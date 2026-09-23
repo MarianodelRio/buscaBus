@@ -1,0 +1,48 @@
+# ── Credentials & secrets ─────────────────────────────────────────────────────
+.env
+# A diferencia de Peluquería, aquí no se ignora *.json entero: ese patrón
+# existía solo por las credenciales de Google, que este proyecto no usa.
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+
+# ── Testing & coverage ────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs.txt
+logs/
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# ── Datos generados ────────────────────────────────────────────────────────────
+# IMPORTANTE: data/*.csv NO se ignora. Los CSV que genera tools/import_excel.py
+# se versionan en git a propósito (ver design.md, sección 2.3): dan historial,
+# diff en cada actualización de horarios y vuelta atrás con un simple revert.
+# No "arregles" esto añadiendo data/*.csv aquí.
+*.xlsx

@@ -1,0 +1,5 @@
+pytest==8.2.0
+pytest-cov==5.0.0
+ruff
+mypy
+openpyxl==3.1.2  # solo para tools/import_excel.py — no hace falta en la VM
