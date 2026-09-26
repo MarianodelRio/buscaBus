@@ -123,5 +123,6 @@ Before declaring the pipeline complete, confirm:
 - [ ] `/health` endpoint behavior is unchanged (or intentionally updated per plan)
 - [ ] No new hardcoded secrets or credentials were introduced
 - [ ] All new Spanish text strings are in `messages.py` (not inlined)
-- [ ] The importer still aborts on unrecognized data — no silent fallback introduced
+- [ ] The schedule validator still rejects invalid/ambiguous data — no silent fallback introduced
+- [ ] No pending business question (Pnn) was silently resolved
 - [ ] No open design question (Dn) was silently resolved instead of flagged

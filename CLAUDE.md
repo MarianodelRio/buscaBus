@@ -7,7 +7,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Framework**: FastAPI + uvicorn
 - **External APIs**: WhatsApp Cloud API (Meta) only — no external API per query
 - **Background jobs**: APScheduler 3.x — one job, expired-state cleanup
-- **Persistence**: none. Bus schedules are parsed once from an Excel file into CSV files in `data/`, loaded into memory at startup, and only read. No database, no writes, no bookings.
+- **Persistence**: none. Bus schedules live in hand-edited YAML files in `horarios/` (the source of truth, versioned in git), loaded into memory at startup, and only read. No database, no writes, no bookings. The company Excel is used once for the initial migration only.
 - **State**: in-memory conversation state, expires after 30 min of inactivity
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
@@ -29,7 +29,10 @@ app/
     whatsapp.py                (pendiente) — copiado tal cual de Peluquería
     scheduler.py                (pendiente) — 1 job: limpieza de estados cada 10 min
     horarios/
-      loader.py                (pendiente) — carga los CSV de data/ a memoria al arrancar, valida integridad
+      modelo.py                (pendiente) — entidades inmutables (design.md 2.4)
+      formato.py               (pendiente) — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
+      diff.py                  (pendiente) — diferencias entre dos versiones de horarios/ en lenguaje de negocio
+      loader.py                (pendiente) — carga horarios/ a memoria al arrancar usando formato.py
       query.py                 (pendiente) — motor de consulta (design.md, sección 3)
       calendario.py            (pendiente) — temporada, tipo de día, festivos, periodo escolar
   utils/
@@ -43,14 +46,17 @@ app/
     security.py                (pendiente) — copiado tal cual de Peluquería
     admin.py                   (pendiente) — adaptado: quita la salud de Calendar, añade la de datos cargados
 tools/
-  import_excel.py              (pendiente) — el importador (design.md, sección 2.3)
-  diff_datos.py                (pendiente) — diff en lenguaje de negocio entre dos versiones de CSV
+  validar.py                   (pendiente) — make validar
+  formatear.py                 (pendiente) — make formatear: realinea tablas sin tocar datos
+  revision.py                  (pendiente) — make revision: HTML + PDF para negocio con cambios vs última versión publicada
+  migracion/                   (pendiente) — scripts de un solo uso para migrar desde el Excel; se borran en la fase 1b
+horarios/                      (pendiente) — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3)
 tests/                         (pendiente) — un fichero por módulo, ver design.md sección 9
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       (pendiente) — fase 5, cambia puerto/dominio/nombre de servicio
 ```
 
-Ficheros ya creados en esta fase de esqueleto: estructura de carpetas, `config.yaml`, `config_import.yaml`, `.env.example`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `pyproject.toml`, `.gitignore`, `README.md`, este `CLAUDE.md`, agentes y comandos de `.claude/`.
+Ficheros ya creados en esta fase de esqueleto: estructura de carpetas, `config.yaml`, `config_import.yaml` (obsoleto: se elimina en la fase 1, lo sustituye `horarios/`), `.env.example`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `pyproject.toml`, `.gitignore`, `README.md`, este `CLAUDE.md`, agentes y comandos de `.claude/`. También `docs/preguntas_negocio.txt`: preguntas P01-P27 enviadas a negocio y decisiones D-a a D-p.
 
 ---
 
@@ -65,9 +71,11 @@ Estos son invariantes del diseño aprobado, no de código existente — guían l
 - `test_interactive.py` (fase 4) debe comprobar esto en todo constructor dinámico, en especial la lista de destinos, cuya longitud depende del origen elegido.
 
 ### Datos
-- **Los CSV de `data/` se generan, nunca se editan a mano.** El Excel (`horarios_fuente/HORARIOS NUEVOS.xlsx`) es lo único que edita la empresa. Se versionan en git a propósito (dan diff, historial y vuelta atrás).
-- **El importador aborta ante cualquier marca desconocida; no adivina nunca.** Un color sin leyenda, un asterisco sin significado, una parada sin mapear, un tipo de día sin identificar o unas horas que retroceden detienen el import con un mensaje concreto (hoja, celda, motivo).
-- Todo el conocimiento que el Excel no dice explícitamente vive en `config_import.yaml`: leyendas de color por hoja, significado de asteriscos por hoja, alias de paradas, agrupación parada→localidad→zona.
+- **`horarios/` es la fuente de verdad y se edita a mano** cuando negocio comunica un cambio. Se versiona en git (diff, historial y vuelta atrás). No hay CSV ni `data/`. El Excel (`horarios_fuente/`) es de un solo uso para la migración inicial.
+- **El validador no deja pasar nada ambiguo; nunca adivina.** Parada, letra u observación sin definir, horas que retroceden, clase de día sin declarar o temporadas que no cubren el año detienen `make validar`, el arranque y los tests con un mensaje concreto (fichero, tabla, fila, motivo). Hay un único parser/validador (`formato.py`).
+- **`sin_servicio` y `sin_datos` son distintos.** El bot nunca presenta un día sin datos como "no hay servicio".
+- Las condiciones (`a_demanda`, `solo_viernes_lectivo`, `solo_si_viajeros_desde_cordoba`) tienen ámbito: línea, viaje o **una parada concreta de un viaje**. El texto al cliente de cada observación vive en `horarios/observaciones.yaml`.
+- Lo pendiente de negocio se marca con su número (`P01`-`P27`, ver `docs/preguntas_negocio.txt`). Nunca se resuelve una pregunta abierta en silencio.
 
 ### Conversación
 - **El usuario elige localidad, el resultado muestra la parada.** No se hace elegir entre las paradas físicas de una misma localidad (p.ej. Pozoblanco pueblo/hospital/estación).
@@ -100,17 +108,19 @@ pytest --cov=app --cov-report=term-missing
 ruff check .
 ```
 
-### Ciclo de actualización de horarios (cuando exista el importador)
+### Ciclo de actualización de horarios (desde la fase 1)
 
 ```bash
-make import   # tools/import_excel.py: Excel → data/*.csv + informe + diff
-              # revisar diff e informe de importación
-git add data/*.csv
-git commit
-make update   # despliega en la VM
+# negocio comunica un cambio → editar horarios/lineas/<linea>.yaml
+make formatear   # realinea columnas
+make validar     # debe salir sin errores
+make revision    # revision/horarios.html + .pdf, con "cambios desde la versión publicada"
+                 # enviar el PDF a negocio y esperar confirmación
+git add horarios/ && git commit
+make publicar    # tag horarios-AAAA-MM-DD + despliegue (fase 5)
 ```
 
-Si algo sale mal tras `make update`, se revierte el commit de los CSV.
+Si algo sale mal, se vuelve al tag anterior.
 
 ---
 

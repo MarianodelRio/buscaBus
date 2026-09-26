@@ -26,7 +26,7 @@ You research and return **actionable findings**. You never invent results — if
 
 - **Runtime**: Python 3.11, FastAPI, uvicorn, APScheduler 3.x
 - **External APIs**: WhatsApp Cloud API (Meta Graph API v23.0) — the only external call, and never per query
-- **Data**: an Excel workbook (`horarios_fuente/`) imported once into CSV files (`data/`), loaded into memory at startup
+- **Data**: hand-edited YAML files in `horarios/` (source of truth), loaded into memory at startup. The Excel in `horarios_fuente/` is only for the one-off initial migration
 - **Auth**: WhatsApp Bearer token + HMAC webhook verification (`WHATSAPP_APP_SECRET`, obligatorio)
 - **Deployment**: GCP VM (shared with the Peluquería bot) + systemd + nginx (TLS reverse proxy) + DuckDNS + Let's Encrypt
 - **State**: in-memory only. No database.
@@ -57,12 +57,12 @@ You research and return **actionable findings**. You never invent results — if
 
 Common research topics you may be asked to explore:
 
-- **Excel parsing**: reading cell fill colors and comments with openpyxl, detecting hidden rows, handling mixed time formats in a single column.
+- **Review output**: HTML → PDF generation (WeasyPrint) with print CSS for wide timetables.
 - **Text matching**: edit-distance libraries/algorithms suitable for Spanish place names with accents and articles.
 - **Date parsing**: parsing Spanish relative dates ("el viernes que viene", "mañana") without pulling in a heavy NLP dependency.
 - **WhatsApp message types**: interactive list/button payload structure, row/button limits, template requirements for the Oct-2026 per-message pricing change (design.md, section 7).
 - **Calendar/holiday data**: BOJA decree publication format, how to encode local (per-municipality) holidays cleanly.
-- **Performance**: in-memory lookup structures for ~236 trips / 706 origin-destination pairs — this is a small-data problem, don't over-research it.
+- **Performance**: in-memory lookup structures for ~222 trips / ~700 origin-destination pairs — this is a small-data problem, don't over-research it.
 
 ## Rules
 

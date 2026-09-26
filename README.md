@@ -8,7 +8,7 @@ Para quién: personas que necesitan saber a qué hora sale su autobús sin llama
 
 ## Estado del proyecto
 
-**Solo diseño, sin implementar.** Este repositorio contiene por ahora el andamiaje (estructura de carpetas, configuración vacía, documentación) y el Excel de origen. La lógica de aplicación — importador, motor de consulta, conversación — llega en las fases 1 a 4.
+**Solo diseño, sin implementar.** Este repositorio contiene por ahora el andamiaje (estructura de carpetas, configuración vacía, documentación) y el Excel de origen. La lógica de aplicación — formato de horarios y validador, motor de consulta, conversación — llega en las fases 1 a 4.
 
 **[`design.md`](design.md) es la única fuente de verdad del proyecto.** Ahí está todo: el modelo de datos, el motor de consulta, la conversación completa, qué se reutiliza del bot de la peluquería, la infraestructura, las fases de implementación y las dudas abiertas. Este README no lo duplica.
 
@@ -16,7 +16,7 @@ Para quién: personas que necesitan saber a qué hora sale su autobús sin llama
 
 ## Arquitectura
 
-FastAPI + WhatsApp Cloud API. Los horarios se importan una vez desde un Excel a CSV versionados en git, y se cargan en memoria al arrancar. Sin base de datos y sin llamada a ninguna API externa por consulta — a diferencia del bot de la peluquería, que consulta Google Calendar en cada mensaje.
+FastAPI + WhatsApp Cloud API. Los horarios viven en ficheros YAML editados a mano en `horarios/`, versionados en git, y se cargan en memoria al arrancar. El Excel de la empresa solo se usa una vez, para la migración inicial. Sin base de datos y sin llamada a ninguna API externa por consulta — a diferencia del bot de la peluquería, que consulta Google Calendar en cada mensaje.
 
 ---
 
@@ -25,9 +25,10 @@ FastAPI + WhatsApp Cloud API. Los horarios se importan una vez desde un Excel a 
 ```
 buscabus/
   config.yaml            # Negocio: teléfono, horario de oficina, enlaces, pueblos del menú
-  config_import.yaml     # Conocimiento del Excel: leyendas de color, alias, zonas
-  data/                  # CSV generados por el importador. NO editar a mano
-  horarios_fuente/       # El Excel tal cual lo manda la empresa
+  horarios/              # FUENTE DE VERDAD de los horarios, editada a mano (design.md 2.3)
+  revision/              # HTML + PDF generados para negocio (no se versiona)
+  horarios_fuente/       # El Excel inicial, de uso único para la migración
+  docs/                  # preguntas_negocio.txt: dudas enviadas a la empresa
   app/
     config.py            # Carga y valida config.yaml + variables de entorno
     main.py               # FastAPI app + lifespan + /health
@@ -37,10 +38,9 @@ buscabus/
       whatsapp.py  scheduler.py
     utils/                # interactive.py, messages.py, matcher.py, fechas.py, ...
   tools/
-    import_excel.py       # Excel → CSV, con informe y diff
-    diff_datos.py
+    validar.py  formatear.py  revision.py
+    migracion/            # Scripts de un solo uso para migrar desde el Excel
   tests/
-  docs/
   .claude/                # Agentes y comandos para trabajar con Claude Code en este repo
 ```
 
@@ -60,23 +60,23 @@ uvicorn app.main:app --reload --port 8001
 pytest
 ```
 
-`requirements-dev.txt` incluye `openpyxl`, que solo hace falta para `tools/import_excel.py` — no se instala en la VM de producción.
+`requirements-dev.txt` incluye `openpyxl` (solo para la migración inicial desde el Excel) y `weasyprint` (PDF de la vista de revisión). Ninguno se instala en la VM de producción.
 
 ---
 
 ## El ciclo de actualización de horarios
 
-Cuando la empresa manda un Excel nuevo:
+Cuando la empresa comunica un cambio de horario:
 
-1. Sustituir `horarios_fuente/HORARIOS NUEVOS.xlsx`.
-2. `make import` — ejecuta `tools/import_excel.py`, que regenera `data/*.csv` y produce un informe y un diff en lenguaje de negocio.
-3. Revisar el diff: qué salidas se han añadido, movido o eliminado, línea por línea.
-4. Si todo cuadra, commit de los CSV.
-5. `make update` en la VM para desplegar.
+1. Editar la fila correspondiente en `horarios/lineas/<linea>.yaml`.
+2. `make formatear` y `make validar` (no debe haber errores).
+3. `make revision` — genera `revision/horarios.html` y `.pdf`, con una sección de cambios respecto a la última versión publicada.
+4. Enviar el PDF a la empresa y esperar su confirmación.
+5. Commit de `horarios/` y `make publicar`.
 
-Si algo sale mal, se revierte el commit de los CSV — el historial completo de cambios de horario queda en git.
+Si algo sale mal, se vuelve al tag anterior: el historial completo de cambios de horario queda en git.
 
-Detalle completo del importador (leyendas de color, cuadre de horas, pruebas doradas) en `design.md`, sección 2.3.
+Detalle completo del formato y las comprobaciones en `design.md`, sección 2.3.
 
 ---
 

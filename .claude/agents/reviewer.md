@@ -31,15 +31,15 @@ You review implementations against their approved plans. **You never modify code
 - Code that reads/writes `_states` or per-phone locks must be inside the phone lock.
 - Any iteration over shared dicts must snapshot first: `snapshot = list(d.items())`.
 
-### 4. The importer (`tools/import_excel.py`) — if touched
-- **Never guesses.** Any unrecognized color, asterisk, stop name, day-type block, or hours going backwards must abort with a concrete message (sheet, cell, reason) — not a warning, not a fallback default.
-- All per-sheet knowledge comes from `config_import.yaml`, never hardcoded in the script.
-- Hour reconciliation: every hour in the Excel must appear in the CSVs and vice versa (design.md, 2.3, point 2).
-- `data/*.csv` are treated as generated output — the coder must not hand-edit them for convenience.
+### 4. Schedule data (`horarios/`, `formato.py`, `tools/`) — if touched
+- **Never guesses.** Every rule in design.md 2.3 ("Comprobaciones", error column) rejects its case with a concrete message (file, table, row, reason) — not a warning, not a fallback default. Each rule has a test.
+- A single parser/validator (`formato.py`) — no second parser in tools or loader.
+- Migrated data: hour reconciliation with the Excel is 100 % for the migrated sheets; doubtful values carry their `Pnn` marker, none is invented.
+- `sin_servicio` and `sin_datos` are never conflated.
 
 ### 5. The schedule engine (`services/horarios/`) — if touched
 - User-facing locality selection must map to a physical stop in the result, not force the user to disambiguate stops within one locality.
-- Calendar conditions (`a_demanda`, `solo_viernes_lectivo`, `no_en_agosto`, `hora_aproximada`, `solo_con_viajeros_desde`) must be data-driven, not hardcoded branches per line.
+- Conditions (`a_demanda`, `solo_viernes_lectivo`, `solo_si_viajeros_desde_cordoba`), `no_circula` months and avisos (`hora_aproximada`...) must be data-driven, not hardcoded branches per line. Stop-level conditions only affect pairs that use that stop.
 - No trasbordos (connections) are invented — only direct trips, per design.md scope.
 
 ### 6. Text matching (`utils/matcher.py`) — if touched
@@ -57,7 +57,7 @@ You review implementations against their approved plans. **You never modify code
 - No naive `datetime.now()`.
 
 ### 9. Error handling and idempotency
-- Any new service function must return a safe default (None, [], False) on exception, never raise to the caller, except the importer — which must abort loudly on unrecognized data (see #4).
+- Any new service function must return a safe default (None, [], False) on exception, never raise to the caller, except the validator/loader — which must fail loudly on invalid schedule data (see #4).
 - All exceptions must be logged with `logger.error(...)`.
 
 ### 10. Security
@@ -67,7 +67,7 @@ You review implementations against their approved plans. **You never modify code
 
 ## Issue priority levels
 
-- **CRITICAL**: security vulnerability, data loss risk, crash path, or a silent-guess in the importer/matcher (this product's worst possible failure — someone misses their bus).
+- **CRITICAL**: security vulnerability, data loss risk, crash path, or a silent-guess in the validator/matcher (this product's worst possible failure — someone misses their bus).
 - **BUG**: incorrect behavior that deviates from the plan or `design.md`, or breaks existing functionality.
 - **EDGE_CASE**: unhandled input that could cause a bad user experience.
 - **STYLE**: minor convention violations that don't affect correctness.
@@ -79,7 +79,7 @@ You review implementations against their approved plans. **You never modify code
 pytest
 
 # Target specific changed modules
-pytest tests/test_import.py -v
+pytest tests/test_formato.py -v
 pytest tests/test_query.py -v
 pytest tests/test_matcher.py -v
 pytest tests/test_conversation.py -v

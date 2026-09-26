@@ -5,7 +5,8 @@
 > implementación. Las dudas abiertas están al final.
 >
 > Estado: **esbozo aprobado para planificar**. No es un diseño cerrado.
-> Fecha: 2026-09-23.
+> Fecha: 2026-09-23. Revisado el 2026-09-26: los horarios pasan a mantenerse a
+> mano en `horarios/` (sección 2) y el Excel es de un solo uso.
 
 ---
 
@@ -49,145 +50,292 @@ Decisiones ya tomadas por Mariano:
 
 ---
 
-## 2. Los datos de origen
+## 2. Los datos de horarios
 
-### 2.1 Qué hay hoy
+> **Cambio de enfoque (2026-09-26).** El Excel de la empresa se usa **una sola
+> vez** para obtener los horarios iniciales. Las actualizaciones futuras no
+> llegarán como Excel: negocio comunicará los cambios (correo, teléfono, PDF...)
+> y el desarrollador los aplicará a mano en `horarios/`, que pasa a ser la
+> **fuente de verdad**. Se abandona el importador robusto y los CSV de `data/`.
 
-`HORARIOS NUEVOS.xlsx`: 18 hojas = 12 líneas, con temporada de invierno y
-verano separadas en hojas distintas. Cada hoja contiene matrices con las
-paradas en columnas y un viaje por fila, agrupadas por sentido y tipo de día.
-Una celda vacía significa que ese viaje no para ahí.
+### 2.1 Origen: el Excel inicial (uso único)
 
-Cifras de la red (calculadas sobre el Excel actual):
+`HORARIOS NUEVOS.xlsx` (en `horarios_fuente/`) tiene 18 hojas. Salen de él
+**15 líneas comerciales**: 11 hojas son una línea en invierno y verano, y la
+hoja `TORR` contiene 4 líneas distintas sin nombre.
 
-- **63 paradas** distintas tras normalizar los nombres.
-- **~236 filas de servicio** (viajes).
-- **706 pares origen→destino** con servicio directo.
-- Córdoba alcanza **53 de las 63** paradas; aparece en el 15 % de los pares
-  pero es, con diferencia, el destino más frecuente.
-- **31 de los 63 orígenes tienen 9 destinos o menos** → su lista de destinos
-  cabe entera en un mensaje de WhatsApp.
-- 95 pares están servidos por más de una línea (Córdoba↔El Vacar y
-  Córdoba↔Cruce de Villaharta, por 4 hojas cada uno). **Ahí el bot aporta más
-  que el PDF**, porque fusiona y ordena todas las salidas.
+Cifras recalculadas el 2026-09-24:
 
-### 2.2 Por qué el Excel no se puede leer solo por valores
+- **64 paradas** distintas tras normalizar (65 si se separan las dos
+  Villafrancas; `C.MURIANO` tiene columna pero ninguna hora y se descarta).
+- **~222 viajes públicos**: 217 filas más las 5 columnas de Badajoz. Los ~236
+  que se daban antes contaban también las 8 filas ocultas y las 6 de régimen
+  interno de Belalcázar-Pozoblanco.
+- **Hay autobuses repetidos en varias hojas**: el de Badajoz aparece entero
+  dentro de `PYA INV`, y dos viajes de `PYA` están también en `BLAZQUEZ`.
+  El motor los fusiona (sección 3).
+- Pendiente de recalcular sobre los datos migrados: pares origen→destino con
+  servicio directo (se estimaron 706), destinos por origen y pares servidos
+  por más de una línea (se estimaron 95, parte de ellos son el mismo autobús).
 
-Estos son los problemas reales detectados, y el importador debe resolverlos
-todos de forma explícita:
+### 2.2 Problemas del Excel (solo afectan a la migración)
 
-1. **El significado está en los colores.** Amarillo y verde codifican
-   "a demanda", "entra en el pueblo", "tiene parada en Los Mochos", etc., y
-   **cada hoja usa su propia leyenda**.
-2. **Formatos de hora heterogéneos:** `datetime.time`, `"8:00*"`, `"18.10"`,
-   `"21:45**"` y hasta `"VIERNES ESCOLAR 16:00"` dentro de una celda de hora.
-   Los asteriscos significan cosas distintas en cada hoja.
-3. **Contenido interno que no es público:** *"No tendríamos que entrar en
-   Rabanales, pero lo hacemos"*, *"PREGUNTAR A ANTONIO SOBRE ESTE HORARIO"*,
-   *"SOLO PARA REGIMEN INTERNO"*, y **4 filas ocultas** en `BELAL - POZ INV`.
-4. **Muchos tipos de día:** lunes; martes-viernes; lunes-viernes; lunes-jueves;
-   viernes; sábado; domingo; "domingos y festivos"; "no hay servicio". En
-   Villaviciosa el lunes tiene horario propio, distinto de martes-viernes.
-5. **Condiciones que no son de calendario:** "solo viernes en periodo escolar",
-   "Cardeña-Pozoblanco no está disponible en agosto", "solo lleva a Villanueva
-   de Córdoba si tiene viajeros desde Córdoba", servicios bajo demanda, y en la
-   línea de Badajoz "los horarios son de paso aproximado".
-6. **Nombres inconsistentes:** `GUALDALCAZAR`/`GUADALCAZAR`, seis grafías de
-   Villanueva de Córdoba, `ST EUFEMIA`/`STA EUFEMIA`. Y un caso peligroso:
-   **`VILLAFRANCA`** es Villafranca de Córdoba en la línea de Adamuz y
-   Villafranca de los Barros en la de Badajoz.
-7. **Fechas de temporada incoherentes:** `POSADAS INV` y `BLAZQUEZ` llevan
-   fechas de 2025/26 (parecen hojas sin actualizar); `PYA` no tiene hoja de
-   verano; el invierno empieza el 01/09 en unas líneas y el 15/09 en otras; las
-   de verano terminan en "fin de vacaciones", sin fecha.
-8. **Dos columnas no son para clientes:** `RUTA` (número de vehículo o
-   circuito) y `VALIDADORA` (código interno).
+Se documentan para migrar bien, no porque el sistema tenga que tolerarlos en el
+futuro. El análisis completo, las preguntas a negocio (P01-P27) y las
+decisiones ya tomadas (D-a a D-p) están en
+[`docs/preguntas_negocio.txt`](docs/preguntas_negocio.txt).
 
-### 2.3 El importador
+1. **El significado está en los colores, y cada hoja tiene su leyenda.** El
+   amarillo es "a demanda" en Pozoblanco, Belalcázar-Córdoba y Badajoz, pero
+   "entran en pueblo" en Peñarroya; en Los Blázquez eso mismo es verde.
+2. **Las marcas actúan a tres niveles**: toda la hoja (Badajoz, "horarios de
+   paso aproximado"), todo el viaje (Posadas: Rivero, Los Mochos, El Pedrera) o
+   **una sola parada de un viaje** (a demanda; "solo viernes lectivo" solo en
+   la última parada; "solo si hay viajeros desde Córdoba" solo en Villanueva de
+   Córdoba).
+3. **Formatos de hora heterogéneos**: `datetime.time`, `"8:00*"`, `"18.10"`,
+   `"21:45**"` y `"VIERNES ESCOLAR 16:00"`. Hay paradas consecutivas con la
+   misma hora: la regla es "las horas no retroceden", no "avanzan".
+4. **Contenido no público**: 17 notas internas, filas ocultas en
+   `BELAL - POZ INV` **y** `BELAL - POZ VER`, un bloque "SOLO PARA RÉGIMEN
+   INTERNO", y las columnas `RUTA` y `VALIDADORA`.
+5. **Estructuras distintas**: `BADAJOZ` está traspuesta (paradas en filas);
+   `TORR` no tiene nombres de línea; las tablas de fin de semana de `POZOB` y
+   `BELAL- COR` tienen otras columnas que las de entre semana; `PYA` no tiene
+   `RUTA` ni `VALIDADORA`.
+6. **Muchos tipos de día**: lunes; martes-viernes; lunes-viernes;
+   lunes-jueves; viernes; sábado; domingo; domingos y festivos; "sábado,
+   domingos y festivos"; "no hay servicio". Villaviciosa no dice nada de los
+   domingos.
+7. **Nombres inconsistentes**: `GUALDALCAZAR`/`GUADALCAZAR`, `ST`/`STA
+   EUFEMIA`, cuatro grafías de Cruce de Villaharta, tres del hospital de
+   Pozoblanco. `VILLAFRANCA` es de Córdoba en Adamuz y de los Barros en
+   Badajoz.
+8. **Temporadas incoherentes**: `POSADAS INV` y `BLAZQUEZ` llevan fechas de
+   2025/26 (decisión D-a: el año se ignora, solo cuentan día y mes); `PYA` y
+   `BLAZQUEZ` no tienen verano; el verano termina en "fin verano" sin fecha;
+   `ADAMUZ VER` dice "DESDE AQUASIERRA" (errata, D-b).
+9. **Posibles erratas y contradicciones**: el Córdoba 10:30 llega a Peñarroya a
+   las 11:55 según `PYA` y a las 12:30 según `BLAZQUEZ` (P21), y hay varios
+   tramos con tiempos anómalos (P22-P26). Mientras negocio no responda, se
+   migran tal cual con su pendiente marcado.
+
+### 2.3 La fuente de verdad: `horarios/`
+
+**Principio:** los horarios viven en ficheros de texto **editados a mano** y
+versionados en git. Están pensados para dos personas:
+
+- **El desarrollador** aplica un cambio que comunica negocio editando una fila
+  de texto. El diff de git muestra exactamente qué cambió.
+- **Negocio** no lee estos ficheros: lee una vista **HTML + PDF** generada a
+  partir de ellos, que incluye los cambios respecto a la versión publicada.
+
+**Regla de oro (sustituye a la del importador): el validador no deja pasar
+nada ambiguo.** Una parada desconocida, una letra de observación sin definir,
+unas horas que retroceden, un día de la semana sin declarar o una temporada que
+no cubre el año detienen `make validar`, el arranque del bot y los tests con un
+mensaje concreto (fichero, tabla, fila, motivo). Un horario mal cargado hace
+que alguien pierda un autobús.
+
+#### Estructura
 
 ```
-HORARIOS NUEVOS.xlsx ─┐
-                      ├─▶ tools/import_excel.py ─▶ data/*.csv
-config_import.yaml ───┘                         ├─▶ informe de importación
-                                                ├─▶ diff contra la versión previa
-                                                └─▶ vista de revisión (Markdown)
+horarios/
+  paradas.yaml          zonas, localidades y paradas (código, nombre público, alias)
+  observaciones.yaml    catálogo de observaciones y el texto exacto que ve el cliente
+  lineas/
+    pozoblanco-cordoba.yaml   una por línea comercial; el nombre del fichero es su id
+    ...
+  calendario.yaml       festivos y periodo escolar (fase 2)
 ```
 
-**Principio:** el Excel es lo que edita la empresa. Los CSV generados **no se
-tocan a mano jamás**. Todo el conocimiento que el Excel no dice explícitamente
-vive en `config_import.yaml`, escrito una vez y versionado en git:
+#### `paradas.yaml`
 
-- Leyenda de colores **por hoja** (qué significa amarillo en `POZOB INV`).
-- Significado de cada asterisco **por hoja**.
-- Tabla de alias y normalización de nombres de parada.
-- Qué hojas, filas, columnas y notas se ignoran.
-- Agrupación parada → localidad y parada → zona.
+```yaml
+zonas:
+  los-pedroches: Los Pedroches
+localidades:                       # lo que elige el usuario
+  pozoblanco: { nombre: Pozoblanco, zona: los-pedroches, alias: [pozo] }
+  villafranca-de-cordoba: { nombre: Villafranca de Córdoba, zona: adamuz, alias: [villafranca] }
+  villafranca-de-los-barros: { nombre: Villafranca de los Barros, zona: extremadura, alias: [villafranca] }
+paradas:                           # lo que muestra el resultado
+  POZ: { nombre: Pozoblanco, localidad: pozoblanco }
+  PZH: { nombre: Pozoblanco (Hospital), localidad: pozoblanco }
+```
 
-**Regla de oro: ante lo desconocido, falla; nunca adivines.** Si el script
-encuentra un color nuevo, un asterisco sin leyenda, una parada sin mapear, un
-bloque sin título de tipo de día o unas horas que retroceden, **aborta con un
-mensaje concreto** (`hoja POZOB INV, celda H24: marca desconocida '**'`). Un
-horario mal importado hace que alguien pierda un autobús: es el peor fallo
-posible de este producto.
+- **Códigos de parada de 3 caracteres** (mayúsculas ASCII, únicos,
+  mnemotécnicos: `COR`, `CVH`, `POZ`, `PZH`, `VFC`, `VFB`). Mantienen las
+  tablas estrechas; la vista de negocio muestra siempre el nombre completo.
+- Un alias compartido por varias localidades (`villafranca`) es la forma de
+  declarar una ambigüedad: el matcher debe preguntar (4.7).
 
-**Formato de salida: CSV en el repositorio, sin base de datos.** Son pocas
-tablas, se ven bien en los diffs de git, se abren en Excel para depurar y caben
-de sobra en memoria (~236 viajes). Una base de datos añadiría operación sin
-aportar nada a este volumen.
+#### `observaciones.yaml`
 
-**La revisión debe ser barata**, no repasar 236 filas a ojo. El script produce:
+```yaml
+a_demanda:
+  letra: D                       # obligatoria si se puede usar a nivel de parada
+  tipo: condicion                # condicion | aviso
+  ambitos: [parada]              # parada | viaje | linea
+  texto: "A demanda: llama al {telefono} con 24 horas laborables de antelación."
+hora_aproximada:
+  tipo: aviso
+  ambitos: [linea]
+  texto: "Horarios de paso aproximados."
+```
 
-1. **Diff contra la versión anterior**, en lenguaje de negocio:
-   *"Línea Pozoblanco-Córdoba, L-V: añadida salida 07:05; 15:15 → 15:20;
-   eliminada 18:00"*. La empresa solo revisa lo que ha cambiado.
-2. **Cuadre de horas:** toda hora del Excel debe aparecer en los CSV y
-   viceversa. Si sobra o falta una sola, no se publica.
-3. **Vista de revisión:** regenera en Markdown una tabla por línea con la misma
-   forma que el Excel original, para comparar de un vistazo.
-4. **Pruebas doradas:** 10-15 consultas con su respuesta correcta validada por
-   la empresa (ej. `Pozoblanco → Córdoba, lunes de invierno = 06:55, 08:15,
-   10:00, 15:15, 18:00`), ejecutadas como tests en cada importación.
+- **Condición**: cambia si el autobús sale o si para. Es un conjunto cerrado
+  que el motor conoce (`a_demanda`, `solo_viernes_lectivo`,
+  `solo_si_viajeros_desde_cordoba`); el validador rechaza una condición que el
+  código no sepa aplicar.
+- **Aviso**: solo informa (`entra_en_pueblo`, `pasa_por_rivero`,
+  `para_en_los_mochos`, `no_para_en_el_pedrera`, `solo_virgen_remedios`,
+  `hora_aproximada`...). Se pueden añadir libremente.
+- **El texto al cliente vive aquí**, no en `messages.py`, para que negocio lo
+  valide en la vista de revisión. `messages.py` solo le da formato.
 
-**Ciclo de actualización:** llega el Excel nuevo → `make import` → se revisan
-diff e informe → se aprueba → commit de los CSV → `make update` en la VM. Si
-algo sale mal, se revierte el commit. Los CSV en git dan historial y vuelta
-atrás gratis.
+#### Un fichero de línea
 
-**Peticiones a la empresa** (facilitan el mantenimiento, no son obligatorias):
-mantener la estructura de hojas y bloques, mover los comentarios internos a una
-hoja aparte, y no ocultar filas.
+```yaml
+# horarios/lineas/pozoblanco-cordoba.yaml
+nombre: Pozoblanco – Córdoba
+telefono_demanda: 957 42 90 30     # obligatorio si alguna tabla usa a_demanda
+avisos: []                         # observaciones de ámbito línea, p.ej. [hora_aproximada]
+no_circula: []                     # meses sin servicio, p.ej. [agosto]
 
-### 2.4 Modelo de datos
+temporadas:                        # día/mes sin año; deben cubrir el año entero sin solaparse
+  invierno: 15/09 - 22/06
+  verano:   23/06 - 14/09          # "todo el año" para las líneas anuales
 
-Inspirado en **GTFS** (el estándar internacional de horarios de transporte)
-sin adoptarlo entero. Se toman prestados sus conceptos útiles: separación entre
-servicio y calendario, marca de "parada a demanda" (`pickup_type=2`) y marca de
-"hora aproximada" (`timepoint=0`). Adoptarlo del todo permitiría más adelante
-publicar en el [Punto de Acceso Nacional](https://nap.transportes.gob.es/) o en
-Google Maps; hoy sería sobreingeniería.
+dias:                              # cada temporada declara las 8 clases de día
+  invierno: { lunes-viernes: horario, sabado: horario, domingos-festivos: horario }
+  verano:   { lunes-viernes: horario, sabado: horario, domingos-festivos: horario }
 
-| Fichero | Contenido |
+horarios:
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      CON     VVC     PZH    POZ    ALC    VHA     CVH    COR
+      -       06:25D  06:45  06:55  07:05  -       -      08:15
+      07:20D  07:45   08:05  08:15  08:25  08:50D  08:55  09:30
+      -       17:30   -      18:00  18:10  -       18:40  19:15
+
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      COR    CVH    VHA     ALC    POZ    PZH    VVC     CON
+      20:00  20:30  20:35D  21:00  21:10  21:15  21:45C  -
+
+pendientes: [P02, P10, P12]        # preguntas abiertas que afectan a esta línea
+```
+
+Reglas del formato:
+
+- **Tabla**: la primera fila son códigos de parada (al menos 2, sin repetir);
+  cada fila siguiente es un viaje con un valor por parada. `-` significa que no
+  para. **El sentido se deduce del orden de las columnas.** Las líneas que
+  empiezan por `#` son comentarios.
+- **Hora**: `HH:MM` seguida opcionalmente de letras de observación de ámbito
+  parada (`06:25D`, `16:35DP`). Cada viaje tiene al menos 2 horas y **las horas
+  no retroceden** (no se admite cruzar la medianoche; no hay ningún caso).
+- **Observaciones de viaje y pendientes** tras `|` al final de la fila:
+  `06:15 06:35 06:50 07:30 | pasa_por_rivero P21`. Los tokens `Pnn` son
+  referencias a preguntas abiertas.
+- **Clases de día**: `lunes`...`domingo` y `festivos`. Claves admitidas en
+  `dias` y en las tablas: los días sueltos, `lunes-viernes`, `lunes-jueves`,
+  `martes-viernes`, `sabados-domingos`, `domingos-festivos`,
+  `sabados-domingos-festivos`. En `dias`, cada temporada cubre las 8 clases
+  **exactamente una vez**, con uno de tres estados:
+  - `horario`: hay al menos una tabla que la cubre.
+  - `sin_servicio`: el horario dice expresamente que no hay autobús.
+  - `sin_datos`: no lo sabemos (por ejemplo, Peñarroya en verano, P01). **El
+    bot nunca lo trata como "sin servicio"** (4.8).
+- Una tabla puede usar una clave más amplia que las de `dias` (la vuelta de
+  Badajoz es `lunes-viernes` aunque `dias` declare `lunes-jueves` y `viernes`),
+  siempre que todas sus clases tengan estado `horario`.
+- **Temporadas**: rangos `DD/MM - DD/MM` (pueden cruzar el año) o
+  `todo el año`. Todo día del año, incluido el 29/02, cae en exactamente una.
+  El año no se guarda (D-a).
+
+#### Comprobaciones
+
+| Error: detiene la validación | Aviso: sale en el informe |
 |---|---|
-| `localidades.csv` | Lo que elige el usuario. Nombre canónico, zona, alias. |
-| `paradas.csv` | Parada física. Pertenece a una localidad. Nombre público. |
-| `lineas.csv` | Línea comercial, nombre público, teléfono si es a demanda. |
-| `temporadas.csv` | Por línea: nombre, fecha inicio, fecha fin. |
-| `servicios.csv` | Un viaje: línea, sentido, tipo de día, temporada, condiciones. |
-| `horas.csv` | Hora de un servicio en una parada, con orden y marcas. |
-| `calendario.csv` | Festivos y periodo escolar, con su ámbito. |
+| YAML mal formado, campo desconocido u obligatorio ausente | El mismo autobús en dos líneas (se fusiona al consultar) |
+| Código de parada, letra u observación sin definir | Tramo con un tiempo anómalo frente al resto de viajes de ese tramo |
+| Observación usada en un ámbito no permitido | Clases de día en `sin_datos` |
+| Condición que el motor no sabe aplicar | Pendientes abiertos, con su número |
+| Fila con un número de valores distinto al de paradas | Paradas o localidades definidas que ninguna línea usa |
+| Horas que retroceden o viaje con menos de 2 horas | |
+| Temporadas que se solapan o dejan días sin cubrir | |
+| Clase de día sin declarar, declarada dos veces, o `horario` sin tabla | |
+| `a_demanda` usada sin `telefono_demanda` en la línea | |
 
-Puntos clave del modelo:
+El parser y el validador son **un único módulo** (`app/services/horarios/formato.py`)
+que usan `make validar`, los tests y el loader al arrancar el bot.
 
-- **El usuario elige una localidad; el resultado muestra la parada.** Pozoblanco
-  tiene tres paradas en el Excel (pueblo, hospital, estación) y hacer elegir
-  entre ellas es confuso. Se elige "Pozoblanco" y el resultado dice de dónde
-  sale cada bus. **Cuidado:** Villaharta y Cruce de Villaharta **no** son el
-  mismo sitio (el cruce está en la carretera, lejos del pueblo) y no deben
-  fusionarse. Ver duda D5.
-- **Las condiciones son datos, no texto libre**: `a_demanda`,
-  `solo_viernes_lectivo`, `no_en_agosto`, `hora_aproximada`,
-  `solo_con_viajeros_desde`. Cada una tiene su mensaje al cliente en
-  `messages.py` y su regla en el motor.
+#### Herramientas
+
+| Comando | Qué hace |
+|---|---|
+| `make validar` | Valida todo `horarios/` y lista errores y avisos |
+| `make formatear` | Realinea las columnas de todas las tablas. No cambia ningún dato |
+| `make revision` | Genera `revision/horarios.html` y `revision/horarios.pdf` (ver abajo) |
+| `make publicar` | Crea el tag `horarios-AAAA-MM-DD` y despliega (fase 5) |
+
+**Vista de revisión para negocio** (HTML y PDF A4 apaisado, del mismo HTML):
+
+1. Portada: fecha, versión, número de líneas y viajes, pendientes abiertos.
+2. **Cambios desde la versión publicada** (el último tag `horarios-*`), en
+   lenguaje de negocio: *"Pozoblanco – Córdoba, invierno, lunes a viernes,
+   hacia Córdoba: la salida de las 10:00 pasa a las 10:05"*. Si no hay versión
+   publicada, pone "primera versión".
+3. Una sección por línea: temporadas en palabras ("del 15 de septiembre al 22
+   de junio"), un cuadro de qué días hay servicio, sin servicio o sin datos,
+   las tablas con nombres de parada completos y `—` donde no para, y bajo cada
+   tabla la leyenda con **el texto literal que dirá el bot**. Lo pendiente,
+   resaltado con su número.
+4. Anexo con las preguntas pendientes.
+
+`revision/` no se versiona: se regenera desde cualquier versión.
+
+#### Ciclo de actualización
+
+Negocio comunica un cambio → se edita la fila en `horarios/lineas/...` →
+`make validar` → `make revision` → se envía el PDF (con la sección de cambios)
+→ negocio confirma → commit → `make publicar`. Si algo sale mal, se vuelve al
+tag anterior.
+
+**Cambios con fecha futura** ("desde el 1 de noviembre..."): no se modelan en
+la v1. Se publican el día que entran en vigor. Si se vuelve habitual, se añade
+un campo de vigencia por viaje.
+
+### 2.4 Modelo de datos en memoria
+
+El loader convierte `horarios/` en objetos inmutables:
+
+| Entidad | Contenido |
+|---|---|
+| `Zona` | Id y nombre |
+| `Localidad` | Lo que elige el usuario: id, nombre, zona, alias |
+| `Parada` | Parada física: código, nombre público, localidad |
+| `Observacion` | Id, letra, tipo (condición/aviso), ámbitos, texto |
+| `Linea` | Id, nombre, teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
+| `Temporada` | Nombre y rangos día/mes |
+| `Viaje` | Línea, temporada, clases de día, observaciones de viaje, pendientes y la lista ordenada de pasos |
+| `Paso` | Parada, hora y observaciones de parada |
+
+Puntos clave:
+
+- **El usuario elige una localidad; el resultado muestra la parada.**
+  Pozoblanco tiene varias paradas (pueblo, hospital, estación; P10) y hacer
+  elegir entre ellas es confuso. **Cuidado:** Villaharta y Cruce de Villaharta
+  **no** son el mismo sitio (P14) y no se fusionan.
+- **Las condiciones son datos con ámbito**: una condición de parada solo
+  afecta a los pares que usan esa parada. El Córdoba 15:30 de Belalcázar sale
+  todos los días; solo su llegada a Cabeza del Buey es "solo viernes lectivo".
+- Se inspira en GTFS (servicio separado del calendario, parada a demanda,
+  hora aproximada) sin adoptarlo. Exportar a GTFS más adelante sería un
+  script sobre este modelo.
 
 ---
 
@@ -207,8 +355,13 @@ Pasos:
 3. **Buscar el par:** el servicio debe parar en una parada del origen y, *más
    adelante en su orden de paradas*, en una del destino. El orden es lo que
    determina el sentido; no hace falta una columna de sentido para esto.
-4. **Ordenar por hora de salida** y anotar las condiciones que aplican.
-5. **Si la fecha es hoy**, marcar o retirar las salidas ya pasadas.
+4. **Fusionar el mismo autobús**: si dos viajes de líneas distintas tienen la
+   misma hora de salida y de llegada para el par consultado, se muestran una
+   sola vez (decisión D-o).
+5. **Ordenar por hora de salida** y anotar las condiciones que aplican.
+6. **Si la fecha es hoy**, marcar o retirar las salidas ya pasadas.
+7. **Si alguna línea implicada tiene `sin_datos` para ese día**, el resultado
+   lo dice en lugar de dar a entender que no hay servicio (2.3 y 4.8).
 
 Todo en memoria, sin E/S. El coste es despreciable frente a los ~0,5 s que
 costaba una consulta a Google Calendar en Peluquería.
@@ -218,13 +371,13 @@ costaba una consulta a Google Calendar en Peluquería.
 - **Festivos:** BOJA — [Decreto 101/2025](https://www.juntadeandalucia.es/organismos/empleoempresaytrabajoautonomo/areas/relaciones-laborales/calendario-fiestas.html)
   para 2026 y [Decreto 84/2026](https://www.juntadeandalucia.es/boja/2026/84/1.html)
   para 2027, más 2 festivos locales por municipio. Se cargan a mano en
-  `calendario.csv`, una vez al año. Ver duda D3.
+  `horarios/calendario.yaml`, una vez al año. Ver duda D3 y P03.
 - **Periodo escolar:** calendario escolar de Córdoba 2026-27 — curso del
   01/09/2026 al 30/06/2027, fin de clases el 23/06/2027, Navidad del 23/12 al
   06/01, Semana Santa del 20 al 28/03/2027.
-- **Temporadas:** hoy son incoherentes entre hojas (ver 2.2 punto 7). Hasta
-  aclararlo, el importador exige fecha de inicio y fin explícitas por línea en
-  `config_import.yaml`, y falla si falta alguna.
+- **Temporadas:** cada línea declara sus rangos día/mes en su fichero de
+  `horarios/lineas/`, y el validador exige que cubran el año sin huecos ni
+  solapes (2.3). El fin del verano está pendiente de negocio (P02).
 
 ---
 
@@ -389,8 +542,9 @@ Todas las ramas, sin excepciones:
 | Sin coincidencia | "No conozco ese pueblo" + lista habitual + `Ver todos por zona` |
 
 **Normalización previa:** mayúsculas, sin tildes, sin puntuación, sin artículos
-(`el`, `la`, `los`). La tabla de alias vive en `config_import.yaml` y recoge las
-variantes del Excel más los nombres coloquiales que aporte la empresa.
+(`el`, `la`, `los`). La tabla de alias vive en `horarios/paradas.yaml` y recoge
+los nombres oficiales, las abreviaturas habituales y los nombres coloquiales que
+aporte la empresa (P13).
 
 **Caso que siempre pregunta:** `Villafranca` (de Córdoba o de los Barros).
 Nunca se resuelve solo.
@@ -406,6 +560,7 @@ paradas, Guadiato 14, Extremadura 11) se parten en dos listas con una fila
 | Caso | Respuesta |
 |---|---|
 | Día sin servicio | Dice cuál es el siguiente día con servicio y lo ofrece en un botón |
+| Día sin datos (`sin_datos`) | Dice que no tiene ese horario y da el teléfono con horario de oficina. **Nunca lo presenta como "no hay servicio"** |
 | Sin trayecto directo | Lo dice, enseña los destinos que sí existen desde ese origen y da el teléfono con horario de oficina. **No inventa trasbordos** |
 | Origen = destino | "Elige un destino distinto" |
 | Hoy sin salidas restantes | "Hoy ya no quedan salidas" + botón a mañana |
@@ -448,7 +603,7 @@ paradas, Guadiato 14, Extremadura 11) se parten en dos listas con una fila
   solo módulo), contenido nuevo.
 - **`app/services/scheduler.py`** — de 3 jobs se queda **1**: limpieza de
   estados cada 10 min. (Opcional: recarga diaria de datos, útil solo si algún
-  día se despliegan CSV sin reiniciar; por defecto no.)
+  día se despliegan horarios sin reiniciar; por defecto no.)
 
 ### 5.3 Descartar por completo
 
@@ -461,15 +616,20 @@ de captación) y las dependencias `google-api-python-client`, `google-auth`.
 
 ```
 app/services/horarios/
-  loader.py       # Carga los CSV a memoria al arrancar. Valida integridad
+  modelo.py       # Entidades inmutables del punto 2.4
+  formato.py      # Parser + validador de horarios/ (punto 2.3). Único para tools, tests y loader
+  diff.py         # Diferencias entre dos versiones de horarios/, en lenguaje de negocio
+  loader.py       # Carga horarios/ a memoria al arrancar usando formato.py
   query.py        # El motor del punto 3
   calendario.py   # Temporada, tipo de día, festivos, periodo escolar
 app/utils/
   matcher.py      # Reglas de coincidencia de texto del punto 4.7
   fechas.py       # Parseo de "25/12", "el viernes que viene", "mañana"
 tools/
-  import_excel.py # El importador del punto 2.3
-  diff_datos.py   # Diff en lenguaje de negocio entre dos versiones de CSV
+  validar.py      # make validar
+  formatear.py    # make formatear
+  revision.py     # make revision: HTML + PDF para negocio
+  migracion/      # Solo mientras dure la migración desde el Excel; se borra en la fase 1b
 ```
 
 ### 5.5 Mapa de módulos resultante
@@ -477,25 +637,26 @@ tools/
 ```
 buscabus/
   config.yaml            # Negocio: teléfono, horario oficina, enlaces, pueblos del menú
-  config_import.yaml     # Conocimiento del Excel: leyendas, alias, zonas
-  data/                  # CSV generados. NO editar a mano
-  horarios_fuente/       # El Excel tal cual lo manda la empresa
+  horarios/              # FUENTE DE VERDAD de los horarios, editada a mano (2.3)
+  revision/              # HTML + PDF generados para negocio. No se versiona
+  horarios_fuente/       # El Excel inicial, de uso único (se archiva tras la fase 1b)
   app/
     config.py  main.py
     handlers/    webhook.py  conversation.py
     services/    whatsapp.py  scheduler.py  horarios/
     utils/       interactive.py  messages.py  matcher.py  fechas.py
                  metrics.py  dedup.py  rate_limiter.py  security.py  admin.py
-  tools/         import_excel.py  diff_datos.py
+  tools/         validar.py  formatear.py  revision.py  migracion/
   tests/
   watchdog.py  Makefile  requirements.txt
 ```
 
 ### 5.6 Dependencias
 
-Se quitan `google-api-python-client` y `google-auth`. Se añade `openpyxl`
-(solo para el importador; puede ir en un `requirements-dev.txt` para no
-instalarlo en la VM). Se mantiene el resto: fastapi, starlette, uvicorn,
+Se quitan `google-api-python-client` y `google-auth`. En `requirements-dev.txt`
+(no se instalan en la VM): `openpyxl` (solo para la migración; se quita tras la
+fase 1b) y `weasyprint` (PDF de la vista de revisión; necesita Pango en el
+sistema). Se mantiene el resto: fastapi, starlette, uvicorn,
 python-dotenv, httpx, apscheduler, pyyaml, pytest, pytest-cov, psutil, ruff,
 mypy. **Migrar `pytz` a `zoneinfo`** desde el principio: es código nuevo y no
 arrastra la deuda de Peluquería.
@@ -651,15 +812,32 @@ Repositorio nuevo, estructura de directorios, `requirements.txt`,
 requieren cambios.
 **Criterio:** el servidor arranca, `/health` responde, los tests pasan.
 
-### Fase 1 · Importador (2-3 días) — *la fase de mayor riesgo, va primero*
-`tools/import_excel.py` + `config_import.yaml` + informe + `diff_datos.py` +
-vista de revisión. Incluye mapear a mano las leyendas de las 18 hojas.
-**Criterio:** los 63 nombres de parada mapeados; las ~236 filas importadas; el
-cuadre de horas al 100 %; el script **aborta** ante cualquier marca desconocida;
-la vista de revisión reproduce el Excel.
+### Fase 1 · Formato de horarios, validador y vista de revisión (2-3 días)
+`horarios/` (formato de 2.3), `modelo.py`, `formato.py`, `diff.py`,
+`tools/validar.py`, `tools/formatear.py`, `tools/revision.py` (HTML + PDF),
+`Makefile` mínimo con `validar`, `formatear` y `revision`, y **5 líneas de
+prueba** migradas del Excel con sus pendientes marcados: Ochavillos–Córdoba,
+Pozoblanco–Córdoba, Belalcázar–Córdoba, Adamuz–Córdoba y Badajoz–Córdoba.
+Juntas cubren una línea anual sin fin de semana, dos temporadas, a demanda, las
+tres condiciones, varias paradas por localidad, Villaharta frente a su cruce y
+las dos Villafrancas. Sustituye a `config_import.yaml` y `data/`.
+**Criterio:** el validador rechaza con mensaje concreto cada error de la tabla
+de 2.3; las 5 líneas validan sin errores; sus horas cuadran al 100 % con las
+hojas del Excel (script de cuadre en `tools/migracion/`); `make revision`
+genera HTML y PDF legibles con la sección de cambios; `formatear` es
+idempotente y no altera datos.
+
+### Fase 1b · Migración completa (cuando responda negocio)
+Las 10 líneas restantes y las correcciones que salgan de P01-P27. Revisión de
+todo el PDF con negocio. Después se borra `tools/migracion/`, se quita
+`openpyxl` y se archiva el Excel. Puede ir en paralelo a las fases 2-4, que se
+desarrollan con las 5 líneas de prueba.
+**Criterio:** las 15 líneas validan; el cuadre de horas con el Excel es del
+100 % salvo las correcciones documentadas; negocio aprueba el PDF.
 
 ### Fase 2 · Motor y calendario (2 días)
-`loader.py`, `calendario.py`, `query.py`, `calendario.csv` del curso 2026-27.
+`loader.py`, `calendario.py`, `query.py`, `horarios/calendario.yaml` del curso
+2026-27.
 **Criterio:** las pruebas doradas pasan; las condiciones especiales (agosto,
 viernes lectivo, a demanda) se aplican; un día sin servicio devuelve el
 siguiente con servicio.
@@ -689,7 +867,8 @@ visible, App, token de System User permanente, webhook apuntando al dominio.
 la dependencia externa más lenta del proyecto.
 
 ### Fase 7 · Precios (cuando lleguen los datos)
-`precios.csv`, regla de cálculo, línea de precio en el resultado.
+Precios en `horarios/` (formato por decidir según D8), regla de cálculo, línea
+de precio en el resultado.
 **Criterio:** el precio sale en el resultado y cuadra con la tarifa oficial.
 
 ### Fase 8 · Piloto y ajuste
@@ -709,7 +888,10 @@ credenciales reales.
 
 | Fichero | Qué cubre |
 |---|---|
-| `test_import.py` | Cada hoja del Excel; marcas desconocidas abortan; cuadre de horas |
+| `test_formato.py` | Cada regla de 2.3 rechaza su caso con mensaje concreto; `horarios/` real valida |
+| `test_diff.py` | Altas, bajas y cambios de hora, de observaciones, de temporadas y de días, en lenguaje de negocio |
+| `test_formatear.py` | Idempotente; no cambia ningún dato |
+| `test_revision.py` | El HTML contiene cada línea, temporada, leyenda y pendiente |
 | `test_calendario.py` | Temporadas, festivos, viernes lectivo, agosto |
 | `test_query.py` | Pruebas doradas; sentido correcto; sin servicio; sin trayecto |
 | `test_matcher.py` | Las 7 ramas de 4.7; `Villafranca`; erratas; alias |
@@ -725,6 +907,12 @@ longitud depende del origen elegido.
 ---
 
 ## 10. Dudas abiertas
+
+> Las dudas sobre los datos se han detallado y enviado a negocio el
+> 2026-09-26: [`docs/preguntas_negocio.txt`](docs/preguntas_negocio.txt)
+> (P01-P27, y las decisiones ya tomadas D-a a D-p). D1, D2, D4 y D5 quedan
+> desglosadas allí: D1 → P01, D-a; D2 → P06, D-m; D4 → P02, D-b, D-c;
+> D5 → P10-P14. D3 → P03 y P04. D6 deja de aplicar: el Excel no se mantiene.
 
 ### Datos
 - **D1.** ¿Es el Excel actual el definitivo? ¿Qué hacemos con `POSADAS INV` y

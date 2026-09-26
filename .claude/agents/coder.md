@@ -28,7 +28,10 @@ app/
     conversation.py      # State machine — MENU → SEL_ORIGEN → SEL_DESTINO → SEL_DIA → RESULTADO
   services/
     horarios/
-      loader.py           # Loads data/*.csv into memory at startup, validates integrity
+      modelo.py           # Immutable entities (design.md 2.4)
+      formato.py          # THE parser + validator for horarios/ (design.md 2.3)
+      diff.py             # Business-language diff between two versions of horarios/
+      loader.py           # Loads horarios/ into memory at startup via formato.py
       query.py            # Schedule-matching engine (design.md, section 3)
       calendario.py       # Season, day-type, holidays, school term
     whatsapp.py           # send_text_message, send_interactive
@@ -40,8 +43,9 @@ app/
     fechas.py                # Date parsing ("25/12", "el viernes que viene", "mañana")
     metrics.py  dedup.py  rate_limiter.py  security.py  admin.py   # copied/adapted from Peluquería
 tools/
-  import_excel.py         # Excel → data/*.csv, with report and diff
-  diff_datos.py
+  validar.py  formatear.py  revision.py   # make validar / formatear / revision
+  migracion/              # one-off Excel migration scripts, deleted in fase 1b
+horarios/                 # SOURCE OF TRUTH, hand-edited: paradas.yaml, observaciones.yaml, lineas/*.yaml
 tests/                    # pytest — run after every change
 ```
 
@@ -52,16 +56,16 @@ tests/                    # pytest — run after every change
 - **New conversation states**: add constant at top of `conversation.py`, add handler `_handle_X(phone, state, value)`, register in the dispatch dict.
 - **New interactive messages**: add builder function to `interactive.py`, import in `conversation.py`.
 - **New text strings**: add to `messages.py`, never inline Spanish strings in handlers.
-- **New config values**: add to `app/config.py` with descriptive name and comment; business-editable values go in `config.yaml`, importer knowledge goes in `config_import.yaml`.
+- **New config values**: add to `app/config.py` with descriptive name and comment; business-editable values go in `config.yaml`; schedule data (stops, aliases, zones, observations and their customer texts) goes in `horarios/`.
 
 ### Thread safety rules
 - New code that touches `_states` or per-phone locks must run inside the phone lock.
 - Never iterate a shared dict without snapshotting first: `snapshot = list(d.items())`.
 
-### The importer (`tools/import_excel.py`)
-- **Never guess.** An unrecognized color, asterisk, stop name, day-type block, or hours that go backwards must abort the import with a concrete message (sheet, cell, reason) — see design.md, 2.3.
-- All per-sheet knowledge (color legends, asterisk meanings, aliases, stop→locality→zone grouping) comes from `config_import.yaml`, never hardcoded in the script.
-- CSV files in `data/` are generated output — never hand-edit them, and the coder must not either.
+### Schedule data (`horarios/` + `formato.py`)
+- **Never guess.** Every rule in design.md 2.3 ("Comprobaciones") is an error with a concrete message (file, table, row, reason), not a warning or a fallback default.
+- One parser/validator only: `app/services/horarios/formato.py`. Tools, tests and the loader all use it — never re-parse `horarios/` elsewhere.
+- When transcribing data from the Excel, copy it exactly; anything doubtful gets its `Pnn` marker from `docs/preguntas_negocio.txt`, never an invented value.
 
 ### WhatsApp interactive message limits
 - Interactive list: max 10 rows total (sum of all sections).
