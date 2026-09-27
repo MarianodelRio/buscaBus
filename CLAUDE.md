@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fases 1 y 2 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta y calendario); fases 3-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1, 2 y 3 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta, calendario, coincidencia de texto y lectura de fechas); fases 4-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -38,8 +38,8 @@ app/
   utils/
     interactive.py             (pendiente) — helpers genéricos copiados de Peluquería + constructores propios
     messages.py                (pendiente) — todos los textos en español
-    matcher.py                 (pendiente) — reglas de coincidencia de texto (design.md, 4.7)
-    fechas.py                  (pendiente) — parseo de "25/12", "el viernes que viene", "mañana"
+    matcher.py                 — reglas de coincidencia de texto (design.md, 4.7)
+    fechas.py                  — lector de fechas en formato cerrado día/mes[/año] (design.md, 4.5); sin lenguaje natural
     metrics.py                 (pendiente) — copiado tal cual de Peluquería
     dedup.py                   (pendiente) — copiado tal cual de Peluquería
     rate_limiter.py            (pendiente) — copiado tal cual de Peluquería
@@ -51,7 +51,7 @@ tools/
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
 horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 5 líneas de prueba; las 10 restantes en la fase 1b
-tests/                         — test_formato, test_formatear, test_diff, test_revision + fixtures/; el resto llega con cada fase (design.md sección 9)
+tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas + fixtures/; el resto llega con cada fase (design.md sección 9)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```
@@ -79,7 +79,10 @@ Estos son invariantes del diseño aprobado, no de código existente — guían l
 
 ### Conversación
 - **El usuario elige localidad, el resultado muestra la parada.** No se hace elegir entre las paradas físicas de una misma localidad (p.ej. Pozoblanco pueblo/hospital/estación).
-- **El bot nunca resuelve un nombre ambiguo en silencio.** Ver la tabla completa de coincidencia en `design.md`, sección 4.7. `Villafranca` (de Córdoba o de los Barros) siempre pregunta.
+- **El bot nunca resuelve un nombre ambiguo en silencio.** Ver la tabla completa de coincidencia en `design.md`, sección 4.7. `Villafranca` (de Córdoba o de los Barros) siempre pregunta, también escrito con errata.
+- **Una sola normalización de nombres**, en `formato.py`, compartida por el validador y `matcher.py`.
+- **Las fechas escritas usan un formato cerrado** (`día/mes[/año]`, design.md 4.5). No se interpreta lenguaje natural (`mañana`, `el viernes que viene`).
+- Los textos no reconocidos se registran con el texto normalizado y el paso, **nunca con el teléfono del cliente**.
 - Estados: `MENU → SEL_ORIGEN → SEL_DESTINO → SEL_DIA → RESULTADO`, más `ESCRIBIR_ORIGEN`, `ESCRIBIR_DESTINO`, `ESCRIBIR_FECHA`, `CONFIRMAR_PUEBLO` para las ramas de texto libre.
 
 ### Infraestructura

@@ -275,6 +275,139 @@ def test_a_demanda_sin_telefono_demanda(tmp_path):
     assert any("no define 'telefono_demanda'" in e for e in resultado.errores)
 
 
+def test_alias_no_es_lista_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: "no-es-lista" }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any(
+        "'alias' debe ser una lista de cadenas" in e for e in resultado.errores
+    )
+
+
+def test_alias_vacio_al_normalizar_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["La"] }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any(
+        "normaliza a una cadena vacía" in e for e in resultado.errores
+    )
+
+
+def test_alias_duplicado_en_la_misma_localidad_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["El Ache", "ache"] }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any("está repetido" in e for e in resultado.errores)
+
+
+def test_alias_igual_al_propio_nombre_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["pueblo a"] }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any(
+        "coincide con el propio nombre de la localidad" in e for e in resultado.errores
+    )
+
+
+def test_dos_localidades_mismo_nombre_normalizado_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: "Pueblo A", zona: zona-test }
+  pueblo-a2: { nombre: "Pueblo, A", zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-a2 }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any(
+        "tienen el mismo nombre normalizado" in e for e in resultado.errores
+    )
+
+
+def test_parada_coincide_con_nombre_de_otra_localidad_es_error(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    paradas = """\
+zonas:
+  zona-test: Zona de prueba
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: "Pueblo B", localidad: pueblo-c }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    resultado = formato.validar(horarios_dir)
+    assert any(
+        "coincide con el nombre de la localidad" in e for e in resultado.errores
+    )
+
+
+def test_horarios_real_avisa_ambiguedad_villafranca():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.errores == []
+    avisos_villafranca = [a for a in resultado.avisos if "villafranca" in a]
+    assert len(avisos_villafranca) == 1
+    assert "villafranca-de-cordoba" in avisos_villafranca[0]
+    assert "villafranca-de-los-barros" in avisos_villafranca[0]
+
+
 def test_horarios_real_valida_sin_errores():
     resultado = formato.validar(HORARIOS_REAL)
     assert resultado.errores == []

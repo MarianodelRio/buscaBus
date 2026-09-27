@@ -1,0 +1,33 @@
+# tests/fixtures/horarios_matcher/paradas.yaml — 10 localidades que
+# comparten el mismo prefijo normalizado ("prefijotest ..."), para probar el
+# límite de candidatas de app/utils/matcher.py (9 -> elegir, 10 -> demasiadas).
+# Ninguna línea las usa (fixture solo para el matcher, no para el motor).
+
+zonas:
+  zona-pref: Zona de prueba del matcher
+
+localidades:
+  pref-uno: { nombre: Prefijotest Uno, zona: zona-pref }
+  pref-dos: { nombre: Prefijotest Dos, zona: zona-pref }
+  pref-tres: { nombre: Prefijotest Tres, zona: zona-pref }
+  pref-cuatro: { nombre: Prefijotest Cuatro, zona: zona-pref }
+  pref-cinco: { nombre: Prefijotest Cinco, zona: zona-pref }
+  pref-seis: { nombre: Prefijotest Seis, zona: zona-pref }
+  pref-siete: { nombre: Prefijotest Siete, zona: zona-pref }
+  pref-ocho: { nombre: Prefijotest Ocho, zona: zona-pref }
+  pref-nueve: { nombre: Prefijotest Nueve, zona: zona-pref }
+  pref-diez: { nombre: Prefijotest Diez, zona: zona-pref }
+
+paradas:
+  PUN: { nombre: Prefijotest Uno, localidad: pref-uno }
+  PDS: { nombre: Prefijotest Dos, localidad: pref-dos }
+  PTR: { nombre: Prefijotest Tres, localidad: pref-tres }
+  PCT: { nombre: Prefijotest Cuatro, localidad: pref-cuatro }
+  PCN: { nombre: Prefijotest Cinco, localidad: pref-cinco }
+  PSE: { nombre: Prefijotest Seis, localidad: pref-seis }
+  PST: { nombre: Prefijotest Siete, localidad: pref-siete }
+  POC: { nombre: Prefijotest Ocho, localidad: pref-ocho }
+  PNV: { nombre: Prefijotest Nueve, localidad: pref-nueve }
+  PDZ: { nombre: Prefijotest Diez, localidad: pref-diez }
+
+pendientes: []

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import calendar
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -123,6 +124,24 @@ _DIAS_DEL_ANIO: list[tuple[int, int]] = [
 ]
 _INDICE_DIA = {md: i for i, md in enumerate(_DIAS_DEL_ANIO)}
 
+# design.md 4.7: artículos y preposiciones de enlace que se descartan al
+# normalizar (villanueva duque = Villanueva del Duque).
+_PALABRAS_VACIAS_NORMALIZAR = frozenset({"el", "la", "los", "las", "de", "del"})
+
+
+def normalizar(texto: str) -> str:
+    """Normalización única de nombres de localidad/parada y sus alias
+    (design.md, 4.7): minúsculas, sin tildes, sin puntuación (colapsada a
+    espacio) y sin artículos/preposiciones de enlace. La comparten el
+    validador (aquí) y `app.utils.matcher`; ningún otro módulo vuelve a
+    normalizar un nombre por su cuenta."""
+    minusculas = texto.lower()
+    descompuesto = unicodedata.normalize("NFD", minusculas)
+    sin_diacriticos = "".join(c for c in descompuesto if not unicodedata.combining(c))
+    limpio = re.sub(r"[^a-z0-9]", " ", sin_diacriticos)
+    palabras = [p for p in limpio.split() if p not in _PALABRAS_VACIAS_NORMALIZAR]
+    return " ".join(palabras)
+
 
 @dataclass
 class Modelo:
@@ -229,7 +248,7 @@ def _parse_rango_fechas_calendario(txt: str) -> tuple[date, date] | None:
 
 
 def _validar_zonas_localidades_paradas(
-    datos_paradas: dict[str, Any], path: Path, errores: list[str]
+    datos_paradas: dict[str, Any], path: Path, errores: list[str], avisos: list[str]
 ) -> tuple[dict[str, Zona], dict[str, Localidad], dict[str, Parada]]:
     zonas: dict[str, Zona] = {}
     localidades: dict[str, Localidad] = {}
@@ -260,10 +279,57 @@ def _validar_zonas_localidades_paradas(
                 f"{path}: localidad '{lid}' referencia una zona sin definir "
                 f"('{zona_id}')"
             )
-        alias = tuple(campos.get("alias", []))
+
+        nombre_norm = normalizar(str(campos["nombre"]))
+        alias_raw = campos.get("alias", []) or []
+        if not isinstance(alias_raw, list) or any(
+            not isinstance(a, str) for a in alias_raw
+        ):
+            errores.append(
+                f"{path}: localidad '{lid}': 'alias' debe ser una lista de "
+                f"cadenas ({alias_raw!r})"
+            )
+            alias_raw = []
+        alias_normalizados_vistos: set[str] = set()
+        for a in alias_raw:
+            a_norm = normalizar(a)
+            if a_norm == "":
+                errores.append(
+                    f"{path}: localidad '{lid}': el alias '{a}' normaliza a "
+                    "una cadena vacía"
+                )
+                continue
+            if a_norm in alias_normalizados_vistos:
+                errores.append(
+                    f"{path}: localidad '{lid}': el alias '{a}' está "
+                    "repetido (normaliza igual que otro alias de la misma "
+                    "localidad)"
+                )
+                continue
+            alias_normalizados_vistos.add(a_norm)
+            if a_norm == nombre_norm:
+                errores.append(
+                    f"{path}: localidad '{lid}': el alias '{a}' coincide con "
+                    "el propio nombre de la localidad"
+                )
+
+        alias = tuple(str(a) for a in alias_raw)
         localidades[lid] = Localidad(
             id=lid, nombre=str(campos["nombre"]), zona=zona_id, alias=alias
         )
+
+    # Dos localidades cuyo nombre normalizado coincide es una ambigüedad no
+    # declarada (a diferencia de un alias compartido, que se avisa más abajo):
+    # error, no aviso.
+    nombre_a_lids: dict[str, list[str]] = {}
+    for lid, loc in localidades.items():
+        nombre_a_lids.setdefault(normalizar(loc.nombre), []).append(lid)
+    for nombre_norm, lids in nombre_a_lids.items():
+        if len(lids) > 1:
+            errores.append(
+                f"{path}: localidades {sorted(lids)} tienen el mismo nombre "
+                f"normalizado ('{nombre_norm}'), sin declarar cómo distinguirlas"
+            )
 
     paradas_raw = datos_paradas.get("paradas")
     if not isinstance(paradas_raw, dict):
@@ -292,6 +358,39 @@ def _validar_zonas_localidades_paradas(
         paradas[codigo] = Parada(
             codigo=codigo, nombre=str(campos["nombre"]), localidad=localidad_id
         )
+
+    # Una parada cuyo nombre normalizado coincide con el de OTRA localidad
+    # (no la suya) confundiría al matcher: error, no aviso.
+    for codigo, parada in paradas.items():
+        if parada.localidad not in localidades:
+            continue
+        parada_norm = normalizar(parada.nombre)
+        for lid, loc in localidades.items():
+            if lid == parada.localidad:
+                continue
+            if normalizar(loc.nombre) == parada_norm:
+                errores.append(
+                    f"{path}: parada '{codigo}' ('{parada.nombre}') coincide "
+                    f"con el nombre de la localidad '{lid}', distinta de la "
+                    f"suya ('{parada.localidad}')"
+                )
+
+    # Ambigüedades declaradas (aviso, no error): un nombre o alias compartido
+    # por varias localidades, o un alias que coincide con el nombre de otra
+    # (design.md 2.3 y 4.7; caso real: 'villafranca').
+    mapa_claves: dict[str, set[str]] = {}
+    for lid, loc in localidades.items():
+        claves = {normalizar(loc.nombre)} | {normalizar(a) for a in loc.alias}
+        for clave in claves:
+            if clave == "":
+                continue
+            mapa_claves.setdefault(clave, set()).add(lid)
+    for clave, lids in sorted(mapa_claves.items()):
+        if len(lids) > 1:
+            avisos.append(
+                f"{path}: ambigüedad declarada: '{clave}' es nombre o alias "
+                f"de varias localidades {sorted(lids)}"
+            )
 
     return zonas, localidades, paradas
 
@@ -1016,7 +1115,7 @@ def validar(directorio: Path | str) -> Resultado:
 
     datos_paradas = _cargar_yaml(paradas_path, errores)
     zonas, localidades, paradas = _validar_zonas_localidades_paradas(
-        datos_paradas or {}, paradas_path, errores
+        datos_paradas or {}, paradas_path, errores, avisos
     )
     pendientes_paradas = _validar_pendientes_paradas(
         datos_paradas or {}, paradas_path, errores, avisos

@@ -1,0 +1,286 @@
+"""tests/test_matcher.py — reglas de coincidencia de texto de design.md 4.7,
+contra `horarios/` real y una fixture pequeña para el límite de candidatas."""
+
+from __future__ import annotations
+
+import dataclasses
+from pathlib import Path
+
+from app.services.horarios import formato, loader
+from app.utils import matcher
+
+REPO_ROOT = Path(__file__).parent.parent
+HORARIOS_REAL = REPO_ROOT / "horarios"
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _horarios_real():
+    return loader.cargar(HORARIOS_REAL)
+
+
+def _nombres(h, coincidencia: matcher.Coincidencia) -> list[str]:
+    return [h.modelo.localidades[lid].nombre for lid in coincidencia.localidades]
+
+
+# ── casos exactos, prefijo, alias ───────────────────────────────────────────
+
+
+def test_exacto_alias_y_mayusculas():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("Pozoblanco", "POZOBLANCO", "pozo"):
+        r = m.buscar(texto)
+        assert r.tipo == "unico"
+        assert _nombres(h, r) == ["Pozoblanco"]
+
+
+def test_cordoba_exacto_no_arrastra_villanueva_de_cordoba():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("Córdoba")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Córdoba"]
+
+
+def test_prefijo_cor_elegir_cordoba_coronada():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("cor")
+    assert r.tipo == "elegir"
+    assert set(_nombres(h, r)) == {"Córdoba", "Coronada"}
+
+
+def test_prefijo_fuente_elegir_tres():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("fuente")
+    assert r.tipo == "elegir"
+    assert set(_nombres(h, r)) == {
+        "Fuente La Lancha",
+        "Fuente Obejuna",
+        "Fuente Palmera",
+    }
+
+
+def test_prefijo_vil_elegir_ocho():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("vil")
+    assert r.tipo == "elegir"
+    assert len(r.localidades) == 8
+
+
+def test_villanueva_duque_unico():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("villanueva duque", "Villanueva del Duque"):
+        r = m.buscar(texto)
+        assert r.tipo == "unico"
+        assert _nombres(h, r) == ["Villanueva del Duque"]
+
+
+def test_villafranca_siempre_pregunta():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+
+    esperadas = {"Villafranca de Córdoba", "Villafranca de los Barros"}
+
+    r = m.buscar("villafranca")
+    assert r.tipo == "elegir"
+    assert set(_nombres(h, r)) == esperadas
+
+    r = m.buscar("villafranka")
+    assert r.tipo == "elegir"  # nunca 'confirmar', aunque sea una errata
+    assert set(_nombres(h, r)) == esperadas
+
+    r = m.buscar("Villafranca de Córdoba")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Villafranca de Córdoba"]
+
+
+def test_errata_unica_confirma():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+
+    r = m.buscar("pozoblnco")
+    assert r.tipo == "confirmar"
+    assert _nombres(h, r) == ["Pozoblanco"]
+
+    r = m.buscar("zafar")
+    assert r.tipo == "confirmar"
+    assert _nombres(h, r) == ["Zafra"]
+
+
+def test_errata_distancia_2_en_clave_corta_no_coincide():
+    # 'zafra' tiene 5 letras (umbral <=1); una query a distancia 2 no debe
+    # generar ninguna candidata.
+    assert matcher.damerau("zabsa", "zafra") == 2
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("zabsa")
+    assert r.tipo == "sin_coincidencia"
+
+
+def test_menos_de_minimo_letras_sin_exacto():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("po", "z"):
+        r = m.buscar(texto)
+        assert r.tipo == "sin_coincidencia"
+
+
+def test_relleno_inicial_se_quita():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+
+    r = m.buscar("desde pozoblanco")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Pozoblanco"]
+
+    r = m.buscar("a la herreria")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["La Herrería"]
+
+    r = m.buscar("voy a cordoba")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Córdoba"]
+
+
+def test_relleno_inicial_con_puntuacion():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("¿desde pozoblanco?", "Desde, Pozoblanco", "¿Hacia Pozoblanco?"):
+        r = m.buscar(texto)
+        assert r.tipo == "unico", texto
+        assert _nombres(h, r) == ["Pozoblanco"]
+
+
+def test_mayusculas_tildes_y_espacios():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto, esperado in (
+        ("POZOBLANCO", "Pozoblanco"),
+        ("  pOzObLaNcO  ", "Pozoblanco"),
+        ("CÓRDOBA", "Córdoba"),
+        ("cordoba", "Córdoba"),
+        ("PENARROYA", "Peñarroya-Pueblonuevo"),
+        ("peñarroya pueblonuevo", "Peñarroya-Pueblonuevo"),
+        ("BELALCÁZAR", "Belalcázar"),
+    ):
+        r = m.buscar(texto)
+        assert r.tipo == "unico", texto
+        assert _nombres(h, r) == [esperado], texto
+
+
+def test_nombre_de_parada_exacto():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("Pozoblanco (Hospital)")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Pozoblanco"]
+
+
+def test_alias_el_cruce():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("el cruce")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Cruce de Villaharta"]
+
+
+def test_sin_coincidencia():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("pozoblanco cordoba", "xyz", "la", ""):
+        r = m.buscar(texto)
+        assert r.tipo == "sin_coincidencia"
+
+
+def test_sin_alias_no_reconocido():
+    # 'pueblonuevo' y 'obejuna' solo se reconocerían con alias (P13); hoy no
+    # existen.
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for texto in ("pueblonuevo", "obejuna"):
+        r = m.buscar(texto)
+        assert r.tipo == "sin_coincidencia"
+
+
+# ── límite de candidatas (9 -> elegir, 10 -> demasiadas) ────────────────────
+
+
+def test_limite_9_elegir_10_demasiadas():
+    h = loader.cargar(FIXTURES / "horarios_matcher")
+    m = matcher.Matcher(h)
+
+    r10 = m.buscar("prefijotest")
+    assert r10.tipo == "demasiadas"
+    assert len(r10.localidades) == 10
+
+    # Quitamos una localidad del modelo para probar el límite justo en 9.
+    localidades_9 = dict(h.modelo.localidades)
+    quitada = next(iter(localidades_9))
+    del localidades_9[quitada]
+    modelo_9 = dataclasses.replace(h.modelo, localidades=localidades_9)
+    h_9 = dataclasses.replace(h, modelo=modelo_9)
+    m_9 = matcher.Matcher(h_9)
+    r9 = m_9.buscar("prefijotest")
+    assert r9.tipo == "elegir"
+    assert len(r9.localidades) == 9
+
+
+def test_localidad_no_usada_se_encuentra_pero_no_sale_en_zonas():
+    h = loader.cargar(FIXTURES / "horarios_matcher")
+    m = matcher.Matcher(h)
+    r = m.buscar("Prefijotest Uno")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Prefijotest Uno"]
+    assert matcher.zonas(h) == ()  # ninguna localidad de esta fixture está en uso
+
+
+# ── zonas() sobre horarios/ real ────────────────────────────────────────────
+
+
+def test_zonas_reales_excluye_campina_y_ordena():
+    h = _horarios_real()
+    zs = matcher.zonas(h)
+    ids_zona = [z.id for z, _ in zs]
+    assert "campina" not in ids_zona
+
+    for zona, localidades in zs:
+        nombres_norm = [formato.normalizar(loc.nombre) for loc in localidades]
+        assert nombres_norm == sorted(nombres_norm)
+        # solo localidades en uso
+        for loc in localidades:
+            assert loc.id in h.localidad_viajes
+
+
+# ── paginar() ────────────────────────────────────────────────────────────
+
+
+def test_paginar():
+    assert matcher.paginar([]) == ()
+    assert matcher.paginar([1, 2, 3]) == ((1, 2, 3),)
+    paginas = matcher.paginar(list(range(1, 11)))
+    assert paginas == (tuple(range(1, 9)), (9, 10))
+    # sin pérdidas ni duplicados
+    aplanado = [x for pagina in paginas for x in pagina]
+    assert aplanado == list(range(1, 11))
+    assert all(len(p) <= matcher.FILAS_POR_PAGINA for p in paginas)
+
+
+# ── propiedad: cada localidad real, escrita con su nombre exacto ───────────
+
+
+def test_propiedad_toda_localidad_por_su_nombre_exacto():
+    # El nombre oficial completo de cada localidad es único incluso para el
+    # par Villafranca (de Córdoba / de los Barros): la ambigüedad declarada
+    # solo salta al escribir el alias compartido "villafranca" (ver
+    # test_villafranca_siempre_pregunta), nunca al escribir el nombre
+    # completo (design.md 4.7: "Villafranca de Córdoba" resuelve sola).
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    for lid, loc in h.modelo.localidades.items():
+        r = m.buscar(loc.nombre)
+        assert r.tipo == "unico", f"{lid}: se esperaba 'unico', fue {r.tipo}"
+        assert r.localidades == (lid,)

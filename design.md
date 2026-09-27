@@ -281,7 +281,9 @@ Reglas del formato:
 | `a_demanda` usada sin `telefono_demanda` en la línea | |
 | Dos tablas de una línea con la misma temporada, días y extremos de cabecera | |
 | Marcador `{xxx}` en el `texto` de una observación distinto de `{telefono}` | |
-| Pendiente mal formado en `pendientes:` de `paradas.yaml` | |
+| Pendiente mal formado en `pendientes:` de `paradas.yaml` | Ambigüedades declaradas: un alias que comparten varias localidades o que coincide con el nombre de otra (`villafranca`) |
+| Alias que no es texto, que queda vacío al normalizar o repetido en la misma localidad | |
+| Dos localidades cuyo nombre normalizado coincide (ambigüedad no declarada) | |
 
 El parser y el validador son **un único módulo** (`app/services/horarios/formato.py`)
 que usan `make validar`, los tests y el loader al arrancar el bot.
@@ -569,7 +571,48 @@ festivo se marca en la descripción: `festivo · 3 salidas`.
 cliente sabe si el jueves es festivo. Se elige **una fecha real** y el bot
 deduce el tipo de día, la temporada, el viernes lectivo y las excepciones.
 
-`📅 Otra fecha` acepta `25/12`, `25 de diciembre`, `el viernes que viene`.
+**`📅 Otra fecha` usa un formato cerrado** (decidido el 2026-09-27, fase 3).
+Al pulsarla, el bot dice exactamente cómo escribir la fecha:
+
+```
+📅 Escribe la fecha así: día/mes
+Por ejemplo: 25/12
+```
+
+Solo se acepta **día y mes en números, en ese orden**, con año opcional. Se
+toleran variaciones de escritura, nunca de contenido:
+
+| Escribe | Entiende |
+|---|---|
+| `25/12`, `25-12`, `25.12`, `25 12`, ` 25 / 12 ` | 25 de diciembre |
+| `5/1`, `05/01` | 5 de enero |
+| `25/12/2026`, `25/12/26` | con año explícito (2 cifras = 20xx) |
+
+No se interpreta lenguaje natural: `mañana`, `el viernes`, `25 de diciembre`
+o `por la mañana` se rechazan igual que una fecha imposible (`31/02`,
+`12/25`), repitiendo el formato: "No he entendido la fecha. Escríbela así:
+día/mes, por ejemplo 25/12". Los próximos 7 días ya están en la lista con su
+fecha; `Otra fecha` es para días más lejanos, y un único formato elimina
+ambigüedades como "el viernes que viene" (¿este viernes o el de la semana
+siguiente?).
+
+**Año cuando no se escribe:** se miran la última vez que ese día/mes ya pasó
+y la próxima vez que llega (hoy incluido).
+- Si la última vez fue hace **30 días o menos** (`20/09` escrito el 27/09, o
+  `28/12` escrito el 05/01): "Esa fecha ya ha pasado". Casi seguro es un
+  error del cliente, no una fecha de dentro de un año.
+- Si no, la próxima vez que llega (`3/1` escrito el 27/09 → 03/01 del año
+  siguiente; `27/09` escrito el 27/09 → hoy).
+- `29/02`: igual, contando solo años bisiestos (hoy, 29/02/2028, fuera del
+  calendario cargado → `sin_datos`).
+
+Con año explícito y fecha ya pasada: "Esa fecha ya ha pasado". Una fecha
+válida pero fuera de la vigencia de `calendario.yaml` no es asunto del lector
+de fechas: el motor responde `sin_datos`.
+
+Si el cliente escribe en la lista de días sin pulsar `Otra fecha`, se usa el
+mismo lector: una fecha válida se acepta; si no, se le recuerda que elija de
+la lista o pulse `Otra fecha` (fase 4).
 
 ### 4.6 Paso 5 — Resultado
 
@@ -608,22 +651,62 @@ Todas las ramas, sin excepciones:
 | Coincide con 2-3 | Botones para elegir |
 | Coincide con 4-9 | Lista para elegir |
 | Coincide con más de 9 | "Sé más concreto" + repregunta |
-| Distancia de edición ≤2 y único (`pozoblnco`) | **Confirma**: "¿Pozoblanco?" [Sí] [No] |
+| Errata única (`pozoblnco`) | **Confirma**: "¿Pozoblanco?" [Sí] [No] |
 | Sin coincidencia | "No conozco ese pueblo" + lista habitual + `Ver todos por zona` |
 
-**Normalización previa:** mayúsculas, sin tildes, sin puntuación, sin artículos
-(`el`, `la`, `los`). La tabla de alias vive en `horarios/paradas.yaml` y recoge
-los nombres oficiales, las abreviaturas habituales y los nombres coloquiales que
-aporte la empresa (P13).
+Reglas precisas (decididas el 2026-09-27, fase 3):
+
+- **Orden de evaluación: exacto → prefijo → errata.** La primera regla que
+  encuentra algo decide; un exacto gana siempre a los prefijos (`adamuz` es
+  Adamuz aunque otro nombre empezara igual).
+- **Qué se compara.** Nombres de localidad y sus alias (exacto y prefijo) y
+  nombres de parada (solo exacto: "Pozoblanco (Hospital)" lleva a
+  Pozoblanco). Cada clave apunta a un **conjunto** de localidades: un alias
+  compartido (`villafranca`) da 2 candidatas y se pregunta.
+- **Prefijo del nombre entero**, no de cualquier palabra: `cordoba` no
+  coincide con "Villanueva de Córdoba". `pueblonuevo` u `obejuna` solo se
+  reconocerán cuando haya alias (P13); hoy no se añaden.
+- **Mínimo 3 letras** (tras normalizar) para prefijo y errata. Por debajo,
+  solo cuenta un exacto; si no, `sin coincidencia` (`z` no es Zafra).
+- **Errata** (distancia de Damerau-Levenshtein contra el nombre o alias
+  completo): **≤1 si la clave tiene 5 letras o menos, ≤2 si es más larga**.
+  Si la errata queda cerca de una sola localidad, se confirma; si queda cerca
+  de 2 o más (incluido `villafranka`), se ofrecen para elegir como cualquier
+  coincidencia múltiple, **nunca** un "¿Villafranca de Córdoba?" de sí o no.
+- **Tras [No] en una confirmación**, el bot pide que lo escriba de otra forma
+  y ofrece `Ver todos por zona`.
+- **Candidatas en orden alfabético.**
+- **Se busca siempre entre todas las localidades**, también en el destino: si
+  se buscara solo entre las alcanzables, `Mérida` desde Pozoblanco daría "no
+  conozco ese pueblo" en vez de "sin trayecto directo" (4.8). Una localidad
+  que ninguna línea usa se reconoce igual (la conversación dirá que no hay
+  trayecto).
+- **Dos pueblos en un mensaje** (`pozoblanco cordoba`) no se interpretan: es
+  un texto no reconocido.
+- **Textos no reconocidos** (localidad o fecha) se registran en el log con el
+  texto normalizado y el paso (origen, destino, fecha), **nunca con el
+  teléfono del cliente**. Sirven a la fase 8 para decidir qué alias faltan.
+
+**Normalización previa:** minúsculas, sin tildes (`ñ` → `n`), sin puntuación
+(el guion pasa a espacio), espacios colapsados, sin artículos (`el`, `la`,
+`los`, `las`) ni `de`/`del` (`villanueva duque` = Villanueva del Duque). En
+el texto del cliente se quita además el relleno inicial `desde`, `a`,
+`hacia`, `para`, `voy a` (`desde pozoblanco`). Es **una sola función**, en
+`formato.py`, compartida por el validador y el matcher. La tabla de alias vive
+en `horarios/paradas.yaml` y recoge los nombres oficiales, las abreviaturas
+habituales y los nombres coloquiales que aporte la empresa (P13).
 
 **Caso que siempre pregunta:** `Villafranca` (de Córdoba o de los Barros).
-Nunca se resuelve solo.
+Nunca se resuelve solo, ni escrito con errata.
 
 **`Ver todos por zona`** es la red de seguridad para quien no sabe escribir el
 nombre. 7 zonas: Los Pedroches, Guadiato, Vega del Guadalquivir, Adamuz,
 Campiña, Extremadura, Córdoba. Las zonas grandes (Los Pedroches tiene 20
 paradas, Guadiato 14, Extremadura 11) se parten en dos listas con una fila
 "ver más". No es el camino principal, pero ningún usuario se queda sin salida.
+Se muestran en el orden de `paradas.yaml`, **ocultando las zonas sin
+localidades en uso** (hoy Campiña); dentro de cada zona, localidades en orden
+alfabético y solo las que alguna línea usa. Zonas pendientes de negocio (P18).
 
 ### 4.8 Casos borde
 
@@ -633,6 +716,7 @@ paradas, Guadiato 14, Extremadura 11) se parten en dos listas con una fila
 | Día sin datos (`sin_datos`) | Dice que no tiene ese horario y da el teléfono con horario de oficina. **Nunca lo presenta como "no hay servicio"** |
 | Sin trayecto directo | Lo dice, enseña los destinos que sí existen desde ese origen y da el teléfono con horario de oficina. **No inventa trasbordos** |
 | Origen = destino | "Elige un destino distinto" |
+| Fecha ya pasada (hace ≤30 días sin año, o con año) | "Esa fecha ya ha pasado" + repregunta (4.5) |
 | Hoy sin salidas restantes | "Hoy ya no quedan salidas" + botón a mañana |
 | Servicio a demanda | `⚠️ A demanda: llama 24 h laborables antes al 957 42 90 30` |
 | Viernes lectivo | `⚠️ Solo viernes en periodo escolar` |
@@ -694,7 +778,7 @@ app/services/horarios/
   calendario.py   # Temporada, tipo de día, festivos, periodo escolar
 app/utils/
   matcher.py      # Reglas de coincidencia de texto del punto 4.7
-  fechas.py       # Parseo de "25/12", "el viernes que viene", "mañana"
+  fechas.py       # Lector de fechas en formato cerrado día/mes[/año] (punto 4.5)
 tools/
   validar.py      # make validar
   formatear.py    # make formatear
@@ -962,10 +1046,22 @@ cupieran festivos de después del curso cargado; ver "`vigencia_fin` no puede
 ir más allá de lo que realmente se conoce del curso escolar" en la sección
 2.3.
 
-### Fase 3 · Coincidencia de texto (1 día)
-`matcher.py`, `fechas.py`, tabla de alias, zonas.
+### Fase 3 · Coincidencia de texto (1 día) — cerrada el 2026-09-27
+`matcher.py`, `fechas.py`, zonas, normalización compartida y validación de
+alias en `formato.py`. Sin alias nuevos (P13 sigue abierta). RDS:
+`docs/rds_fase3_matcher.md`.
 **Criterio:** todas las ramas de la tabla 4.7 cubiertas por tests; `Villafranca`
-siempre pregunta; las erratas de 1-2 letras piden confirmación.
+siempre pregunta, también con errata; las erratas piden confirmación según la
+longitud del nombre; `fechas.py` solo acepta el formato cerrado de 4.5.
+
+Verificado el 2026-09-27: 158 tests en verde, `ruff` limpio, `make validar`
+sin errores (con el aviso esperado de la ambigüedad declarada `villafranca`).
+Probados contra `horarios/` real todos los ejemplos de 4.5 y 4.7, incluidos
+mayúsculas, tildes, `ñ` y espacios sobrantes. Corregido en la revisión: el
+relleno inicial (`desde`, `hacia`...) se quitaba antes de normalizar y fallaba
+con puntuación (`¿desde pozoblanco?`); ahora se quita sobre el texto ya
+normalizado. P13 (alias) y P18 (zonas) siguen abiertas: son datos y no
+cambian el código.
 
 ### Fase 4 · Conversación (2-3 días)
 `conversation.py`, `interactive.py`, `messages.py`, `webhook.py`, scheduler de
@@ -1014,8 +1110,8 @@ credenciales reales.
 | `test_revision.py` | El HTML contiene cada línea, temporada, leyenda y pendiente |
 | `test_calendario.py` | Temporadas, festivos, viernes lectivo, agosto |
 | `test_query.py` | Pruebas doradas; sentido correcto; sin servicio; sin trayecto |
-| `test_matcher.py` | Las 7 ramas de 4.7; `Villafranca`; erratas; alias |
-| `test_fechas.py` | "mañana" vs "por la mañana"; formatos de fecha |
+| `test_matcher.py` | Las 7 ramas de 4.7; `Villafranca` (también con errata); erratas por longitud; mínimo de 3 letras; zonas |
+| `test_fechas.py` | Separadores y espacios; año implícito y explícito; fechas imposibles; fechas pasadas; rechazo de lenguaje natural (`mañana`, `el viernes`) |
 | `test_conversation.py` | Flujo completo; casos borde; caducidad de estado |
 | `test_interactive.py` | **Ninguna lista supera 10 filas ni ningún botón 3** |
 | `test_webhook.py` | HMAC, dedup, límites, payloads inválidos |
