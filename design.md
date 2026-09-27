@@ -1089,7 +1089,7 @@ con puntuación (`¿desde pozoblanco?`); ahora se quita sobre el texto ya
 normalizado. P13 (alias) y P18 (zonas) siguen abiertas: son datos y no
 cambian el código.
 
-### Fase 4 · Conversación (2-3 días)
+### Fase 4 · Conversación (2-3 días) — cerrada el 2026-09-27
 `conversation.py` (infraestructura), `flujo.py` (máquina de estados),
 `interactive.py`, `messages.py`, `webhook.py`, `datos.py`, scheduler de
 limpieza, comandos de administrador. RDS: `docs/rds_fase4_conversacion.md`.
@@ -1105,6 +1105,10 @@ del resultado queda pendiente de la fase 7 (D8): no se añadió ninguna línea
 de precio. `WHATSAPP_APP_SECRET` es obligatorio y `_verify_signature` falla
 cerrado (403) si falta, al contrario que en Peluquería.
 
+Cerrada el 2026-09-27, tras las correcciones de abajo: 258 tests en verde,
+`ruff` limpio, `make validar` sin errores y cada caso de 4.8 con test de
+conversación.
+
 ### Correcciones de la fase 4 (revisión del 2026-09-27) — resueltas el 2026-09-27
 Resueltas en un ciclo propio (`docs/rds_fase4_correcciones.md`). La revisión
 superficial de la fase 4 encontró que su criterio de cierre ("todos los
@@ -1114,8 +1118,8 @@ lectivo ni horas aproximadas; `test_webhook.py` tenía 8 tests frente a los
 26 de Peluquería (faltaban límites por IP/teléfono, BSUID, payloads mal
 formados); y `_descripcion_dia`, `_leer_fecha_libre` y el registro de textos
 no reconocidos en `flujo.py` se desviaban en tres puntos pequeños de
-`docs/rds_fase4_conversacion.md`. Verificado el 2026-09-27: 257 tests en
-verde (69 en `test_conversation.py` + `test_webhook.py`, 37 y 32
+`docs/rds_fase4_conversacion.md`. Verificado el 2026-09-27: 258 tests en
+verde (70 en `test_conversation.py` + `test_webhook.py`, 38 y 32
 respectivamente), `ruff` limpio, `test_query.py` sin regresión tras añadir
 `linea-aproximada.yaml` a `tests/fixtures/horarios_motor/`. Se añadió el
 fixture `datos_motor` (no autouse) en `tests/conftest.py`, se corrigió
@@ -1123,7 +1127,8 @@ fixture `datos_motor` (no autouse) en `tests/conftest.py`, se corrigió
 salida` / `horario no disponible` / ` · puede haber más` (ver 4.5), se
 redujo `_leer_fecha_libre` a un mensaje por paso, y se añadió
 `_texto_para_log` (normaliza y sustituye por `<numero>` si hay 6 dígitos
-seguidos o más) en los dos puntos de registro `[NO_RECONOCIDO]`. Queda sin
+o más en total, seguidos o no: más estricto que el RDS, aceptado en la
+revisión porque protege mejor la privacidad) en los dos puntos de registro `[NO_RECONOCIDO]`. Queda sin
 colapsar, documentado y aceptado, el camino de `Ver la vuelta` sin trayecto
 de vuelta (`_handle_resultado`): manda un texto y después un interactivo del
 menú, porque `build_menu()` no acepta un aviso en el cuerpo y esta
