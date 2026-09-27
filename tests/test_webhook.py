@@ -31,7 +31,7 @@ def test_verify_webhook_wrong_token(monkeypatch):
 
 def test_post_without_signature_rejected():
     body = make_payload("34600000000", text="hola")
-    resp = client.post("/webhook", data=json.dumps(body),
+    resp = client.post("/webhook", content=json.dumps(body),
                         headers={"Content-Type": "application/json"})
     assert resp.status_code == 403
 
@@ -39,7 +39,7 @@ def test_post_without_signature_rejected():
 def test_post_with_invalid_signature_rejected():
     body = make_payload("34600000000", text="hola")
     resp = client.post(
-        "/webhook", data=json.dumps(body),
+        "/webhook", content=json.dumps(body),
         headers={"Content-Type": "application/json",
                  "X-Hub-Signature-256": "sha256=deadbeef"},
     )
@@ -51,7 +51,7 @@ def test_post_with_valid_signature_dispatches(monkeypatch):
     raw, sig = sign_body(body)
     with patch("app.handlers.webhook.handle_message") as mocked:
         resp = client.post(
-            "/webhook", data=raw,
+            "/webhook", content=raw,
             headers={"Content-Type": "application/json",
                      "X-Hub-Signature-256": sig},
         )
@@ -60,7 +60,7 @@ def test_post_with_valid_signature_dispatches(monkeypatch):
 
 
 def test_post_non_json_content_type_ignored():
-    resp = client.post("/webhook", data="not json",
+    resp = client.post("/webhook", content="not json",
                         headers={"Content-Type": "text/plain"})
     assert resp.status_code == 200
 
@@ -71,7 +71,7 @@ def test_post_oversized_payload_rejected():
     # Fuerza el límite de tamaño simulando un cuerpo mayor a 64 KB.
     huge = raw + b" " * 70_000
     resp = client.post(
-        "/webhook", data=huge,
+        "/webhook", content=huge,
         headers={"Content-Type": "application/json",
                  "X-Hub-Signature-256": sig},
     )
@@ -90,10 +90,10 @@ def test_dedup_same_message_id_only_dispatched_once():
     }
     raw, sig = sign_body(body)
     with patch("app.handlers.webhook.handle_message") as mocked:
-        client.post("/webhook", data=raw,
+        client.post("/webhook", content=raw,
                      headers={"Content-Type": "application/json",
                               "X-Hub-Signature-256": sig})
-        client.post("/webhook", data=raw,
+        client.post("/webhook", content=raw,
                      headers={"Content-Type": "application/json",
                               "X-Hub-Signature-256": sig})
         assert mocked.call_count == 1
@@ -106,7 +106,7 @@ def test_dedup_same_message_id_only_dispatched_once():
 def _post(body: dict):
     raw, sig = sign_body(body)
     return client.post(
-        "/webhook", data=raw,
+        "/webhook", content=raw,
         headers={"Content-Type": "application/json", "X-Hub-Signature-256": sig},
     )
 
@@ -189,7 +189,7 @@ def test_invalid_json_returns_ok():
     sig = "sha256=" + _hmac.new(
         TEST_APP_SECRET.encode("utf-8"), raw, hashlib.sha256
     ).hexdigest()
-    resp = client.post("/webhook", data=raw,
+    resp = client.post("/webhook", content=raw,
                         headers={"Content-Type": "application/json",
                                  "X-Hub-Signature-256": sig})
     assert resp.status_code == 200
