@@ -22,6 +22,8 @@ localidades:
   pueblo-k: { nombre: Pueblo K, zona: zona-test }
   pueblo-m: { nombre: Pueblo M, zona: zona-test }
   pueblo-l: { nombre: Pueblo L, zona: zona-test }
+  pueblo-r: { nombre: Pueblo R, zona: zona-test }
+  pueblo-s: { nombre: Pueblo S, zona: zona-test }
 
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
@@ -40,5 +42,7 @@ paradas:
   KKK: { nombre: Pueblo K, localidad: pueblo-k }
   MMM: { nombre: Pueblo M, localidad: pueblo-m }
   LLL: { nombre: Pueblo L, localidad: pueblo-l }
+  RRR: { nombre: Pueblo R, localidad: pueblo-r }
+  SSS: { nombre: Pueblo S, localidad: pueblo-s }
 
 pendientes: []

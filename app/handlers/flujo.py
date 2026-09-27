@@ -1,0 +1,526 @@
+# handlers/flujo.py
+"""Máquina de estados de la conversación (design.md, 4.1-4.8).
+
+Toda lectura del reloj o del calendario pasa por `calendario.hoy()` /
+`calendario.ahora()`, llamadas únicamente desde aquí (nunca desde los
+constructores de `interactive.py` ni desde `messages.py`) para que los tests
+puedan fijar la fecha con monkeypatch.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import date, timedelta
+
+from app.services.horarios import calendario, datos as horarios_datos
+from app.services.horarios import formato
+from app.services.horarios import query
+from app.services import whatsapp as wa
+from app.utils import fechas
+from app.utils.interactive import (
+    build_candidatas,
+    build_confirmar,
+    build_destinos,
+    build_dias,
+    build_escribir,
+    build_info,
+    build_menu,
+    build_origen,
+    build_resultado,
+    build_zona,
+    build_zonas,
+)
+from app.utils.matcher import zonas as matcher_zonas, paginar
+from app.utils import messages as msg
+
+logger = logging.getLogger(__name__)
+
+# Textos no reconocidos se registran normalizados, nunca con el teléfono del
+# cliente (design.md, 4.7): si el texto contiene 6 dígitos o más (p. ej. un
+# teléfono escrito donde iba una fecha, con o sin espacios/guiones), se
+# registra `<numero>` en su lugar. El recuento se hace sobre los dígitos del
+# texto sin separadores, porque `formato.normalizar()` sustituye separadores
+# por espacios y los dígitos dejarían de estar consecutivos.
+_RE_NO_DIGITO = re.compile(r"\D")
+
+
+def _texto_para_log(texto: str) -> str:
+    normalizado = formato.normalizar(texto)[:40]
+    solo_digitos = _RE_NO_DIGITO.sub("", normalizado)
+    if len(solo_digitos) >= 6:
+        return "<numero>"
+    return normalizado
+
+# ── Estados ────────────────────────────────────────────────────────────────
+MENU = "MENU"
+SEL_ORIGEN = "SEL_ORIGEN"
+ESCRIBIR_ORIGEN = "ESCRIBIR_ORIGEN"
+SEL_DESTINO = "SEL_DESTINO"
+ESCRIBIR_DESTINO = "ESCRIBIR_DESTINO"
+CONFIRMAR_PUEBLO = "CONFIRMAR_PUEBLO"
+SEL_DIA = "SEL_DIA"
+ESCRIBIR_FECHA = "ESCRIBIR_FECHA"
+RESULTADO = "RESULTADO"
+
+
+# ── Helpers puros ───────────────────────────────────────────────────────
+
+
+def ordenar_destinos(
+    alcanzables: list[str], prioridad: list[str], nombres: dict[str, str]
+) -> list[tuple[str, str]]:
+    """Orden de negocio primero (según `pueblos_menu_inicio`), después el
+    resto en orden alfabético (design.md, 4.4)."""
+    prioridad_presentes = [lid for lid in prioridad if lid in alcanzables]
+    resto = [lid for lid in alcanzables if lid not in prioridad_presentes]
+    resto.sort(key=lambda lid: formato.normalizar(nombres[lid]))
+    orden = prioridad_presentes + resto
+    return [(lid, nombres[lid]) for lid in orden]
+
+
+def _nombres(datos, ids) -> list[tuple[str, str]]:
+    return [(lid, datos.horarios.modelo.localidades[lid].nombre) for lid in ids]
+
+
+def _nombre_localidad(datos, lid: str) -> str:
+    return datos.horarios.modelo.localidades[lid].nombre
+
+
+# ── Navegación ──────────────────────────────────────────────────────────
+
+
+def to_menu(identifier: str, state) -> None:
+    state.step = MENU
+    state.campo = None
+    state.origen = None
+    state.destino = None
+    state.fecha = None
+    state.pendiente = None
+    wa.send_interactive(identifier, build_menu())
+
+
+def _ir_a_origen(identifier: str, state, aviso: str | None = None) -> None:
+    datos = horarios_datos.actual()
+    state.step = SEL_ORIGEN
+    state.campo = "origen"
+    state.origen = None
+    state.destino = None
+    state.pendiente = None
+    localidades = _nombres(datos, datos.menu_origen)
+    wa.send_interactive(identifier, build_origen(localidades, aviso=aviso))
+
+
+def _mostrar_paso(identifier: str, state, campo: str, aviso: str | None = None,
+                   con_zonas: bool = False) -> None:
+    datos = horarios_datos.actual()
+    if campo == "origen":
+        localidades = _nombres(datos, datos.menu_origen)
+        wa.send_interactive(
+            identifier,
+            build_origen(localidades, aviso=aviso, con_zonas=con_zonas),
+        )
+    else:
+        origen_nombre = _nombre_localidad(datos, state.origen)
+        alcanzables = list(query.destinos_desde(datos.horarios, state.origen))
+        nombres_map = {lid: _nombre_localidad(datos, lid) for lid in alcanzables}
+        ordenados = ordenar_destinos(alcanzables, list(datos.menu_origen), nombres_map)
+        wa.send_interactive(
+            identifier,
+            build_destinos(origen_nombre, ordenados, aviso=aviso, con_zonas=con_zonas),
+        )
+
+
+# ── Búsqueda de texto libre (design.md, 4.7) ──────────────────────────────
+
+
+def _buscar(identifier: str, state, campo: str, texto: str) -> None:
+    datos = horarios_datos.actual()
+    coincidencia = datos.matcher.buscar(texto)
+
+    if coincidencia.tipo == "unico":
+        _elegir(identifier, state, campo, coincidencia.localidades[0])
+        return
+
+    if coincidencia.tipo == "confirmar":
+        state.pendiente = coincidencia.localidades[0]
+        state.campo = campo
+        state.step = CONFIRMAR_PUEBLO
+        nombre = _nombre_localidad(datos, state.pendiente)
+        wa.send_interactive(identifier, build_confirmar(nombre))
+        return
+
+    if coincidencia.tipo == "elegir":
+        candidatas = _nombres(datos, coincidencia.localidades)
+        state.campo = campo
+        wa.send_interactive(identifier, build_candidatas(candidatas, campo))
+        return
+
+    if coincidencia.tipo == "demasiadas":
+        state.campo = campo
+        wa.send_interactive(
+            identifier, build_escribir(campo, msg.msg_demasiadas_coincidencias())
+        )
+        return
+
+    # sin_coincidencia
+    logger.info(
+        "[NO_RECONOCIDO] paso=%s texto=%s", campo, _texto_para_log(texto)
+    )
+    state.campo = campo
+    _mostrar_paso(identifier, state, campo, aviso=msg.msg_no_conozco_ese_pueblo(),
+                  con_zonas=True)
+
+
+def _elegir(identifier: str, state, campo: str, localidad_id: str) -> None:
+    datos = horarios_datos.actual()
+    if campo == "origen":
+        destinos = query.destinos_desde(datos.horarios, localidad_id)
+        if not destinos:
+            nombre = _nombre_localidad(datos, localidad_id)
+            _mostrar_paso(
+                identifier, state, "origen",
+                aviso=msg.msg_sin_destinos_desde_origen(nombre),
+            )
+            return
+        state.origen = localidad_id
+        state.destino = None
+        state.campo = "destino"
+        state.step = SEL_DESTINO
+        _mostrar_paso(identifier, state, "destino")
+        return
+
+    # campo == "destino"
+    if localidad_id == state.origen:
+        _mostrar_paso(identifier, state, "destino", aviso=msg.msg_destino_distinto())
+        return
+    alcanzables = query.destinos_desde(datos.horarios, state.origen)
+    if localidad_id not in alcanzables:
+        origen_nombre = _nombre_localidad(datos, state.origen)
+        destino_nombre = _nombre_localidad(datos, localidad_id)
+        _mostrar_paso(
+            identifier, state, "destino",
+            aviso=msg.msg_sin_trayecto(origen_nombre, destino_nombre),
+        )
+        return
+    state.destino = localidad_id
+    state.campo = None
+    _mostrar_dias(identifier, state)
+
+
+# ── Zonas ──────────────────────────────────────────────────────────────
+
+
+def _localidades_de_zona(datos, zona_id: str, campo: str, origen: str | None):
+    for zona, locs in matcher_zonas(datos.horarios):
+        if zona.id == zona_id:
+            if campo == "destino" and origen is not None:
+                alcanzables = query.destinos_desde(datos.horarios, origen)
+                locs = tuple(loc for loc in locs if loc.id in alcanzables)
+            return zona, locs
+    return None, ()
+
+
+def _mostrar_zonas(identifier: str, state, campo: str) -> None:
+    datos = horarios_datos.actual()
+    filtradas: list[tuple[str, str]] = []
+    for zona, locs in matcher_zonas(datos.horarios):
+        if campo == "destino" and state.origen is not None:
+            alcanzables = query.destinos_desde(datos.horarios, state.origen)
+            locs = tuple(loc for loc in locs if loc.id in alcanzables)
+        if locs:
+            filtradas.append((zona.id, zona.nombre))
+    state.campo = campo
+    wa.send_interactive(identifier, build_zonas(filtradas, campo))
+
+
+def _mostrar_zona_pagina(identifier: str, state, campo: str, value: str) -> None:
+    partes = value.split(":")
+    if len(partes) != 3:
+        _mostrar_zonas(identifier, state, campo)
+        return
+    zid, pag_txt = partes[1], partes[2]
+    try:
+        pagina = int(pag_txt)
+    except ValueError:
+        pagina = 0
+    datos = horarios_datos.actual()
+    zona, locs = _localidades_de_zona(datos, zid, campo, state.origen)
+    if zona is None or not locs:
+        _mostrar_zonas(identifier, state, campo)
+        return
+    paginas = paginar(locs)
+    if pagina < 0 or pagina >= len(paginas):
+        pagina = 0
+    pagina_locs = paginas[pagina]
+    hay_mas = pagina + 1 < len(paginas)
+    filas = [(loc.id, loc.nombre) for loc in pagina_locs]
+    state.campo = campo
+    wa.send_interactive(
+        identifier, build_zona(zona.nombre, zid, pagina, filas, hay_mas)
+    )
+
+
+# ── Día ────────────────────────────────────────────────────────────────
+
+
+def _titulo_dia(fecha: date, indice: int) -> str:
+    abrev = msg.nombre_dia_abrev_es(fecha)
+    dd_mm = f"{fecha.day:02d}/{fecha.month:02d}"
+    if indice == 0:
+        return f"Hoy · {abrev} {dd_mm}"
+    if indice == 1:
+        return f"Mañana · {abrev} {dd_mm}"
+    return f"{abrev.capitalize()} {dd_mm}"
+
+
+def _descripcion_dia(consulta, es_hoy: bool) -> str:
+    """Descripción de una fila de la lista de días (design.md, 4.5)."""
+    es_festivo = consulta.info_dia is not None and consulta.info_dia.es_festivo
+    prefijo = "festivo · " if es_festivo else ""
+    sufijo = " · puede haber más" if consulta.lineas_sin_datos else ""
+
+    if consulta.estado == "con_salidas":
+        n = len(consulta.salidas)
+        if es_hoy:
+            pendientes = [s for s in consulta.salidas if not s.ya_salio]
+            if not pendientes:
+                return prefijo + "ya no quedan salidas hoy" + sufijo
+            proxima = pendientes[0].hora_salida.strftime("%H:%M")
+            return prefijo + f"{n} salidas · próxima {proxima}" + sufijo
+        if n == 1:
+            hora = consulta.salidas[0].hora_salida.strftime("%H:%M")
+            return prefijo + f"1 salida · {hora}" + sufijo
+        primera = consulta.salidas[0].hora_salida.strftime("%H:%M")
+        ultima = consulta.salidas[-1].hora_salida.strftime("%H:%M")
+        return prefijo + f"{n} salidas · de {primera} a {ultima}" + sufijo
+    if consulta.estado == "sin_servicio":
+        return prefijo + "sin servicio"
+    if consulta.estado == "sin_datos":
+        return prefijo + "horario no disponible"
+    return prefijo + "—"
+
+
+def _mostrar_dias(identifier: str, state, aviso: str | None = None) -> None:
+    datos = horarios_datos.actual()
+    hoy = calendario.hoy()
+    ahora = calendario.ahora()
+    filas = []
+    for i in range(7):
+        f = hoy + timedelta(days=i)
+        consulta = query.consultar(
+            datos.horarios, state.origen, state.destino, f, ahora=ahora
+        )
+        filas.append(
+            (f"dia:{f.isoformat()}", _titulo_dia(f, i),
+             _descripcion_dia(consulta, es_hoy=(i == 0)))
+        )
+    origen_nombre = _nombre_localidad(datos, state.origen)
+    destino_nombre = _nombre_localidad(datos, state.destino)
+    state.step = SEL_DIA
+    state.campo = None
+    wa.send_interactive(
+        identifier, build_dias(origen_nombre, destino_nombre, filas, aviso=aviso)
+    )
+
+
+# ── Fecha libre ────────────────────────────────────────────────────────
+
+
+def _leer_fecha_libre(identifier: str, state, texto: str, en_lista: bool) -> None:
+    hoy = calendario.hoy()
+    lectura = fechas.leer_fecha(texto, hoy)
+    if lectura.estado == "ok":
+        _resultado(identifier, state, lectura.fecha)
+        return
+    if lectura.estado == "pasada":
+        if en_lista:
+            _mostrar_dias(identifier, state, aviso=msg.msg_fecha_pasada())
+        else:
+            wa.send_text_message(identifier, msg.msg_fecha_pasada_con_formato())
+        return
+    # formato | inexistente
+    logger.info("[NO_RECONOCIDO] paso=fecha texto=%s", _texto_para_log(texto))
+    if en_lista:
+        _mostrar_dias(identifier, state, aviso=msg.msg_elige_de_la_lista())
+    else:
+        wa.send_text_message(identifier, msg.msg_fecha_no_entendida())
+
+
+# ── Resultado ──────────────────────────────────────────────────────────
+
+
+def _botones_resultado(datos, consulta, fecha: date) -> list[tuple[str, str]]:
+    hoy = calendario.hoy()
+    vigencia_fin = datos.horarios.modelo.calendario.vigencia_fin
+    botones: list[tuple[str, str]] = []
+
+    if consulta.estado == "con_salidas":
+        pendientes = [s for s in consulta.salidas if not s.ya_salio]
+        if not pendientes and fecha == hoy:
+            manana = fecha + timedelta(days=1)
+            if manana <= vigencia_fin:
+                botones.append((f"dia:{manana.isoformat()}", "📅 Mañana"))
+            else:
+                botones.append(("otro_dia", "📅 Otro día"))
+        else:
+            botones.append(("otro_dia", "📅 Otro día"))
+    elif consulta.estado == "sin_servicio" and consulta.siguiente_con_servicio:
+        sig = consulta.siguiente_con_servicio
+        botones.append((f"dia:{sig.isoformat()}", f"📅 Día {sig.day}/{sig.month}"))
+    else:
+        botones.append(("otro_dia", "📅 Otro día"))
+
+    botones.append(("vuelta", "🔄 Ver la vuelta"))
+    botones.append(("otra_consulta", "🔍 Otra consulta"))
+    return botones[:3]
+
+
+def _resultado(identifier: str, state, fecha: date) -> None:
+    datos = horarios_datos.actual()
+    ahora = calendario.ahora()
+    consulta = query.consultar(
+        datos.horarios, state.origen, state.destino, fecha, ahora=ahora
+    )
+    origen_nombre = _nombre_localidad(datos, state.origen)
+    destino_nombre = _nombre_localidad(datos, state.destino)
+    texto = msg.msg_resultado(
+        consulta, datos.horarios, origen_nombre, destino_nombre, fecha
+    )
+    botones = _botones_resultado(datos, consulta, fecha)
+    state.fecha = fecha
+    state.step = RESULTADO
+    wa.send_interactive(identifier, build_resultado(texto, botones))
+
+
+# ── Handlers por estado ───────────────────────────────────────────────
+
+
+def _handle_menu(identifier: str, state, value: str) -> None:
+    if value == "menu_horarios":
+        _ir_a_origen(identifier, state)
+    elif value == "menu_info":
+        wa.send_interactive(identifier, build_info())
+    else:
+        wa.send_interactive(identifier, build_menu())
+
+
+def _handle_sel_origen(identifier: str, state, value: str) -> None:
+    if value.startswith("loc:"):
+        _elegir(identifier, state, "origen", value.removeprefix("loc:"))
+    elif value == "escribir":
+        state.step = ESCRIBIR_ORIGEN
+        state.campo = "origen"
+        wa.send_interactive(
+            identifier, build_escribir("origen", msg.msg_pedir_pueblo("origen"))
+        )
+    elif value == "zonas":
+        _mostrar_zonas(identifier, state, "origen")
+    elif value.startswith("zona:"):
+        _mostrar_zona_pagina(identifier, state, "origen", value)
+    elif value == "menu":
+        to_menu(identifier, state)
+    else:
+        _buscar(identifier, state, "origen", value)
+
+
+def _handle_sel_destino(identifier: str, state, value: str) -> None:
+    if value.startswith("loc:"):
+        _elegir(identifier, state, "destino", value.removeprefix("loc:"))
+    elif value == "escribir":
+        state.step = ESCRIBIR_DESTINO
+        state.campo = "destino"
+        wa.send_interactive(
+            identifier, build_escribir("destino", msg.msg_pedir_pueblo("destino"))
+        )
+    elif value == "zonas":
+        _mostrar_zonas(identifier, state, "destino")
+    elif value.startswith("zona:"):
+        _mostrar_zona_pagina(identifier, state, "destino", value)
+    elif value == "cambiar_origen":
+        _ir_a_origen(identifier, state)
+    else:
+        _buscar(identifier, state, "destino", value)
+
+
+def _handle_confirmar_pueblo(identifier: str, state, value: str) -> None:
+    if value == "si":
+        if state.pendiente is None or state.campo is None:
+            to_menu(identifier, state)
+            return
+        campo = state.campo
+        lid = state.pendiente
+        state.pendiente = None
+        _elegir(identifier, state, campo, lid)
+    elif value == "no":
+        state.pendiente = None
+        campo = state.campo or "origen"
+        state.step = ESCRIBIR_ORIGEN if campo == "origen" else ESCRIBIR_DESTINO
+        wa.send_interactive(
+            identifier, build_escribir(campo, msg.msg_escribelo_de_otra_forma())
+        )
+    else:
+        campo = state.campo or "origen"
+        _buscar(identifier, state, campo, value)
+
+
+def _handle_sel_dia(identifier: str, state, value: str) -> None:
+    if value.startswith("dia:"):
+        try:
+            f = date.fromisoformat(value.removeprefix("dia:"))
+        except ValueError:
+            _mostrar_dias(identifier, state)
+            return
+        _resultado(identifier, state, f)
+    elif value == "otra_fecha":
+        state.step = ESCRIBIR_FECHA
+        wa.send_text_message(identifier, msg.msg_formato_fecha())
+    else:
+        _leer_fecha_libre(identifier, state, value, en_lista=True)
+
+
+def _handle_escribir_fecha(identifier: str, state, value: str) -> None:
+    _leer_fecha_libre(identifier, state, value, en_lista=False)
+
+
+def _handle_resultado(identifier: str, state, value: str) -> None:
+    datos = horarios_datos.actual()
+    if value == "otro_dia":
+        _mostrar_dias(identifier, state)
+    elif value == "vuelta":
+        nuevo_origen, nuevo_destino = state.destino, state.origen
+        alcanzables = query.destinos_desde(datos.horarios, nuevo_origen)
+        if nuevo_destino not in alcanzables:
+            origen_nombre = _nombre_localidad(datos, nuevo_origen)
+            destino_nombre = _nombre_localidad(datos, nuevo_destino)
+            wa.send_text_message(
+                identifier, msg.msg_sin_trayecto(origen_nombre, destino_nombre)
+            )
+            to_menu(identifier, state)
+            return
+        state.origen, state.destino = nuevo_origen, nuevo_destino
+        _mostrar_dias(identifier, state)
+    elif value == "otra_consulta":
+        _ir_a_origen(identifier, state)
+    elif value.startswith("dia:"):
+        try:
+            f = date.fromisoformat(value.removeprefix("dia:"))
+        except ValueError:
+            to_menu(identifier, state)
+            return
+        _resultado(identifier, state, f)
+    else:
+        to_menu(identifier, state)
+
+
+DESPACHO = {
+    MENU: _handle_menu,
+    SEL_ORIGEN: _handle_sel_origen,
+    ESCRIBIR_ORIGEN: _handle_sel_origen,
+    SEL_DESTINO: _handle_sel_destino,
+    ESCRIBIR_DESTINO: _handle_sel_destino,
+    CONFIRMAR_PUEBLO: _handle_confirmar_pueblo,
+    SEL_DIA: _handle_sel_dia,
+    ESCRIBIR_FECHA: _handle_escribir_fecha,
+    RESULTADO: _handle_resultado,
+}

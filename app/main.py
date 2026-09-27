@@ -1,0 +1,129 @@
+# main.py
+"""FastAPI application entry point. Starts scheduler on startup, stops on
+shutdown. Carga los horarios en memoria antes de aceptar tráfico
+(design.md, fase 4)."""
+import logging
+import logging.handlers
+import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from app.config import HORARIOS_DIR, PUEBLOS_MENU_INICIO, validate_config
+from app.handlers.webhook import router as webhook_router
+from app.services.horarios import datos as horarios_datos
+from app.services.scheduler import create_scheduler
+from app.utils.metrics import get_all as get_metrics
+
+
+def _setup_logging() -> None:
+    raw_level = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, raw_level, None)
+    if not isinstance(level, int):
+        print(f"[APP] Invalid LOG_LEVEL={raw_level!r}, defaulting to INFO", flush=True)
+        level = logging.INFO
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+
+    log_file = os.getenv("LOG_FILE", "")
+    if log_file:
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_file,
+                maxBytes=10 * 1024 * 1024,
+                backupCount=3,
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(formatter)
+            root.addHandler(file_handler)
+        except Exception as e:
+            print(f"[APP] Could not open log file {log_file!r}: {e}", flush=True)
+
+
+_setup_logging()
+logger = logging.getLogger(__name__)
+
+_scheduler = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _scheduler
+    validate_config()   # Fail fast if critical env vars are missing
+    logger.info("[APP] Cargando horarios...")
+    horarios_datos.instalar(horarios_datos.cargar(HORARIOS_DIR, PUEBLOS_MENU_INICIO))
+    logger.info("[APP] Starting scheduler...")
+    _scheduler = create_scheduler()
+    _scheduler.start()
+    logger.info("[APP] Scheduler started. App ready.")
+    yield
+    logger.info("[APP] Shutting down scheduler...")
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Buscabus", lifespan=lifespan)
+app.include_router(webhook_router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(
+        "[APP] Unhandled exception on %s %s", request.method, request.url.path,
+        exc_info=True,
+    )
+    return JSONResponse(
+        {"status": "error", "detail": "Internal server error"},
+        status_code=500,
+    )
+
+
+@app.get("/health")
+def health():
+    if not horarios_datos.hay_datos():
+        return JSONResponse(
+            {"status": "degraded", "datos": None, "metrics": get_metrics()},
+            status_code=503,
+        )
+    datos = horarios_datos.actual()
+    modelo = datos.horarios.modelo
+    n_lineas = len(modelo.lineas)
+    n_localidades = len(modelo.localidades)
+    n_paradas = len(modelo.paradas)
+    n_viajes = sum(len(linea.viajes) for linea in modelo.lineas.values())
+    status = "ok" if n_lineas > 0 and n_viajes > 0 else "degraded"
+    return JSONResponse(
+        {
+            "status": status,
+            "datos": {
+                "lineas": n_lineas,
+                "localidades": n_localidades,
+                "paradas": n_paradas,
+                "viajes": n_viajes,
+                "cargado": datos.cargado.isoformat(),
+                "calendario_hasta": (
+                    modelo.calendario.vigencia_fin.isoformat()
+                    if modelo.calendario is not None else None
+                ),
+            },
+            "metrics": get_metrics(),
+        },
+        status_code=200 if status == "ok" else 503,
+    )
+
+
+@app.get("/metrics")
+def metrics_endpoint():
+    """Returns operational counters without touching external APIs."""
+    return JSONResponse(get_metrics())

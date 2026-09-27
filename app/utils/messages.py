@@ -1,0 +1,296 @@
+# utils/messages.py
+"""Todos los textos en español que ve el cliente. `messages.py` solo da
+formato: el texto de las observaciones vive en `horarios/observaciones.yaml`
+(design.md, 2.3)."""
+
+from __future__ import annotations
+
+from datetime import date
+
+from app.config import (
+    MAX_TEXTO,
+    NEGOCIO_ENLACES,
+    NEGOCIO_HORARIO_OFICINA,
+    NEGOCIO_TELEFONO,
+)
+
+_DIAS_ES = (
+    "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo",
+)
+_DIAS_ES_ABREV = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+_MESES_ES = (
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+)
+
+_MARCAS_NUMERO = "¹²³⁴⁵⁶⁷⁸⁹"
+
+
+def nombre_dia_es(fecha: date) -> str:
+    return _DIAS_ES[fecha.weekday()]
+
+
+def nombre_dia_abrev_es(fecha: date) -> str:
+    return _DIAS_ES_ABREV[fecha.weekday()]
+
+
+def nombre_mes_es(fecha: date) -> str:
+    return _MESES_ES[fecha.month - 1]
+
+
+def _horario_oficina_txt() -> str:
+    return " y ".join(f"{ini}-{fin}" for ini, fin in NEGOCIO_HORARIO_OFICINA)
+
+
+def tel_y_horario() -> str:
+    return f"📞 {NEGOCIO_TELEFONO} (horario de oficina: {_horario_oficina_txt()})"
+
+
+# ── Menú / información ──────────────────────────────────────────────────
+
+def msg_menu_footer() -> str:
+    return f"📞 Para otras consultas, llámanos al {NEGOCIO_TELEFONO}"
+
+
+def msg_info() -> str:
+    lineas = [
+        "ℹ️ Información",
+        "",
+        f"📞 Teléfono: {NEGOCIO_TELEFONO}",
+        f"🕒 Horario de oficina: {_horario_oficina_txt()}",
+    ]
+    etiquetas = {
+        "compra_online": "🛒 Compra online",
+        "bonos": "🎫 Bonos",
+        "pdf_horarios": "📄 PDF de horarios",
+    }
+    for clave, etiqueta in etiquetas.items():
+        valor = NEGOCIO_ENLACES.get(clave)
+        if valor:
+            lineas.append(f"{etiqueta}: {valor}")
+    lineas.append("")
+    lineas.append(
+        "🔒 No guardamos tus datos: la conversación se borra a los 30 minutos"
+        " de inactividad. No hace falta ningún consentimiento."
+    )
+    return "\n".join(lineas)
+
+
+# ── Origen / destino / búsqueda ──────────────────────────────────────────
+
+def msg_pedir_pueblo(campo: str) -> str:
+    palabra = "origen" if campo == "origen" else "destino"
+    return f"Escribe el nombre del pueblo de {palabra}:"
+
+
+def msg_no_conozco_ese_pueblo() -> str:
+    return "No conozco ese pueblo."
+
+
+def msg_demasiadas_coincidencias() -> str:
+    return "Hay muchos pueblos que coinciden. Sé más concreto, por favor."
+
+
+def msg_confirmar_errata(nombre: str) -> str:
+    return f"¿Querías decir {nombre}?"
+
+def msg_escribelo_de_otra_forma() -> str:
+    return "Vale, escríbelo de otra forma."
+
+
+def msg_destino_distinto() -> str:
+    return "Elige un destino distinto."
+
+
+def msg_sin_destinos_desde_origen(origen_nombre: str) -> str:
+    return (
+        f"No hay autobuses directos desde {origen_nombre}.\n"
+        f"{tel_y_horario()}"
+    )
+
+
+def msg_sin_trayecto(origen_nombre: str, destino_nombre: str) -> str:
+    return (
+        f"No hay trayecto directo de {origen_nombre} a {destino_nombre}.\n"
+        f"{tel_y_horario()}"
+    )
+
+
+# ── Fechas ─────────────────────────────────────────────────────────────
+
+def msg_formato_fecha() -> str:
+    return "📅 Escribe la fecha así: día/mes\nPor ejemplo: 25/12"
+
+
+def msg_fecha_no_entendida() -> str:
+    return (
+        "No he entendido la fecha. Escríbela así: día/mes,"
+        " por ejemplo 25/12."
+    )
+
+
+def msg_fecha_pasada() -> str:
+    return "Esa fecha ya ha pasado."
+
+
+def msg_elige_de_la_lista() -> str:
+    return "Elige un día de la lista o pulsa 📅 Otra fecha."
+
+
+def msg_fecha_pasada_con_formato() -> str:
+    return f"{msg_fecha_pasada()} {msg_formato_fecha()}"
+
+
+# ── Resultado ──────────────────────────────────────────────────────────
+
+def msg_reintentar() -> str:
+    return "Ha habido un problema. Por favor, inténtalo de nuevo."
+
+
+def msg_input_no_soportado() -> str:
+    return "No puedo leer audios, imágenes ni stickers. Escríbeme o usa los botones."
+
+
+def _nombre_parada(horarios, codigo: str) -> str:
+    parada = horarios.modelo.paradas.get(codigo)
+    return parada.nombre if parada is not None else codigo
+
+
+def _cabecera_fecha(consulta, fecha: date) -> str:
+    info = consulta.info_dia
+    dia_txt = f"{nombre_dia_es(fecha).capitalize()} {fecha.day:02d}/{fecha.month:02d}"
+    if info is not None and info.es_festivo:
+        return f"📅 {dia_txt} · festivo ({info.nombre_festivo})"
+    if consulta.temporadas:
+        nombres_temporada = sorted({t.nombre for _, t in consulta.temporadas})
+        temp_txt = " / ".join(nombres_temporada)
+        return f"📅 {dia_txt} · horario de {temp_txt}"
+    return f"📅 {dia_txt}"
+
+
+def msg_resultado(consulta, horarios, origen_nombre: str, destino_nombre: str,
+                   fecha: date) -> str:
+    """Mensaje de resultado (design.md, 4.6). `consulta.estado` decide el
+    contenido; nunca se deriva de si `salidas` está vacío (`sin_datos`
+    también produce salidas vacías)."""
+    cabecera = f"🚌 {origen_nombre} → {destino_nombre}"
+
+    if consulta.estado == "sin_trayecto":
+        return f"{cabecera}\n\n" + msg_sin_trayecto(origen_nombre, destino_nombre)
+
+    if consulta.estado == "sin_datos":
+        return (
+            f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+            "No tengo el horario de ese día.\n"
+            f"{tel_y_horario()}"
+        )
+
+    if consulta.estado == "sin_servicio":
+        cuerpo = f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+        if consulta.siguiente_con_servicio is not None:
+            sig = consulta.siguiente_con_servicio
+            cuerpo += (
+                f"Ese día no hay servicio. El siguiente día con salidas es"
+                f" {nombre_dia_es(sig)} {sig.day:02d}/{sig.month:02d}."
+            )
+        else:
+            cuerpo += (
+                "No hay salidas en los próximos días.\n" + tel_y_horario()
+            )
+        return cuerpo
+
+    # con_salidas
+    listadas = [s for s in consulta.salidas if not s.ya_salio]
+    ya_salidas = len(consulta.salidas) - len(listadas)
+
+    if not listadas:
+        return (
+            f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+            "Hoy ya no quedan salidas."
+        )
+
+    origenes = {s.parada_origen for s in listadas}
+    destinos = {s.parada_destino for s in listadas}
+    mismo_origen = len(origenes) == 1
+    mismo_destino = len(destinos) == 1
+
+    # notas comunes a TODAS las salidas listadas -> una línea sin número
+    notas_por_salida = [list(s.notas) for s in listadas]
+    todas_notas = [n for notas in notas_por_salida for n in notas]
+    comunes = [
+        n for n in dict.fromkeys(todas_notas)
+        if all(n in notas for notas in notas_por_salida)
+    ]
+
+    marcas: dict[str, str] = {}
+    siguiente_marca = 0
+
+    def _marca_de(nota: str) -> str:
+        nonlocal siguiente_marca
+        if nota not in marcas:
+            marcas[nota] = _MARCAS_NUMERO[min(siguiente_marca, len(_MARCAS_NUMERO) - 1)]
+            siguiente_marca += 1
+        return marcas[nota]
+
+    lineas_salidas = []
+    for s in listadas:
+        if s.duracion_min >= 60:
+            duracion = f"{s.duracion_min // 60}h {s.duracion_min % 60:02d}"
+        else:
+            duracion = f"{s.duracion_min} min"
+        hora_ini = s.hora_salida.strftime('%H:%M')
+        hora_fin = s.hora_llegada.strftime('%H:%M')
+        fila = f"{hora_ini} → {hora_fin}  ({duracion})"
+        marcas_fila = ""
+        for nota in s.notas:
+            if nota in comunes:
+                continue
+            marcas_fila += _marca_de(nota)
+        if marcas_fila:
+            fila += marcas_fila
+        if not mismo_origen or not mismo_destino:
+            origen_parada = _nombre_parada(horarios, s.parada_origen)
+            destino_parada = _nombre_parada(horarios, s.parada_destino)
+            fila += f"  ({origen_parada} → {destino_parada})"
+        lineas_salidas.append(fila)
+
+    partes = [cabecera, _cabecera_fecha(consulta, fecha), ""]
+    partes.extend(lineas_salidas)
+    partes.append("")
+
+    if mismo_origen:
+        origen_parada = _nombre_parada(horarios, listadas[0].parada_origen)
+        partes.append(f"📍 Salidas desde: {origen_parada}")
+
+    for nota, marca in marcas.items():
+        partes.append(f"⚠️ {marca} {nota}")
+    for nota in comunes:
+        partes.append(f"⚠️ {nota}")
+
+    if consulta.lineas_sin_datos:
+        partes.append(
+            f"⚠️ Puede haber más salidas: llama al {NEGOCIO_TELEFONO}."
+        )
+
+    if ya_salidas:
+        partes.append(f"(hoy ya han salido {ya_salidas})")
+
+    texto = "\n".join(partes)
+    if len(texto) > MAX_TEXTO:
+        # Trunca por la última salida completa (design.md 4.6).
+        acumulado = []
+        largo = 0
+        cabecera_txt = "\n".join(partes[:3]) + "\n"
+        largo = len(cabecera_txt)
+        for fila in lineas_salidas:
+            if largo + len(fila) + 1 > MAX_TEXTO - 80:
+                break
+            acumulado.append(fila)
+            largo += len(fila) + 1
+        restantes = len(lineas_salidas) - len(acumulado)
+        texto = (
+            cabecera_txt
+            + "\n".join(acumulado)
+            + f"\n\n…y {restantes} salidas más, llama al {NEGOCIO_TELEFONO}."
+        )
+    return texto

@@ -5,8 +5,8 @@
 # sección 10.
 
 negocio:
-  nombre: ""              # Ej: "Autocares San Sebastián" — pendiente de D9
-  telefono_contacto: ""   # Ej: "957 42 90 30"
+  nombre: "Autocares San Sebastián"    # TODO D9: confirmar operador y encargo
+  telefono_contacto: "957 42 90 30"    # TODO D9
   admin_phone: ""         # Fallback si no se define ADMIN_PHONE en .env. Solo dígitos, sin '+' ni espacios.
 
   horario_oficina:
@@ -26,11 +26,13 @@ negocio:
 # billetes. NO usar el ranking de servicios del Excel tal cual: sobrevalora
 # paradas de paso como Cruce de Villaharta o El Vacar.
 pueblos_menu_inicio:
-  - ""  # Ej: "Córdoba"
-  - ""  # Ej: "Pozoblanco"
-  - ""  # Ej: "Peñarroya-Pueblonuevo"
-  - ""  # Ej: "Villanueva de Córdoba"
-  - ""  # Ej: "Posadas"
-  - ""  # Ej: "Almodóvar del Río"
-  - ""  # Ej: "Hinojosa del Duque"
-  - ""  # Ej: "Hornachuelos"
+  # TODO D7: provisional, verificado contra horarios/ real (fase 4). El orden
+  # y la selección definitivos los tiene que confirmar la empresa.
+  - "Córdoba"
+  - "Pozoblanco"
+  - "Peñarroya-Pueblonuevo"
+  - "Villanueva de Córdoba"
+  - "Hinojosa del Duque"
+  - "Belalcázar"
+  - "Adamuz"
+  - "Fuente Palmera"

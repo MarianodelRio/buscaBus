@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fases 1, 2 y 3 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta, calendario, coincidencia de texto y lectura de fechas); fases 4-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -20,14 +20,15 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 
 ```
 app/
-  config.py                    (pendiente) — constantes + carga y validación de config.yaml
-  main.py                      (pendiente) — FastAPI app + lifespan + /health
+  config.py                    — constantes + carga y validación de config.yaml
+  main.py                      — FastAPI app + lifespan + /health
   handlers/
-    webhook.py                 (pendiente) — GET/POST /webhook, copiado de Peluquería salvo el import de conversation
-    conversation.py            (pendiente) — máquina de estados: MENU → SEL_ORIGEN → SEL_DESTINO → SEL_DIA → RESULTADO
+    webhook.py                 — GET/POST /webhook, copiado de Peluquería salvo el import de conversation y el fallo cerrado sin WHATSAPP_APP_SECRET
+    conversation.py            — infraestructura: bloqueo por teléfono, estado con caducidad, comandos de administrador, despacho por estado
+    flujo.py                   — la máquina de estados en sí: MENU → SEL_ORIGEN → SEL_DESTINO → SEL_DIA → RESULTADO (design.md, 4.1-4.8)
   services/
-    whatsapp.py                (pendiente) — copiado tal cual de Peluquería
-    scheduler.py                (pendiente) — 1 job: limpieza de estados cada 10 min
+    whatsapp.py                — copiado tal cual de Peluquería
+    scheduler.py                — 1 job: limpieza de estados cada 10 min
     horarios/
       modelo.py                — entidades inmutables (design.md 2.4)
       formato.py               — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
@@ -35,23 +36,24 @@ app/
       loader.py                — carga horarios/ a memoria al arrancar usando formato.py
       query.py                 — motor de consulta (design.md, sección 3)
       calendario.py            — temporada, tipo de día, festivos, periodo escolar
+      datos.py                 — contenedor con lock de los datos cargados (Horarios + Matcher + menú de origen), leído por peticiones y por el scheduler
   utils/
-    interactive.py             (pendiente) — helpers genéricos copiados de Peluquería + constructores propios
-    messages.py                (pendiente) — todos los textos en español
+    interactive.py             — helpers genéricos copiados de Peluquería + constructores propios de listas/botones
+    messages.py                — todos los textos en español
     matcher.py                 — reglas de coincidencia de texto (design.md, 4.7)
     fechas.py                  — lector de fechas en formato cerrado día/mes[/año] (design.md, 4.5); sin lenguaje natural
-    metrics.py                 (pendiente) — copiado tal cual de Peluquería
-    dedup.py                   (pendiente) — copiado tal cual de Peluquería
-    rate_limiter.py            (pendiente) — copiado tal cual de Peluquería
-    security.py                (pendiente) — copiado tal cual de Peluquería
-    admin.py                   (pendiente) — adaptado: quita la salud de Calendar, añade la de datos cargados
+    metrics.py                 — copiado tal cual de Peluquería
+    dedup.py                   — copiado tal cual de Peluquería
+    rate_limiter.py            — copiado tal cual de Peluquería
+    security.py                — copiado tal cual de Peluquería
+    admin.py                   — adaptado: quita la salud de Calendar, añade la de datos cargados
 tools/
   validar.py                   — make validar
   formatear.py                 — make formatear: realinea tablas sin tocar datos
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
 horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 5 líneas de prueba; las 10 restantes en la fase 1b
-tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas + fixtures/; el resto llega con cada fase (design.md sección 9)
+tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```

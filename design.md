@@ -555,17 +555,31 @@ servicio, y calcularlo es gratis porque los datos están en memoria.
                                       [ Ver días ▾ ]
   Hoy · mié 23/09          5 salidas · próxima 15:15
   Mañana · jue 24/09       5 salidas · de 06:55 a 18:00
-  Vie 25/09                5 salidas
-  Sáb 26/09                2 salidas
-  Dom 27/09                3 salidas
-  Lun 28/09                5 salidas
-  Mar 29/09                5 salidas
+  Vie 25/09                5 salidas · de 06:55 a 18:00
+  Sáb 26/09                sin servicio
+  Dom 27/09                sin servicio
+  Lun 28/09                1 salida · 08:00
+  Mar 29/09                5 salidas · de 06:55 a 18:00
   📅 Otra fecha
 ```
 
-8 filas. Un día sin servicio aparece como `sin servicio` en la descripción (en
-una línea como Ochavillos, sábado y domingo saldrían así de entrada). Un
-festivo se marca en la descripción: `festivo · 3 salidas`.
+8 filas (`app/handlers/flujo.py`, `_descripcion_dia`, corregido en la
+revisión del 2026-09-27 — `docs/rds_fase4_correcciones.md`). Reglas, en este
+orden, con el prefijo `festivo · ` cuando `info_dia.es_festivo`:
+
+| Consulta | Descripción |
+|---|---|
+| `con_salidas`, hoy, quedan salidas | `N salidas · próxima HH:MM` |
+| `con_salidas`, hoy, ninguna pendiente | `ya no quedan salidas hoy` |
+| `con_salidas`, otro día, N ≥ 2 | `N salidas · de HH:MM a HH:MM` |
+| `con_salidas`, otro día, N = 1 | `1 salida · HH:MM` (singular) |
+| cualquiera de las anteriores, si alguna línea de ese par no tiene datos ese día (`lineas_sin_datos`) | + ` · puede haber más` |
+| `sin_servicio` | `sin servicio` |
+| `sin_datos` | `horario no disponible` (nunca "sin servicio": son estados distintos, 2.3 y 4.8) |
+
+Un día sin servicio (en una línea como Ochavillos, sábado y domingo saldrían
+así de entrada) aparece como `sin servicio`. Un festivo con 3 salidas sale
+como `festivo · 3 salidas · de HH:MM a HH:MM`.
 
 **No se pregunta el tipo de día** (laborable / sábado / festivo): a veces ni el
 cliente sabe si el jueves es festivo. Se elige **una fecha real** y el bot
@@ -633,7 +647,19 @@ la lista o pulse `Otra fecha` (fase 4).
 ```
 
 Los horarios del ejemplo son los reales de la hoja `POZOB INV`, lunes a
-viernes. El precio queda como hueco hasta tener los datos (duda D8).
+viernes. El precio queda como hueco hasta tener los datos (duda D8): la fase
+4 no añade ninguna línea de precio; se implementa en la fase 7.
+
+**Formato de notas implementado en la fase 4** (`app/utils/messages.py`):
+una nota de observación que se repite en TODAS las salidas listadas de la
+respuesta sale como una única línea `⚠️` sin número, al final; una nota que
+solo afecta a algunas sale con una marca numérica (¹, ², ³...) asignada por
+orden de primera aparición entre las salidas listadas, y esa misma marca se
+repite junto a la hora de cada salida afectada. Las salidas ya pasadas (hoy)
+no se listan ni participan en la numeración; su recuento sale en
+`(hoy ya han salido N)`. Si el texto superaría 4096 caracteres, se corta en
+la última salida completa que entre y se añade
+"…y N salidas más, llama al <teléfono>".
 
 Los tres botones cubren lo que de verdad se repite: mismo trayecto otro día,
 el viaje de vuelta, y empezar de cero. `Otra consulta` va directo al paso de
@@ -1064,10 +1090,44 @@ normalizado. P13 (alias) y P18 (zonas) siguen abiertas: son datos y no
 cambian el código.
 
 ### Fase 4 · Conversación (2-3 días)
-`conversation.py`, `interactive.py`, `messages.py`, `webhook.py`, scheduler de
-limpieza, comandos de administrador.
+`conversation.py` (infraestructura), `flujo.py` (máquina de estados),
+`interactive.py`, `messages.py`, `webhook.py`, `datos.py`, scheduler de
+limpieza, comandos de administrador. RDS: `docs/rds_fase4_conversacion.md`.
 **Criterio:** el flujo completo funciona con la API simulada; ninguna lista
 supera 10 filas ni ningún botón 3; todos los casos borde de 4.8 cubiertos.
+
+Verificado el 2026-09-27: 210 tests en verde, `ruff` limpio. Los 8 pueblos de
+`pueblos_menu_inicio` (config.yaml) se verificaron contra `horarios/` real
+antes de fijarlos: los 8 dan coincidencia `unico` en `Matcher.buscar()` y
+tienen viajes en `horarios.localidad_viajes` (D7 sigue provisional: el orden
+y la selección definitivos los tiene que confirmar la empresa). El precio
+del resultado queda pendiente de la fase 7 (D8): no se añadió ninguna línea
+de precio. `WHATSAPP_APP_SECRET` es obligatorio y `_verify_signature` falla
+cerrado (403) si falta, al contrario que en Peluquería.
+
+### Correcciones de la fase 4 (revisión del 2026-09-27) — resueltas el 2026-09-27
+Resueltas en un ciclo propio (`docs/rds_fase4_correcciones.md`). La revisión
+superficial de la fase 4 encontró que su criterio de cierre ("todos los
+casos borde de 4.8 cubiertos") no se cumplía todavía: `test_conversation.py`
+no tenía ningún caso de `sin_datos`, `sin_servicio`, a demanda, viernes
+lectivo ni horas aproximadas; `test_webhook.py` tenía 8 tests frente a los
+26 de Peluquería (faltaban límites por IP/teléfono, BSUID, payloads mal
+formados); y `_descripcion_dia`, `_leer_fecha_libre` y el registro de textos
+no reconocidos en `flujo.py` se desviaban en tres puntos pequeños de
+`docs/rds_fase4_conversacion.md`. Verificado el 2026-09-27: 257 tests en
+verde (69 en `test_conversation.py` + `test_webhook.py`, 37 y 32
+respectivamente), `ruff` limpio, `test_query.py` sin regresión tras añadir
+`linea-aproximada.yaml` a `tests/fixtures/horarios_motor/`. Se añadió el
+fixture `datos_motor` (no autouse) en `tests/conftest.py`, se corrigió
+`_descripcion_dia` para dar `próxima HH:MM` / `de HH:MM a HH:MM` / `1
+salida` / `horario no disponible` / ` · puede haber más` (ver 4.5), se
+redujo `_leer_fecha_libre` a un mensaje por paso, y se añadió
+`_texto_para_log` (normaliza y sustituye por `<numero>` si hay 6 dígitos
+seguidos o más) en los dos puntos de registro `[NO_RECONOCIDO]`. Queda sin
+colapsar, documentado y aceptado, el camino de `Ver la vuelta` sin trayecto
+de vuelta (`_handle_resultado`): manda un texto y después un interactivo del
+menú, porque `build_menu()` no acepta un aviso en el cuerpo y esta
+corrección no tocaba `interactive.py`.
 
 ### Fase 5 · Infraestructura (1 día)
 `Makefile` adaptado, systemd en el puerto 8001, server block de nginx,

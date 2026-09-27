@@ -19,3 +19,8 @@ aviso_dos:
   tipo: aviso
   ambitos: [viaje]
   texto: "Aviso dos."
+
+hora_aproximada:
+  tipo: aviso
+  ambitos: [linea]
+  texto: "Horarios de paso aproximados."
