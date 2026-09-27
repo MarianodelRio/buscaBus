@@ -146,7 +146,7 @@ horarios/
   lineas/
     pozoblanco-cordoba.yaml   una por línea comercial; el nombre del fichero es su id
     ...
-  calendario.yaml       festivos y periodo escolar (fase 2)
+  calendario.yaml       festivos y periodo escolar
 ```
 
 #### `paradas.yaml`
@@ -322,6 +322,60 @@ tag anterior.
 la v1. Se publican el día que entran en vigor. Si se vuelve habitual, se añade
 un campo de vigencia por viaje.
 
+#### `calendario.yaml`
+
+```yaml
+vigencia: 01/01/2026 - 31/12/2027   # fechas con año real (a diferencia de las
+                                     # temporadas de línea, que no lo llevan)
+
+festivos:
+  01/01/2026: Año Nuevo
+  25/12/2026: Navidad
+
+curso:
+  inicio_clases: 10/09/2026
+  fin_clases: 22/06/2027
+  vacaciones:
+    - 23/12/2026 - 07/01/2027       # Navidad
+    - 22/03/2027 - 28/03/2027       # Semana Santa
+  no_lectivos: [26/02/2027]
+
+pendientes: [P03, P04]
+```
+
+- Validado por `formato.py`, como el resto de `horarios/`: campo desconocido
+  u obligatorio ausente, fecha inválida, rango invertido (`vigencia` o un
+  tramo de `vacaciones`), festivo duplicado, festivo o fecha de `curso` fuera
+  de `vigencia`, `inicio_clases` posterior a `fin_clases` y pendiente mal
+  formado son todos errores concretos, nunca avisos.
+- **Un festivo siempre gana sobre el día de la semana** (decisión 1): un
+  festivo en sábado usa la clase de día `festivos`, no `sabado`.
+- `calendario.py` (fase 2) es lógica pura sobre este objeto ya validado: no
+  vuelve a parsear YAML ni lee el reloj salvo en `hoy()`/`ahora()`, pensadas
+  para quien las llame en fases posteriores, no para uso interno del motor.
+- **`vigencia_fin` ampliada de 31/08/2027 a 31/12/2027.** Esta RDS proponía
+  originalmente `vigencia: 01/01/2026 - 31/08/2027`, pero la misma RDS pedía
+  cargar festivos de 2027 hasta el 25/12/2027. Con el fin de vigencia en
+  agosto, esos festivos de fin de año habrían quedado fuera de rango y
+  `formato.py` los habría rechazado como "festivo fuera de vigencia" al
+  validar `horarios/` real. Se amplió `vigencia_fin` a 31/12/2027 para que
+  quepan los festivos que la propia RDS pedía. Es una corrección de
+  implementación confirmada por negocio durante la fase 2, no un pendiente
+  nuevo: el razonamiento original de la RDS (el curso 2027-28 aún no se
+  conoce más allá del 22/06/2027) se mantiene intacto — solo se ensanchó la
+  ventana de vigencia de `festivos`, no el límite de `curso`/lectivo.
+
+#### Decisiones provisionales de la fase 2 (P03, P04)
+
+| # | Decisión | Pendiente |
+|---|---|---|
+| 1 | Un festivo siempre determina la clase de día (`festivos`), sea cual sea el día de la semana en que caiga. | — |
+| 1b | Los festivos locales por municipio no se cargan en la v1: solo festivos autonómicos (BOJA). | P03 |
+| 1c | No hay festivos declarados más allá de los decretos 2026-2027 conocidos; un año adicional se añadirá cuando salga el decreto correspondiente. | P03 |
+| 2 | El periodo lectivo usa el calendario escolar de Córdoba 2026-27 tal como está publicado, sin margen de confirmación de negocio sobre las fechas exactas. | P04 |
+| 3 | Los días sueltos no lectivos (p.ej. 26/02/2027) se declaran en `no_lectivos`, no como una `vacacion` de un solo día. | P04 |
+| 4 | Si una línea tiene `sin_datos` para una fecha pero otra línea sí cubre ese mismo par con `horario`, el resultado muestra las salidas de la que sí sabe, más el aviso de que otra línea no tiene datos ese día. Si solo la línea `sin_datos` cubre el par, el resultado es `sin_datos`, nunca `sin_servicio`. | — |
+
 ### 2.4 Modelo de datos en memoria
 
 El loader convierte `horarios/` en objetos inmutables:
@@ -387,8 +441,9 @@ costaba una consulta a Google Calendar en Peluquería.
   para 2027, más 2 festivos locales por municipio. Se cargan a mano en
   `horarios/calendario.yaml`, una vez al año. Ver duda D3 y P03.
 - **Periodo escolar:** calendario escolar de Córdoba 2026-27 — curso del
-  01/09/2026 al 30/06/2027, fin de clases el 23/06/2027, Navidad del 23/12 al
-  06/01, Semana Santa del 20 al 28/03/2027.
+  10/09/2026 al 22/06/2027, vacaciones de Navidad del 23/12/2026 al
+  07/01/2027, Semana Santa del 22 al 28/03/2027, y el 26/02/2027 como día no
+  lectivo suelto.
 - **Temporadas:** cada línea declara sus rangos día/mes en su fichero de
   `horarios/lineas/`, y el validador exige que cubran el año sin huecos ni
   solapes (2.3). El fin del verano está pendiente de negocio (P02).
@@ -884,12 +939,21 @@ un viaje. Se conserva la lista como registro:
      la pregunta es solo sobre verano. Es inofensivo; se revisa cuando
      responda negocio.
 
-### Fase 2 · Motor y calendario (2 días)
+### Fase 2 · Motor y calendario (2 días) — cerrada el 2026-09-27
 `loader.py`, `calendario.py`, `query.py`, `horarios/calendario.yaml` del curso
 2026-27.
 **Criterio:** las pruebas doradas pasan; las condiciones especiales (agosto,
 viernes lectivo, a demanda) se aplican; un día sin servicio devuelve el
 siguiente con servicio.
+
+Verificado el 2026-09-27: pruebas doradas contra `horarios/` real
+(Pozoblanco-Córdoba, Ochavillos-Córdoba) en verde, `tests/fixtures/
+horarios_motor/` cubre viernes lectivo (a nivel de viaje y de parada),
+`no_circula`, `sin_datos` combinado con `horario` (decisión 4), fusión de
+autobuses y `a_demanda` en origen frente a parada intermedia. `make validar`,
+`formatear` y `revision` sin regresión sobre las 5 líneas de la fase 1.
+`calendario.yaml` deja P03 y P04 abiertos, visibles como avisos en
+`make validar`.
 
 ### Fase 3 · Coincidencia de texto (1 día)
 `matcher.py`, `fechas.py`, tabla de alias, zonas.

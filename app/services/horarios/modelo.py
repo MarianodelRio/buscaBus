@@ -8,6 +8,7 @@ ningún otro sitio.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,22 @@ class Viaje:
     observaciones: tuple[str, ...] = ()  # ids de observaciones de ámbito viaje
     pendientes: tuple[str, ...] = ()
     pasos: tuple[Paso, ...] = ()
+
+
+@dataclass(frozen=True)
+class Calendario:
+    """Festivos y periodo escolar (design.md, sección 3 y `horarios/calendario.yaml`).
+    Validado por `formato.py` como el resto de `horarios/`; `calendario.py`
+    (fase 2) solo hace lógica pura sobre este objeto ya validado."""
+
+    vigencia_inicio: date
+    vigencia_fin: date
+    festivos: dict[date, str]
+    inicio_clases: date
+    fin_clases: date
+    vacaciones: tuple[tuple[date, date], ...] = ()
+    no_lectivos: tuple[date, ...] = ()
+    pendientes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

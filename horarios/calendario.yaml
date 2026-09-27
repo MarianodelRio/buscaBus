@@ -1,0 +1,57 @@
+# horarios/calendario.yaml — festivos y periodo escolar (design.md, 2.3 y 3).
+#
+# Fuente de verdad editada a mano, validada por app/services/horarios/formato.py
+# como el resto de horarios/. Festivos de Andalucía (BOJA): Decreto 101/2025
+# para 2026 y Decreto 84/2026 para 2027. No incluye festivos locales por
+# municipio (P03, pendiente).
+#
+# Calendario escolar de Córdoba curso 2026-27 (P04, pendiente de confirmar el
+# detalle completo con negocio).
+
+# vigencia_fin ampliada de 31/08/2027 (propuesta original de la RDS) a
+# 31/12/2027: la propia RDS pedía festivos de 2027 hasta el 25/12/2027, que
+# con el fin de vigencia en agosto habrían caído fuera de rango y
+# formato.py los habría rechazado como "festivo fuera de vigencia". Se
+# ensancha solo la ventana de festivos para que quepa lo que la RDS pedía;
+# el límite de curso/lectivo (fin_clases 22/06/2027, curso 2027-28 aún no
+# conocido) no cambia. Corrección de implementación confirmada por negocio
+# durante la fase 2, documentada en design.md (2.3, calendario.yaml).
+vigencia: 01/01/2026 - 31/12/2027
+
+festivos:
+  # 2026 — Decreto 101/2025
+  01/01/2026: Año Nuevo
+  06/01/2026: Epifanía
+  28/02/2026: Día de Andalucía
+  02/04/2026: Jueves Santo
+  03/04/2026: Viernes Santo
+  01/05/2026: Fiesta del Trabajo
+  15/08/2026: Asunción
+  12/10/2026: Fiesta Nacional
+  02/11/2026: Todos los Santos (trasladado)
+  07/12/2026: Constitución (trasladado)
+  08/12/2026: Inmaculada
+  25/12/2026: Navidad
+  # 2027 — Decreto 84/2026
+  01/01/2027: Año Nuevo
+  06/01/2027: Epifanía
+  01/03/2027: Día de Andalucía (trasladado)
+  25/03/2027: Jueves Santo
+  26/03/2027: Viernes Santo
+  01/05/2027: Fiesta del Trabajo
+  16/08/2027: Asunción (trasladado)
+  12/10/2027: Fiesta Nacional
+  01/11/2027: Todos los Santos
+  06/12/2027: Constitución
+  08/12/2027: Inmaculada
+  25/12/2027: Navidad
+
+curso:
+  inicio_clases: 10/09/2026
+  fin_clases: 22/06/2027
+  vacaciones:
+    - 23/12/2026 - 07/01/2027   # Navidad
+    - 22/03/2027 - 28/03/2027   # Semana Santa
+  no_lectivos: [26/02/2027]
+
+pendientes: [P03, P04]

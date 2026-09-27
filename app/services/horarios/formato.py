@@ -17,12 +17,14 @@ from __future__ import annotations
 import calendar
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from app.services.horarios.modelo import (
+    Calendario,
     Linea,
     Localidad,
     Observacion,
@@ -83,6 +85,19 @@ CAMPOS_LINEA_PERMITIDOS = CAMPOS_LINEA_OBLIGATORIOS | {
     "pendientes",
 }
 
+# ── calendario.yaml (fase 2, design.md 2.3 y 3) ─────────────────────────────
+# Fechas con año real (a diferencia de las temporadas de línea, que no lo
+# llevan): parser distinto y sin relación con `_parse_temporada_rango` /
+# `_DIAS_DEL_ANIO` (que son año-independientes y se reutilizan cada año).
+FECHA_RE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
+RANGO_FECHA_RE = re.compile(
+    r"^(\d{2})/(\d{2})/(\d{4})\s*-\s*(\d{2})/(\d{2})/(\d{4})$"
+)
+
+CAMPOS_CALENDARIO_OBLIGATORIOS = {"vigencia", "festivos", "curso"}
+CAMPOS_CALENDARIO_PERMITIDOS = CAMPOS_CALENDARIO_OBLIGATORIOS | {"pendientes"}
+CAMPOS_CURSO_OBLIGATORIOS = {"inicio_clases", "fin_clases", "vacaciones", "no_lectivos"}
+
 _MESES = {
     "enero": 1,
     "febrero": 2,
@@ -117,6 +132,10 @@ class Modelo:
     observaciones: dict[str, Observacion]
     lineas: dict[str, Linea]
     pendientes: tuple[str, ...] = ()  # pendientes declarados en paradas.yaml
+    calendario: Calendario | None = None  # None solo si validar() no llegó a
+    # construirlo (errores); formato.validar() siempre lo rellena si no hay
+    # errores. test_diff.py construye Modelo(...) a mano sin pasar por
+    # validar() y depende de este valor por defecto.
 
 
 @dataclass
@@ -163,6 +182,50 @@ def _parse_temporada_rango(rango: str) -> list[tuple[int, int]] | None:
     if i1 <= i2:
         return list(range(i1, i2 + 1))
     return list(range(i1, len(_DIAS_DEL_ANIO))) + list(range(0, i2 + 1))
+
+
+def temporada_de_linea(linea: Linea, mes: int, dia: int) -> Temporada | None:
+    """Temporada de `linea` vigente para ese día/mes (design.md 2.3 y 3).
+
+    Único punto que vuelve a interpretar un rango de temporada de línea fuera
+    de la validación: reutiliza `_parse_temporada_rango`, el mismo parser
+    año-independiente que usa `_validar_linea`. `app.services.horarios.
+    calendario.temporada_de` delega aquí; nadie más vuelve a parsear esto."""
+    try:
+        indice = _INDICE_DIA[(mes, dia)]
+    except KeyError:
+        return None
+    for temporada in linea.temporadas:
+        indices = _parse_temporada_rango(temporada.rango)
+        if indices is not None and indice in indices:
+            return temporada
+    return None
+
+
+def _parse_fecha_calendario(txt: str) -> date | None:
+    """Fecha con año real 'DD/MM/AAAA' (calendario.yaml). Distinto del rango
+    año-independiente 'DD/MM - DD/MM' de las temporadas de línea."""
+    m = FECHA_RE.match(txt.strip())
+    if not m:
+        return None
+    d, mo, y = (int(x) for x in m.groups())
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
+def _parse_rango_fechas_calendario(txt: str) -> tuple[date, date] | None:
+    m = RANGO_FECHA_RE.match(txt.strip())
+    if not m:
+        return None
+    d1, m1, y1, d2, m2, y2 = (int(x) for x in m.groups())
+    try:
+        f1 = date(y1, m1, d1)
+        f2 = date(y2, m2, d2)
+    except ValueError:
+        return None
+    return f1, f2
 
 
 def _validar_zonas_localidades_paradas(
@@ -252,6 +315,188 @@ def _validar_pendientes_paradas(
         validos.append(p)
         avisos.append(f"{path}: pendiente {p}")
     return tuple(validos)
+
+
+def _validar_calendario(
+    directorio: Path, errores: list[str], avisos: list[str]
+) -> Calendario | None:
+    """Valida `calendario.yaml` (design.md 2.3 y 3): festivos y periodo
+    escolar, con fechas de año real. Nunca adivina: fecha inválida, rango
+    invertido, festivo duplicado o fuera de vigencia, campo desconocido o
+    ausente, e inicio de curso posterior al fin son errores concretos."""
+    path = directorio / "calendario.yaml"
+    datos = _cargar_yaml(path, errores)
+    if datos is None:
+        return None
+
+    campos_desconocidos = set(datos.keys()) - CAMPOS_CALENDARIO_PERMITIDOS
+    if campos_desconocidos:
+        errores.append(
+            f"{path}: campo(s) desconocido(s): {sorted(campos_desconocidos)}"
+        )
+    campos_ausentes = CAMPOS_CALENDARIO_OBLIGATORIOS - set(datos.keys())
+    if campos_ausentes:
+        errores.append(
+            f"{path}: falta(n) campo(s) obligatorio(s): {sorted(campos_ausentes)}"
+        )
+        return None
+
+    vigencia_raw = datos["vigencia"]
+    rango_vigencia = _parse_rango_fechas_calendario(str(vigencia_raw))
+    if rango_vigencia is None:
+        errores.append(
+            f"{path}: 'vigencia' con rango inválido '{vigencia_raw}' (se "
+            "esperaba 'DD/MM/AAAA - DD/MM/AAAA')"
+        )
+        return None
+    vigencia_inicio, vigencia_fin = rango_vigencia
+    if vigencia_fin < vigencia_inicio:
+        errores.append(
+            f"{path}: 'vigencia' con fecha de fin anterior a la de inicio "
+            f"('{vigencia_raw}')"
+        )
+        return None
+
+    def _en_vigencia(f: date, contexto: str) -> None:
+        if f < vigencia_inicio or f > vigencia_fin:
+            errores.append(
+                f"{path}: {contexto} ({f.strftime('%d/%m/%Y')}) fuera de la "
+                f"vigencia del calendario ('{vigencia_raw}')"
+            )
+
+    festivos_raw = datos["festivos"]
+    festivos: dict[date, str] = {}
+    if not isinstance(festivos_raw, dict) or not festivos_raw:
+        errores.append(f"{path}: 'festivos' debe ser un mapa no vacío")
+        festivos_raw = {}
+    for fecha_txt, nombre in festivos_raw.items():
+        fecha = _parse_fecha_calendario(str(fecha_txt))
+        if fecha is None:
+            errores.append(
+                f"{path}: festivo con fecha inválida '{fecha_txt}' (se "
+                "esperaba 'DD/MM/AAAA')"
+            )
+            continue
+        if fecha in festivos:
+            errores.append(f"{path}: festivo duplicado '{fecha_txt}'")
+            continue
+        _en_vigencia(fecha, f"festivo '{nombre}'")
+        festivos[fecha] = str(nombre)
+
+    curso_raw = datos["curso"]
+    if not isinstance(curso_raw, dict):
+        errores.append(f"{path}: 'curso' debe ser un mapa")
+        curso_raw = {}
+    campos_curso_desconocidos = set(curso_raw.keys()) - CAMPOS_CURSO_OBLIGATORIOS
+    if campos_curso_desconocidos:
+        errores.append(
+            f"{path}: 'curso' tiene campo(s) desconocido(s): "
+            f"{sorted(campos_curso_desconocidos)}"
+        )
+    campos_curso_ausentes = CAMPOS_CURSO_OBLIGATORIOS - set(curso_raw.keys())
+    if campos_curso_ausentes:
+        errores.append(
+            f"{path}: 'curso' no define campo(s) obligatorio(s): "
+            f"{sorted(campos_curso_ausentes)}"
+        )
+
+    inicio_clases: date | None = None
+    if "inicio_clases" in curso_raw:
+        inicio_clases = _parse_fecha_calendario(str(curso_raw["inicio_clases"]))
+        if inicio_clases is None:
+            errores.append(
+                f"{path}: 'curso.inicio_clases' con fecha inválida "
+                f"'{curso_raw['inicio_clases']}'"
+            )
+        else:
+            _en_vigencia(inicio_clases, "'curso.inicio_clases'")
+
+    fin_clases: date | None = None
+    if "fin_clases" in curso_raw:
+        fin_clases = _parse_fecha_calendario(str(curso_raw["fin_clases"]))
+        if fin_clases is None:
+            errores.append(
+                f"{path}: 'curso.fin_clases' con fecha inválida "
+                f"'{curso_raw['fin_clases']}'"
+            )
+        else:
+            _en_vigencia(fin_clases, "'curso.fin_clases'")
+
+    if (
+        inicio_clases is not None
+        and fin_clases is not None
+        and inicio_clases > fin_clases
+    ):
+        errores.append(
+            f"{path}: 'curso.inicio_clases' ({inicio_clases.strftime('%d/%m/%Y')}) "
+            f"es posterior a 'curso.fin_clases' ({fin_clases.strftime('%d/%m/%Y')})"
+        )
+
+    vacaciones_raw = curso_raw.get("vacaciones", [])
+    vacaciones: list[tuple[date, date]] = []
+    if not isinstance(vacaciones_raw, list):
+        errores.append(f"{path}: 'curso.vacaciones' debe ser una lista")
+        vacaciones_raw = []
+    for rango_txt in vacaciones_raw:
+        rango = _parse_rango_fechas_calendario(str(rango_txt))
+        if rango is None:
+            errores.append(
+                f"{path}: 'curso.vacaciones' con rango inválido '{rango_txt}'"
+            )
+            continue
+        f1, f2 = rango
+        if f2 < f1:
+            errores.append(
+                f"{path}: 'curso.vacaciones' con rango invertido '{rango_txt}'"
+            )
+            continue
+        _en_vigencia(f1, f"'curso.vacaciones' ({rango_txt}), inicio")
+        _en_vigencia(f2, f"'curso.vacaciones' ({rango_txt}), fin")
+        vacaciones.append((f1, f2))
+
+    no_lectivos_raw = curso_raw.get("no_lectivos", [])
+    no_lectivos: list[date] = []
+    if not isinstance(no_lectivos_raw, list):
+        errores.append(f"{path}: 'curso.no_lectivos' debe ser una lista")
+        no_lectivos_raw = []
+    for fecha_txt in no_lectivos_raw:
+        fecha = _parse_fecha_calendario(str(fecha_txt))
+        if fecha is None:
+            errores.append(
+                f"{path}: 'curso.no_lectivos' con fecha inválida '{fecha_txt}'"
+            )
+            continue
+        _en_vigencia(fecha, "'curso.no_lectivos'")
+        no_lectivos.append(fecha)
+
+    pendientes_raw = datos.get("pendientes", []) or []
+    pendientes: list[str] = []
+    if not isinstance(pendientes_raw, list):
+        errores.append(f"{path}: 'pendientes' debe ser una lista")
+    else:
+        for p in pendientes_raw:
+            p = str(p)
+            if not PENDIENTE_RE.match(p):
+                errores.append(
+                    f"{path}: pendiente inválido '{p}' (debe cumplir P\\d{{2}})"
+                )
+                continue
+            pendientes.append(p)
+            avisos.append(f"{path}: pendiente {p}")
+
+    if inicio_clases is None or fin_clases is None:
+        return None
+
+    return Calendario(
+        vigencia_inicio=vigencia_inicio,
+        vigencia_fin=vigencia_fin,
+        festivos=festivos,
+        inicio_clases=inicio_clases,
+        fin_clases=fin_clases,
+        vacaciones=tuple(vacaciones),
+        no_lectivos=tuple(no_lectivos),
+        pendientes=tuple(pendientes),
+    )
 
 
 def _validar_observaciones(
@@ -782,6 +1027,8 @@ def validar(directorio: Path | str) -> Resultado:
         datos_observaciones or {}, observaciones_path, errores
     )
 
+    calendario = _validar_calendario(directorio, errores, avisos)
+
     lineas: dict[str, Linea] = {}
     paradas_usadas: set[str] = set()
     if lineas_dir.is_dir():
@@ -827,5 +1074,6 @@ def validar(directorio: Path | str) -> Resultado:
         observaciones=observaciones,
         lineas=lineas,
         pendientes=pendientes_paradas,
+        calendario=calendario,
     )
     return Resultado(modelo=modelo, errores=errores, avisos=avisos)

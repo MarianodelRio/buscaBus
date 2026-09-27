@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fase 1 implementada (formato de horarios, validador, herramientas y 5 líneas de prueba); fases 2-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1 y 2 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta y calendario); fases 3-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -32,9 +32,9 @@ app/
       modelo.py                — entidades inmutables (design.md 2.4)
       formato.py               — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
       diff.py                  — diferencias entre dos versiones de horarios/ en lenguaje de negocio
-      loader.py                (pendiente) — carga horarios/ a memoria al arrancar usando formato.py
-      query.py                 (pendiente) — motor de consulta (design.md, sección 3)
-      calendario.py            (pendiente) — temporada, tipo de día, festivos, periodo escolar
+      loader.py                — carga horarios/ a memoria al arrancar usando formato.py
+      query.py                 — motor de consulta (design.md, sección 3)
+      calendario.py            — temporada, tipo de día, festivos, periodo escolar
   utils/
     interactive.py             (pendiente) — helpers genéricos copiados de Peluquería + constructores propios
     messages.py                (pendiente) — todos los textos en español

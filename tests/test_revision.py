@@ -68,6 +68,10 @@ def _build_repo(tmp_path: Path) -> Path:
         (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (horarios_dir / "calendario.yaml").write_text(
+        (FIXTURES / "calendario_base.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (horarios_dir / "lineas" / "linea-prueba.yaml").write_text(
         LINEA_YAML, encoding="utf-8"
     )
@@ -178,6 +182,10 @@ def test_main_primera_version_sin_tags(tmp_path, monkeypatch):
         (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    (horarios_dir / "calendario.yaml").write_text(
+        (FIXTURES / "calendario_base.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (horarios_dir / "lineas" / "linea-prueba.yaml").write_text(
         LINEA_YAML, encoding="utf-8"
     )
@@ -262,6 +270,10 @@ def _construir_html(
     )
     (horarios_dir / "observaciones.yaml").write_text(
         (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (horarios_dir / "calendario.yaml").write_text(
+        (FIXTURES / "calendario_base.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     for nombre, contenido in lineas.items():

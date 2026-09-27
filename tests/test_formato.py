@@ -19,6 +19,7 @@ def _build(
     paradas_fixture: str = "paradas_base.yaml",
     observaciones_fixture: str = "observaciones_base.yaml",
     linea_nombre: str = "linea-prueba",
+    calendario_fixture: str = "calendario_base.yaml",
 ) -> Path:
     horarios_dir = tmp_path / "horarios"
     (horarios_dir / "lineas").mkdir(parents=True)
@@ -27,6 +28,9 @@ def _build(
     )
     (horarios_dir / "observaciones.yaml").write_text(
         (FIXTURES / observaciones_fixture).read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    (horarios_dir / "calendario.yaml").write_text(
+        (FIXTURES / calendario_fixture).read_text(encoding="utf-8"), encoding="utf-8"
     )
     (horarios_dir / "lineas" / f"{linea_nombre}.yaml").write_text(
         linea_yaml, encoding="utf-8"
@@ -63,6 +67,10 @@ def test_yaml_mal_formado(tmp_path):
     )
     (horarios_dir / "observaciones.yaml").write_text(
         (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (horarios_dir / "calendario.yaml").write_text(
+        (FIXTURES / "calendario_base.yaml").read_text(encoding="utf-8"),
         encoding="utf-8",
     )
     (horarios_dir / "lineas" / "mala.yaml").write_text(
