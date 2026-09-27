@@ -2,4 +2,5 @@ pytest==8.2.0
 pytest-cov==5.0.0
 ruff
 mypy
-openpyxl==3.1.2  # solo para tools/import_excel.py — no hace falta en la VM
+openpyxl==3.1.2  # solo para tools/migracion/ — no hace falta en la VM
+weasyprint       # PDF de tools/revision.py (make revision); necesita Pango en el sistema

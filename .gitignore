@@ -41,8 +41,7 @@ logs/
 .DS_Store
 
 # ── Datos generados ────────────────────────────────────────────────────────────
-# IMPORTANTE: data/*.csv NO se ignora. Los CSV que genera tools/import_excel.py
-# se versionan en git a propósito (ver design.md, sección 2.3): dan historial,
-# diff en cada actualización de horarios y vuelta atrás con un simple revert.
-# No "arregles" esto añadiendo data/*.csv aquí.
+# horarios/ SÍ se versiona (es la fuente de verdad, design.md sección 2.3).
+# revision/ se regenera con `make revision` desde cualquier versión: no se versiona.
+revision/
 *.xlsx

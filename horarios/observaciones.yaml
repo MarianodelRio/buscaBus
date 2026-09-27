@@ -1,0 +1,60 @@
+# horarios/observaciones.yaml — catálogo de observaciones y el texto exacto
+# que ve el cliente (design.md, 2.3).
+#
+# tipo: condicion | aviso
+#   - condicion: cambia si el autobús sale o si para. Conjunto cerrado que
+#     el motor de consulta conoce (app/services/horarios/query.py, fase 2).
+#     El validador rechaza una condición que el código no sepa aplicar.
+#   - aviso: solo informa. Se puede añadir libremente.
+#
+# ambitos: parada | viaje | linea — dónde se puede usar esta observación.
+
+a_demanda:
+  letra: D
+  tipo: condicion
+  ambitos: [parada]
+  texto: "A demanda: llama al {telefono} con 24 horas laborables de antelación."  # P19: texto y plazo por confirmar
+
+solo_viernes_lectivo:
+  letra: V
+  tipo: condicion
+  ambitos: [parada, viaje]
+  texto: "Solo viernes en periodo escolar."
+
+solo_si_viajeros_desde_cordoba:
+  letra: C
+  tipo: condicion
+  ambitos: [parada]
+  texto: "Llega hasta aquí solo si el autobús sale de Córdoba con viajeros para este destino."
+
+entra_en_pueblo:
+  letra: P
+  tipo: aviso
+  ambitos: [parada]
+  texto: "Este autobús entra en el pueblo."
+
+solo_virgen_remedios:
+  letra: R
+  tipo: aviso
+  ambitos: [parada]
+  texto: "Solo para en la parada de Virgen de los Remedios."
+
+hora_aproximada:
+  tipo: aviso
+  ambitos: [linea]
+  texto: "Horarios de paso aproximados."
+
+pasa_por_rivero:
+  tipo: aviso
+  ambitos: [viaje]
+  texto: "Pasa por Rivero de Posadas."
+
+para_en_los_mochos:
+  tipo: aviso
+  ambitos: [viaje]
+  texto: "Tiene parada dentro de Los Mochos."
+
+no_para_en_el_pedrera:
+  tipo: aviso
+  ambitos: [viaje]
+  texto: "No para en El Pedrera."

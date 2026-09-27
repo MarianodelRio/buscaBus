@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: solo diseño, nada implementado.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fase 1 implementada (formato de horarios, validador, herramientas y 5 líneas de prueba); fases 2-5 pendientes.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -29,9 +29,9 @@ app/
     whatsapp.py                (pendiente) — copiado tal cual de Peluquería
     scheduler.py                (pendiente) — 1 job: limpieza de estados cada 10 min
     horarios/
-      modelo.py                (pendiente) — entidades inmutables (design.md 2.4)
-      formato.py               (pendiente) — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
-      diff.py                  (pendiente) — diferencias entre dos versiones de horarios/ en lenguaje de negocio
+      modelo.py                — entidades inmutables (design.md 2.4)
+      formato.py               — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
+      diff.py                  — diferencias entre dos versiones de horarios/ en lenguaje de negocio
       loader.py                (pendiente) — carga horarios/ a memoria al arrancar usando formato.py
       query.py                 (pendiente) — motor de consulta (design.md, sección 3)
       calendario.py            (pendiente) — temporada, tipo de día, festivos, periodo escolar
@@ -46,17 +46,17 @@ app/
     security.py                (pendiente) — copiado tal cual de Peluquería
     admin.py                   (pendiente) — adaptado: quita la salud de Calendar, añade la de datos cargados
 tools/
-  validar.py                   (pendiente) — make validar
-  formatear.py                 (pendiente) — make formatear: realinea tablas sin tocar datos
-  revision.py                  (pendiente) — make revision: HTML + PDF para negocio con cambios vs última versión publicada
-  migracion/                   (pendiente) — scripts de un solo uso para migrar desde el Excel; se borran en la fase 1b
-horarios/                      (pendiente) — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3)
-tests/                         (pendiente) — un fichero por módulo, ver design.md sección 9
+  validar.py                   — make validar
+  formatear.py                 — make formatear: realinea tablas sin tocar datos
+  revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
+  migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
+horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 5 líneas de prueba; las 10 restantes en la fase 1b
+tests/                         — test_formato, test_formatear, test_diff, test_revision + fixtures/; el resto llega con cada fase (design.md sección 9)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
-Makefile                       (pendiente) — fase 5, cambia puerto/dominio/nombre de servicio
+Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```
 
-Ficheros ya creados en esta fase de esqueleto: estructura de carpetas, `config.yaml`, `config_import.yaml` (obsoleto: se elimina en la fase 1, lo sustituye `horarios/`), `.env.example`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `pyproject.toml`, `.gitignore`, `README.md`, este `CLAUDE.md`, agentes y comandos de `.claude/`. También `docs/preguntas_negocio.txt`: preguntas P01-P27 enviadas a negocio y decisiones D-a a D-p.
+Ficheros ya creados en esta fase de esqueleto: estructura de carpetas, `config.yaml`, `.env.example`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `pyproject.toml`, `.gitignore`, `README.md`, este `CLAUDE.md`, agentes y comandos de `.claude/`. También `docs/preguntas_negocio.txt`: preguntas P01-P27 enviadas a negocio y decisiones D-a a D-p.
 
 ---
 

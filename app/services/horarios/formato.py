@@ -1,0 +1,831 @@
+"""app/services/horarios/formato.py — parser + validador único de horarios/.
+
+Único módulo que interpreta el formato de horarios/ (design.md, sección 2.3).
+Lo usan `tools/validar.py`, `tools/formatear.py`, los tests y (fase 2) el
+loader al arrancar el bot. Ninguna otra parte del código vuelve a parsear
+estos ficheros.
+
+`validar(directorio)` nunca lanza una excepción para un error de negocio
+esperado (parada sin definir, horas que retroceden, etc.): esos casos entran
+en la lista de errores del `Resultado`. Solo se propagan excepciones ante
+fallos verdaderamente inesperados de E/S (por ejemplo, que `horarios/` no
+exista).
+"""
+
+from __future__ import annotations
+
+import calendar
+import re
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+from app.services.horarios.modelo import (
+    Linea,
+    Localidad,
+    Observacion,
+    Paso,
+    Parada,
+    Tabla,
+    Temporada,
+    Viaje,
+    Zona,
+)
+
+PENDIENTE_RE = re.compile(r"^P\d{2}$")
+CODIGO_PARADA_RE = re.compile(r"^[A-Z]{3}$")
+HORA_CON_LETRAS_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)([A-Z]*)$")
+MARCADOR_RE = re.compile(r"\{([^}]*)\}")
+
+DIAS_INDIVIDUALES = (
+    "lunes",
+    "martes",
+    "miercoles",
+    "jueves",
+    "viernes",
+    "sabado",
+    "domingo",
+    "festivos",
+)
+
+GRUPOS_DIA: dict[str, frozenset[str]] = {
+    "lunes": frozenset({"lunes"}),
+    "martes": frozenset({"martes"}),
+    "miercoles": frozenset({"miercoles"}),
+    "jueves": frozenset({"jueves"}),
+    "viernes": frozenset({"viernes"}),
+    "sabado": frozenset({"sabado"}),
+    "domingo": frozenset({"domingo"}),
+    "festivos": frozenset({"festivos"}),
+    "lunes-viernes": frozenset({"lunes", "martes", "miercoles", "jueves", "viernes"}),
+    "lunes-jueves": frozenset({"lunes", "martes", "miercoles", "jueves"}),
+    "martes-viernes": frozenset({"martes", "miercoles", "jueves", "viernes"}),
+    "sabados-domingos": frozenset({"sabado", "domingo"}),
+    "domingos-festivos": frozenset({"domingo", "festivos"}),
+    "sabados-domingos-festivos": frozenset({"sabado", "domingo", "festivos"}),
+}
+
+ESTADOS_DIA = {"horario", "sin_servicio", "sin_datos"}
+
+CONDICIONES_CONOCIDAS = {
+    "a_demanda",
+    "solo_viernes_lectivo",
+    "solo_si_viajeros_desde_cordoba",
+}
+
+CAMPOS_LINEA_OBLIGATORIOS = {"nombre", "temporadas", "dias", "horarios"}
+CAMPOS_LINEA_PERMITIDOS = CAMPOS_LINEA_OBLIGATORIOS | {
+    "telefono_demanda",
+    "avisos",
+    "no_circula",
+    "pendientes",
+}
+
+_MESES = {
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+}
+
+# Los 366 días del año (mes, día), usando un año bisiesto como calendario de
+# referencia. Sirve para comprobar que las temporadas cubren el año entero,
+# incluido el 29 de febrero, sin años reales (D-a).
+_DIAS_DEL_ANIO: list[tuple[int, int]] = [
+    (mes, dia)
+    for mes in range(1, 13)
+    for dia in range(1, calendar.monthrange(2024, mes)[1] + 1)
+]
+_INDICE_DIA = {md: i for i, md in enumerate(_DIAS_DEL_ANIO)}
+
+
+@dataclass
+class Modelo:
+    zonas: dict[str, Zona]
+    localidades: dict[str, Localidad]
+    paradas: dict[str, Parada]
+    observaciones: dict[str, Observacion]
+    lineas: dict[str, Linea]
+    pendientes: tuple[str, ...] = ()  # pendientes declarados en paradas.yaml
+
+
+@dataclass
+class Resultado:
+    modelo: Modelo | None
+    errores: list[str]
+    avisos: list[str]
+
+
+def _cargar_yaml(path: Path, errores: list[str]) -> dict[str, Any] | None:
+    try:
+        texto = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        errores.append(f"{path}: no se puede leer el fichero ({exc})")
+        return None
+    try:
+        datos = yaml.safe_load(texto)
+    except yaml.YAMLError as exc:
+        errores.append(f"{path}: YAML mal formado ({exc})")
+        return None
+    if datos is None:
+        datos = {}
+    if not isinstance(datos, dict):
+        errores.append(f"{path}: YAML mal formado (se esperaba un mapa en la raíz)")
+        return None
+    return datos
+
+
+def _parse_temporada_rango(rango: str) -> list[tuple[int, int]] | None:
+    """Devuelve la lista de índices (en _DIAS_DEL_ANIO) que cubre el rango, o
+    None si el formato es inválido."""
+    rango = rango.strip()
+    if rango.lower() == "todo el año" or rango.lower() == "todo el ano":
+        return list(range(len(_DIAS_DEL_ANIO)))
+    m = re.match(r"^(\d{2})/(\d{2})\s*-\s*(\d{2})/(\d{2})$", rango)
+    if not m:
+        return None
+    d1, m1, d2, m2 = (int(x) for x in m.groups())
+    try:
+        i1 = _INDICE_DIA[(m1, d1)]
+        i2 = _INDICE_DIA[(m2, d2)]
+    except KeyError:
+        return None
+    if i1 <= i2:
+        return list(range(i1, i2 + 1))
+    return list(range(i1, len(_DIAS_DEL_ANIO))) + list(range(0, i2 + 1))
+
+
+def _validar_zonas_localidades_paradas(
+    datos_paradas: dict[str, Any], path: Path, errores: list[str]
+) -> tuple[dict[str, Zona], dict[str, Localidad], dict[str, Parada]]:
+    zonas: dict[str, Zona] = {}
+    localidades: dict[str, Localidad] = {}
+    paradas: dict[str, Parada] = {}
+
+    zonas_raw = datos_paradas.get("zonas")
+    if not isinstance(zonas_raw, dict):
+        errores.append(f"{path}: falta el campo obligatorio 'zonas' (mapa)")
+        zonas_raw = {}
+    for zid, nombre in zonas_raw.items():
+        zonas[zid] = Zona(id=zid, nombre=str(nombre))
+
+    localidades_raw = datos_paradas.get("localidades")
+    if not isinstance(localidades_raw, dict):
+        errores.append(f"{path}: falta el campo obligatorio 'localidades' (mapa)")
+        localidades_raw = {}
+    for lid, campos in localidades_raw.items():
+        if (
+            not isinstance(campos, dict)
+            or "nombre" not in campos
+            or "zona" not in campos
+        ):
+            errores.append(f"{path}: localidad '{lid}' sin 'nombre' u 'zona'")
+            continue
+        zona_id = campos["zona"]
+        if zona_id not in zonas:
+            errores.append(
+                f"{path}: localidad '{lid}' referencia una zona sin definir "
+                f"('{zona_id}')"
+            )
+        alias = tuple(campos.get("alias", []))
+        localidades[lid] = Localidad(
+            id=lid, nombre=str(campos["nombre"]), zona=zona_id, alias=alias
+        )
+
+    paradas_raw = datos_paradas.get("paradas")
+    if not isinstance(paradas_raw, dict):
+        errores.append(f"{path}: falta el campo obligatorio 'paradas' (mapa)")
+        paradas_raw = {}
+    for codigo, campos in paradas_raw.items():
+        if not CODIGO_PARADA_RE.match(codigo):
+            errores.append(
+                f"{path}: código de parada inválido '{codigo}' "
+                "(deben ser 3 letras mayúsculas)"
+            )
+            continue
+        if (
+            not isinstance(campos, dict)
+            or "nombre" not in campos
+            or "localidad" not in campos
+        ):
+            errores.append(f"{path}: parada '{codigo}' sin 'nombre' o 'localidad'")
+            continue
+        localidad_id = campos["localidad"]
+        if localidad_id not in localidades:
+            errores.append(
+                f"{path}: parada '{codigo}' referencia una localidad sin definir "
+                f"('{localidad_id}')"
+            )
+        paradas[codigo] = Parada(
+            codigo=codigo, nombre=str(campos["nombre"]), localidad=localidad_id
+        )
+
+    return zonas, localidades, paradas
+
+
+def _validar_pendientes_paradas(
+    datos_paradas: dict[str, Any], path: Path, errores: list[str], avisos: list[str]
+) -> tuple[str, ...]:
+    """Lee el campo opcional `pendientes:` de paradas.yaml (design.md 2.3):
+    preguntas abiertas que no están ligadas a ninguna línea concreta (p.ej.
+    P18, zonas/localidades propuestas por negocio sin confirmar)."""
+    raw = datos_paradas.get("pendientes", []) or []
+    if not isinstance(raw, list):
+        errores.append(f"{path}: 'pendientes' debe ser una lista")
+        return ()
+    validos: list[str] = []
+    for p in raw:
+        p = str(p)
+        if not PENDIENTE_RE.match(p):
+            errores.append(f"{path}: pendiente inválido '{p}' (debe cumplir P\\d{{2}})")
+            continue
+        validos.append(p)
+        avisos.append(f"{path}: pendiente {p}")
+    return tuple(validos)
+
+
+def _validar_observaciones(
+    datos: dict[str, Any], path: Path, errores: list[str]
+) -> dict[str, Observacion]:
+    observaciones: dict[str, Observacion] = {}
+    for oid, campos in datos.items():
+        if (
+            not isinstance(campos, dict)
+            or "tipo" not in campos
+            or "ambitos" not in campos
+            or "texto" not in campos
+        ):
+            errores.append(
+                f"{path}: observación '{oid}' sin 'tipo', 'ambitos' o 'texto'"
+            )
+            continue
+        tipo = campos["tipo"]
+        if tipo not in ("condicion", "aviso"):
+            errores.append(f"{path}: observación '{oid}' con tipo desconocido '{tipo}'")
+            continue
+        ambitos = campos["ambitos"]
+        if (
+            not isinstance(ambitos, list)
+            or not ambitos
+            or any(a not in ("parada", "viaje", "linea") for a in ambitos)
+        ):
+            errores.append(
+                f"{path}: observación '{oid}' con ámbitos inválidos {ambitos!r}"
+            )
+            continue
+        letra = campos.get("letra")
+        if "parada" in ambitos and letra is None:
+            errores.append(
+                f"{path}: observación '{oid}' tiene ámbito 'parada' pero no "
+                "define 'letra'"
+            )
+        if tipo == "condicion" and oid not in CONDICIONES_CONOCIDAS:
+            errores.append(
+                f"{path}: observación '{oid}' es una condición que el motor no "
+                f"sabe aplicar (conocidas: {sorted(CONDICIONES_CONOCIDAS)})"
+            )
+        texto = str(campos["texto"])
+        for m in MARCADOR_RE.finditer(texto):
+            marcador = m.group(1)
+            if marcador != "telefono":
+                errores.append(
+                    f"{path}: observación '{oid}' tiene un marcador desconocido "
+                    f"'{{{marcador}}}' en 'texto' (solo se admite '{{telefono}}')"
+                )
+        observaciones[oid] = Observacion(
+            id=oid,
+            letra=letra,
+            tipo=tipo,
+            ambitos=tuple(ambitos),
+            texto=str(campos["texto"]),
+        )
+    return observaciones
+
+
+def _obs_por_letra(observaciones: dict[str, Observacion]) -> dict[str, Observacion]:
+    return {o.letra: o for o in observaciones.values() if o.letra}
+
+
+def texto_observacion(obs: Observacion, linea: Linea) -> str:
+    """Texto literal que verá el cliente para `obs`, con `{telefono}`
+    sustituido por el `telefono_demanda` de `linea` cuando lo hay. No hace
+    nada si el texto no tiene el marcador o la línea no define teléfono."""
+    if "{telefono}" in obs.texto and linea.telefono_demanda:
+        return obs.texto.replace("{telefono}", linea.telefono_demanda)
+    return obs.texto
+
+
+@dataclass
+class _FilaTabla:
+    valores: list[str]
+    obs_viaje: list[str]
+    pendientes: list[str]
+    numero: int  # fila dentro de la tabla (1-based, sin cabecera ni comentarios)
+
+
+def _parse_tabla(texto: str) -> tuple[list[str] | None, list[_FilaTabla]]:
+    """Devuelve (cabecera, filas). cabecera es None si no hay ninguna línea útil."""
+    lineas = [
+        line
+        for line in texto.splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not lineas:
+        return None, []
+    cabecera = lineas[0].split()
+    filas: list[_FilaTabla] = []
+    for i, linea in enumerate(lineas[1:], start=1):
+        if "|" in linea:
+            izquierda, derecha = linea.split("|", 1)
+            valores = izquierda.split()
+            resto = derecha.split()
+        else:
+            valores = linea.split()
+            resto = []
+        obs_viaje = [tok for tok in resto if not PENDIENTE_RE.match(tok)]
+        pendientes = [tok for tok in resto if PENDIENTE_RE.match(tok)]
+        filas.append(
+            _FilaTabla(
+                valores=valores, obs_viaje=obs_viaje, pendientes=pendientes, numero=i
+            )
+        )
+    return cabecera, filas
+
+
+def _hora_a_minutos(hhmm: str) -> int:
+    h, m = hhmm.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _validar_linea(
+    lid: str,
+    datos: dict[str, Any],
+    path: Path,
+    paradas: dict[str, Parada],
+    observaciones: dict[str, Observacion],
+    errores: list[str],
+    avisos: list[str],
+) -> Linea | None:
+    campos_desconocidos = set(datos.keys()) - CAMPOS_LINEA_PERMITIDOS
+    if campos_desconocidos:
+        errores.append(
+            f"{path}: campo(s) desconocido(s): {sorted(campos_desconocidos)}"
+        )
+    campos_ausentes = CAMPOS_LINEA_OBLIGATORIOS - set(datos.keys())
+    if campos_ausentes:
+        errores.append(
+            f"{path}: falta(n) campo(s) obligatorio(s): {sorted(campos_ausentes)}"
+        )
+        return None
+
+    # TODO(design.md 2.3, avisos): dos comprobaciones de la tabla de avisos no
+    # están implementadas: "el mismo autobús en dos líneas (se fusiona al
+    # consultar)" y "tramo con un tiempo anómalo frente al resto de viajes de
+    # ese tramo". Ninguna de las 5 líneas de prueba de la fase 1 ejercita
+    # estos casos. Implementar cuando haga falta (probablemente fase 1b, ver
+    # también docs/preguntas_negocio.txt).
+
+    nombre = datos["nombre"]
+    telefono_demanda = datos.get("telefono_demanda")
+    avisos_linea = datos.get("avisos", []) or []
+    no_circula = datos.get("no_circula", []) or []
+    pendientes_linea = datos.get("pendientes", []) or []
+
+    for p in pendientes_linea:
+        if not PENDIENTE_RE.match(p):
+            errores.append(f"{path}: pendiente inválido '{p}' (debe cumplir P\\d{{2}})")
+
+    obs_por_letra = _obs_por_letra(observaciones)
+
+    # avisos de línea deben ser observaciones de ámbito línea, existentes
+    for oid in avisos_linea:
+        obs = observaciones.get(oid)
+        if obs is None:
+            errores.append(
+                f"{path}: aviso de línea '{oid}' sin definir en observaciones.yaml"
+            )
+        elif "linea" not in obs.ambitos:
+            errores.append(
+                f"{path}: observación '{oid}' usada en ámbito 'linea' pero no lo "
+                "permite"
+            )
+
+    # ── temporadas ───────────────────────────────────────────────────────
+    temporadas_raw = datos["temporadas"]
+    if not isinstance(temporadas_raw, dict) or not temporadas_raw:
+        errores.append(f"{path}: 'temporadas' debe ser un mapa no vacío")
+        temporadas_raw = {}
+
+    temporadas: list[Temporada] = []
+    cobertura = [0] * len(_DIAS_DEL_ANIO)
+    for nombre_temp, rango in temporadas_raw.items():
+        indices = _parse_temporada_rango(str(rango))
+        if indices is None:
+            errores.append(
+                f"{path}: temporada '{nombre_temp}' con rango inválido '{rango}' "
+                "(se esperaba 'DD/MM - DD/MM' o 'todo el año')"
+            )
+            continue
+        for i in indices:
+            cobertura[i] += 1
+        temporadas.append(Temporada(nombre=nombre_temp, rango=str(rango)))
+
+    dias_sin_cubrir = sum(1 for c in cobertura if c == 0)
+    dias_solapados = sum(1 for c in cobertura if c > 1)
+    if dias_sin_cubrir:
+        errores.append(
+            f"{path}: las temporadas dejan {dias_sin_cubrir} día(s) del año sin cubrir"
+        )
+    if dias_solapados:
+        errores.append(
+            f"{path}: las temporadas se solapan en {dias_solapados} día(s) del año"
+        )
+
+    nombres_temporada = {t.nombre for t in temporadas}
+
+    # ── dias (estado de cada clase de día, por temporada) ───────────────
+    dias_raw = datos["dias"]
+    dias_estado: dict[str, dict[str, str]] = {}
+    if not isinstance(dias_raw, dict):
+        errores.append(f"{path}: 'dias' debe ser un mapa temporada -> claves de día")
+        dias_raw = {}
+
+    for nombre_temp in nombres_temporada:
+        declaracion = dias_raw.get(nombre_temp)
+        estado_por_clase: dict[str, str] = {}
+        if not isinstance(declaracion, dict):
+            errores.append(f"{path}: la temporada '{nombre_temp}' no declara 'dias'")
+            dias_estado[nombre_temp] = estado_por_clase
+            continue
+        cobertura_clases: dict[str, int] = {c: 0 for c in DIAS_INDIVIDUALES}
+        for clave, estado in declaracion.items():
+            if clave not in GRUPOS_DIA:
+                errores.append(
+                    f"{path}: temporada '{nombre_temp}': clave de día "
+                    f"desconocida '{clave}'"
+                )
+                continue
+            if estado not in ESTADOS_DIA:
+                errores.append(
+                    f"{path}: temporada '{nombre_temp}', día '{clave}': estado "
+                    f"desconocido '{estado}'"
+                )
+                continue
+            for clase in GRUPOS_DIA[clave]:
+                cobertura_clases[clase] += 1
+                estado_por_clase[clase] = estado
+                if estado == "sin_datos":
+                    avisos.append(
+                        f"{path}: {lid}, temporada '{nombre_temp}', '{clase}': "
+                        "sin datos (nunca se trata como sin servicio)"
+                    )
+        no_declaradas = [c for c, n in cobertura_clases.items() if n == 0]
+        declaradas_dos_veces = [c for c, n in cobertura_clases.items() if n > 1]
+        if no_declaradas:
+            errores.append(
+                f"{path}: temporada '{nombre_temp}': clase(s) de día sin "
+                f"declarar: {no_declaradas}"
+            )
+        if declaradas_dos_veces:
+            errores.append(
+                f"{path}: temporada '{nombre_temp}': clase(s) de día declaradas "
+                f"dos veces: {declaradas_dos_veces}"
+            )
+        dias_estado[nombre_temp] = estado_por_clase
+
+    # ── horarios (tablas) ────────────────────────────────────────────────
+    horarios_raw = datos["horarios"]
+    if not isinstance(horarios_raw, list) or not horarios_raw:
+        errores.append(f"{path}: 'horarios' debe ser una lista no vacía de tablas")
+        horarios_raw = []
+
+    viajes: list[Viaje] = []
+    tablas: list[Tabla] = []
+    clases_cubiertas: dict[str, set[str]] = {t: set() for t in nombres_temporada}
+    usa_a_demanda = False
+
+    # Varias tablas de la misma línea pueden compartir temporada+dias (p.ej.
+    # ida y vuelta ambas anual/sábado): sin más información en el esquema
+    # (design.md 2.3 no declara un campo de sentido por tabla), se numeran
+    # "tabla N de M" para que los avisos/errores de cada una sean
+    # distinguibles.
+    claves_tabla = [
+        (entrada["temporada"], entrada["dias"])
+        for entrada in horarios_raw
+        if isinstance(entrada, dict)
+        and {"temporada", "dias", "tabla"} <= set(entrada.keys())
+    ]
+    conteo_claves: dict[tuple[Any, Any], int] = {}
+    for clave in claves_tabla:
+        conteo_claves[clave] = conteo_claves.get(clave, 0) + 1
+    indice_clave: dict[tuple[Any, Any], int] = {}
+
+    for entrada in horarios_raw:
+        if not isinstance(entrada, dict) or not {"temporada", "dias", "tabla"} <= set(
+            entrada.keys()
+        ):
+            errores.append(
+                f"{path}: entrada de 'horarios' incompleta "
+                "(faltan temporada/dias/tabla)"
+            )
+            continue
+        temporada_e = entrada["temporada"]
+        dias_e = entrada["dias"]
+        tabla_txt = entrada["tabla"]
+        clave = (temporada_e, dias_e)
+        if conteo_claves.get(clave, 0) > 1:
+            indice_clave[clave] = indice_clave.get(clave, 0) + 1
+            etiqueta_tabla = (
+                f"{path} [temporada={temporada_e}, dias={dias_e}, "
+                f"tabla {indice_clave[clave]} de {conteo_claves[clave]}]"
+            )
+        else:
+            etiqueta_tabla = f"{path} [temporada={temporada_e}, dias={dias_e}]"
+
+        if temporada_e not in nombres_temporada:
+            errores.append(f"{etiqueta_tabla}: referencia una temporada sin declarar")
+            continue
+        if dias_e not in GRUPOS_DIA:
+            errores.append(f"{etiqueta_tabla}: clave de día desconocida '{dias_e}'")
+            continue
+
+        cabecera, filas = _parse_tabla(tabla_txt)
+        if cabecera is None:
+            errores.append(f"{etiqueta_tabla}: tabla vacía")
+            continue
+        if len(cabecera) < 2:
+            errores.append(
+                f"{etiqueta_tabla}: la cabecera debe tener al menos 2 paradas"
+            )
+        if len(cabecera) != len(set(cabecera)):
+            errores.append(
+                f"{etiqueta_tabla}: paradas repetidas en la cabecera {cabecera}"
+            )
+        for codigo in cabecera:
+            if codigo not in paradas:
+                errores.append(
+                    f"{etiqueta_tabla}: código de parada sin definir '{codigo}'"
+                )
+
+        tabla_actual = Tabla(
+            linea=lid,
+            temporada=temporada_e,
+            dias=dias_e,
+            paradas=tuple(cabecera),
+            posicion=len(tablas),
+        )
+        tablas.append(tabla_actual)
+
+        for fila in filas:
+            if len(fila.valores) != len(cabecera):
+                errores.append(
+                    f"{etiqueta_tabla}, fila {fila.numero}: "
+                    f"{len(fila.valores)} valores, se esperaban "
+                    f"{len(cabecera)} (uno por parada)"
+                )
+                continue
+
+            pasos: list[Paso] = []
+            horas_validas: list[int] = []
+            fila_valida = True
+            for codigo, valor in zip(cabecera, fila.valores):
+                if valor == "-":
+                    continue
+                m = HORA_CON_LETRAS_RE.match(valor)
+                if not m:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: valor inválido "
+                        f"'{valor}' en '{codigo}'"
+                    )
+                    fila_valida = False
+                    continue
+                hhmm = f"{m.group(1)}:{m.group(2)}"
+                letras = m.group(3)
+                minutos = _hora_a_minutos(hhmm)
+                if horas_validas and minutos < horas_validas[-1]:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: las horas "
+                        f"retroceden en '{codigo}' ({hhmm})"
+                    )
+                horas_validas.append(minutos)
+
+                obs_parada: list[str] = []
+                for letra in letras:
+                    obs = obs_por_letra.get(letra)
+                    if obs is None:
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: letra de "
+                            f"observación sin definir '{letra}' en '{codigo}'"
+                        )
+                        continue
+                    if "parada" not in obs.ambitos:
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: observación "
+                            f"'{obs.id}' usada en ámbito 'parada' pero no lo permite"
+                        )
+                        continue
+                    if obs.tipo == "condicion" and obs.id not in CONDICIONES_CONOCIDAS:
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: condición "
+                            f"'{obs.id}' que el motor no sabe aplicar"
+                        )
+                        continue
+                    if obs.id == "a_demanda":
+                        usa_a_demanda = True
+                    obs_parada.append(obs.id)
+                pasos.append(
+                    Paso(parada=codigo, hora=hhmm, observaciones=tuple(obs_parada))
+                )
+
+            if fila_valida and len(horas_validas) < 2:
+                errores.append(
+                    f"{etiqueta_tabla}, fila {fila.numero}: el viaje tiene menos "
+                    "de 2 horas"
+                )
+
+            obs_viaje_ids: list[str] = []
+            for tok in fila.obs_viaje:
+                obs = observaciones.get(tok)
+                if obs is None:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: observación de "
+                        f"viaje sin definir '{tok}'"
+                    )
+                    continue
+                if "viaje" not in obs.ambitos:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: observación "
+                        f"'{tok}' usada en ámbito 'viaje' pero no lo permite"
+                    )
+                    continue
+                if obs.tipo == "condicion" and obs.id not in CONDICIONES_CONOCIDAS:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: condición '{tok}' "
+                        "que el motor no sabe aplicar"
+                    )
+                    continue
+                obs_viaje_ids.append(obs.id)
+
+            pendientes_fila: list[str] = []
+            for tok in fila.pendientes:
+                if not PENDIENTE_RE.match(tok):
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: pendiente "
+                        f"inválido '{tok}'"
+                    )
+                    continue
+                pendientes_fila.append(tok)
+                avisos.append(f"{etiqueta_tabla}, fila {fila.numero}: pendiente {tok}")
+
+            viajes.append(
+                Viaje(
+                    linea=lid,
+                    temporada=temporada_e,
+                    dias=dias_e,
+                    tabla=tabla_actual,
+                    observaciones=tuple(obs_viaje_ids),
+                    pendientes=tuple(pendientes_fila),
+                    pasos=tuple(pasos),
+                )
+            )
+
+        clases_cubiertas.setdefault(temporada_e, set()).update(GRUPOS_DIA[dias_e])
+
+    # Dos tablas con la misma temporada, días y extremos de cabecera serían
+    # indistinguibles para el diff y para la vista de revisión (design.md
+    # 2.4): a diferencia de "tabla N de M" (que solo numera avisos), esto es
+    # un error porque probablemente son la misma tabla duplicada por error.
+    firmas_tabla: dict[tuple[str, str, str, str], list[Tabla]] = {}
+    for t in tablas:
+        if len(t.paradas) < 2:
+            continue
+        firma = (t.temporada, t.dias, t.paradas[0], t.paradas[-1])
+        firmas_tabla.setdefault(firma, []).append(t)
+    for (temporada_f, dias_f, primera_f, ultima_f), lista in firmas_tabla.items():
+        if len(lista) > 1:
+            errores.append(
+                f"{path}: {len(lista)} tablas con temporada '{temporada_f}', "
+                f"días '{dias_f}', de '{primera_f}' a '{ultima_f}' (deben "
+                "distinguirse por sus extremos; si no, son la misma tabla "
+                "duplicada)"
+            )
+
+    # clase con estado 'horario' que ninguna tabla cubre
+    for nombre_temp, estado_por_clase in dias_estado.items():
+        for clase, estado in estado_por_clase.items():
+            if estado == "horario" and clase not in clases_cubiertas.get(
+                nombre_temp, set()
+            ):
+                errores.append(
+                    f"{path}: temporada '{nombre_temp}', clase '{clase}': "
+                    "estado 'horario' sin ninguna tabla que la cubra"
+                )
+        # avisar de pendientes de línea (una sola vez, ya se listan en pendientes_linea)
+
+    if usa_a_demanda and not telefono_demanda:
+        errores.append(
+            f"{path}: se usa 'a_demanda' pero la línea no define 'telefono_demanda'"
+        )
+
+    for p in pendientes_linea:
+        if PENDIENTE_RE.match(p):
+            avisos.append(f"{path}: {lid}: pendiente de línea {p}")
+
+    return Linea(
+        id=lid,
+        nombre=str(nombre),
+        telefono_demanda=telefono_demanda,
+        avisos=tuple(avisos_linea),
+        no_circula=tuple(no_circula),
+        temporadas=tuple(temporadas),
+        dias=dias_estado,
+        pendientes=tuple(pendientes_linea),
+        viajes=tuple(viajes),
+        tablas=tuple(tablas),
+    )
+
+
+def validar(directorio: Path | str) -> Resultado:
+    """Valida `horarios/` al completo y devuelve (modelo, errores, avisos).
+
+    No lanza excepciones para errores de negocio esperados: solo las lanzaría
+    ante un fallo de E/S catastrófico no capturado explícitamente.
+    """
+    directorio = Path(directorio)
+    errores: list[str] = []
+    avisos: list[str] = []
+
+    paradas_path = directorio / "paradas.yaml"
+    observaciones_path = directorio / "observaciones.yaml"
+    lineas_dir = directorio / "lineas"
+
+    datos_paradas = _cargar_yaml(paradas_path, errores)
+    zonas, localidades, paradas = _validar_zonas_localidades_paradas(
+        datos_paradas or {}, paradas_path, errores
+    )
+    pendientes_paradas = _validar_pendientes_paradas(
+        datos_paradas or {}, paradas_path, errores, avisos
+    )
+
+    datos_observaciones = _cargar_yaml(observaciones_path, errores)
+    observaciones = _validar_observaciones(
+        datos_observaciones or {}, observaciones_path, errores
+    )
+
+    lineas: dict[str, Linea] = {}
+    paradas_usadas: set[str] = set()
+    if lineas_dir.is_dir():
+        for path in sorted(lineas_dir.glob("*.yaml")):
+            lid = path.stem
+            datos_linea = _cargar_yaml(path, errores)
+            if datos_linea is None:
+                continue
+            linea = _validar_linea(
+                lid, datos_linea, path, paradas, observaciones, errores, avisos
+            )
+            if linea is not None:
+                lineas[lid] = linea
+                for viaje in linea.viajes:
+                    for paso in viaje.pasos:
+                        paradas_usadas.add(paso.parada)
+    else:
+        errores.append(f"{lineas_dir}: no existe el directorio de líneas")
+
+    paradas_sin_usar = sorted(set(paradas.keys()) - paradas_usadas)
+    if paradas_sin_usar:
+        avisos.append(f"Paradas definidas que ninguna línea usa: {paradas_sin_usar}")
+
+    # design.md 2.3: la misma fila de avisos cubre "paradas o localidades
+    # definidas que ninguna línea usa". Una localidad está en uso si alguna de
+    # sus paradas físicas aparece en algún viaje.
+    localidades_usadas = {
+        paradas[codigo].localidad for codigo in paradas_usadas if codigo in paradas
+    }
+    localidades_sin_usar = sorted(set(localidades.keys()) - localidades_usadas)
+    if localidades_sin_usar:
+        avisos.append(
+            f"Localidades definidas que ninguna línea usa: {localidades_sin_usar}"
+        )
+
+    if errores:
+        return Resultado(modelo=None, errores=errores, avisos=avisos)
+
+    modelo = Modelo(
+        zonas=zonas,
+        localidades=localidades,
+        paradas=paradas,
+        observaciones=observaciones,
+        lineas=lineas,
+        pendientes=pendientes_paradas,
+    )
+    return Resultado(modelo=modelo, errores=errores, avisos=avisos)

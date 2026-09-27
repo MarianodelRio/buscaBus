@@ -161,7 +161,14 @@ localidades:                       # lo que elige el usuario
 paradas:                           # lo que muestra el resultado
   POZ: { nombre: Pozoblanco, localidad: pozoblanco }
   PZH: { nombre: Pozoblanco (Hospital), localidad: pozoblanco }
+pendientes: [P18]                  # preguntas abiertas que no son de una línea
+                                    # concreta (zonas, localidades, paradas)
 ```
+
+- **`pendientes:`** (opcional, lista): preguntas abiertas (`P\d{2}`, igual que
+  las de una línea) que afectan a zonas, localidades o paradas y no a una
+  línea concreta. Un pendiente mal formado detiene la validación, igual que
+  en `lineas/*.yaml`.
 
 - **Códigos de parada de 3 caracteres** (mayúsculas ASCII, únicos,
   mnemotécnicos: `COR`, `CVH`, `POZ`, `PZH`, `VFC`, `VFB`). Mantienen las
@@ -192,6 +199,9 @@ hora_aproximada:
   `hora_aproximada`...). Se pueden añadir libremente.
 - **El texto al cliente vive aquí**, no en `messages.py`, para que negocio lo
   valide en la vista de revisión. `messages.py` solo le da formato.
+- **El único marcador admitido en `texto` es `{telefono}`**, sustituido por el
+  `telefono_demanda` de la línea (`formato.texto_observacion`). Cualquier otro
+  `{xxx}` es un error de validación, no un marcador ignorado en silencio.
 
 #### Un fichero de línea
 
@@ -269,6 +279,9 @@ Reglas del formato:
 | Temporadas que se solapan o dejan días sin cubrir | |
 | Clase de día sin declarar, declarada dos veces, o `horario` sin tabla | |
 | `a_demanda` usada sin `telefono_demanda` en la línea | |
+| Dos tablas de una línea con la misma temporada, días y extremos de cabecera | |
+| Marcador `{xxx}` en el `texto` de una observación distinto de `{telefono}` | |
+| Pendiente mal formado en `pendientes:` de `paradas.yaml` | |
 
 El parser y el validador son **un único módulo** (`app/services/horarios/formato.py`)
 que usan `make validar`, los tests y el loader al arrancar el bot.
@@ -321,7 +334,8 @@ El loader convierte `horarios/` en objetos inmutables:
 | `Observacion` | Id, letra, tipo (condición/aviso), ámbitos, texto |
 | `Linea` | Id, nombre, teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
 | `Temporada` | Nombre y rangos día/mes |
-| `Viaje` | Línea, temporada, clases de día, observaciones de viaje, pendientes y la lista ordenada de pasos |
+| `Tabla` | Línea, temporada, clave de días y **la lista ordenada de paradas de su cabecera**. Conserva el sentido y el orden de columnas tal como se escribieron; la vista de revisión pinta una tabla por `Tabla`, nunca mezcla tablas |
+| `Viaje` | La tabla a la que pertenece (y, por ella, línea, temporada y días), observaciones de viaje, pendientes y la lista ordenada de pasos |
 | `Paso` | Parada, hora y observaciones de parada |
 
 Puntos clave:
@@ -812,7 +826,7 @@ Repositorio nuevo, estructura de directorios, `requirements.txt`,
 requieren cambios.
 **Criterio:** el servidor arranca, `/health` responde, los tests pasan.
 
-### Fase 1 · Formato de horarios, validador y vista de revisión (2-3 días)
+### Fase 1 · Formato de horarios, validador y vista de revisión (2-3 días) — cerrada el 2026-09-27
 `horarios/` (formato de 2.3), `modelo.py`, `formato.py`, `diff.py`,
 `tools/validar.py`, `tools/formatear.py`, `tools/revision.py` (HTML + PDF),
 `Makefile` mínimo con `validar`, `formatear` y `revision`, y **5 líneas de
@@ -834,6 +848,41 @@ todo el PDF con negocio. Después se borra `tools/migracion/`, se quita
 desarrollan con las 5 líneas de prueba.
 **Criterio:** las 15 líneas validan; el cuadre de horas con el Excel es del
 100 % salvo las correcciones documentadas; negocio aprueba el PDF.
+
+### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27
+Resueltas en un ciclo propio (`docs/rds_fase1_correcciones.md`). Verificado el
+2026-09-27: 64 tests en verde, `ruff` limpio, `make validar` con 0 errores,
+cuadre con el Excel al 100 %, `formatear` idempotente, PDF con una tabla por
+sentido, Badajoz traspuesta sin cortes, y el diff da un solo mensaje al quitar
+un viaje. Se conserva la lista como registro:
+
+1. **Tablas mezcladas en la revisión.** `revision.py` junta en una sola tabla
+   la ida y la vuelta de la misma temporada y días, y ordena las columnas por
+   aparición. Resultado en Adamuz: Alcolea sale después de Córdoba y los
+   viajes de vuelta se leen al revés. Causa: el modelo no tenía la entidad
+   `Tabla` (ya añadida en 2.4). Hay que pintar una tabla por `Tabla` con sus
+   columnas en el orden del fichero, incluidas las paradas sin ninguna hora.
+2. **Tablas anchas cortadas en el PDF.** En Badajoz (20 paradas) se pierden en
+   el PDF las columnas de Villagarcía en adelante: faltan datos en el
+   documento que firma negocio. Hay que partir la tabla o trasponerla
+   (paradas en filas) cuando no quepa. Ninguna columna puede quedar fuera.
+3. **El diff empareja viajes por posición.** Al quitar el Adamuz 14:45 (L-V
+   invierno), dice que se quita el de las 18:00 y que el de las 14:45 "pasa a
+   las 18:00" en 4 paradas. Hay que emparejar por cercanía de horas, o tratar
+   como alta y baja todo lo que no sea un cambio pequeño. Hace falta un test
+   con este caso.
+4. **`{telefono}` sin sustituir** en la leyenda de `a_demanda`. Debe salir el
+   `telefono_demanda` de la línea.
+5. **Los avisos de línea y `no_circula` no aparecen en la revisión.** El
+   `hora_aproximada` de Badajoz no sale en ningún sitio.
+6. **Los pendientes marcados solo en comentarios de `paradas.yaml`** (P12,
+   P18) no llegan a la revisión. Hace falta un campo `pendientes:` en
+   `paradas.yaml`, igual que en las líneas.
+7. Menores:
+   - El diff llama "salida" a la hora de llegada a la última parada.
+   - P09 está marcado también en el domingo de invierno (Córdoba 14:30), pero
+     la pregunta es solo sobre verano. Es inofensivo; se revisa cuando
+     responda negocio.
 
 ### Fase 2 · Motor y calendario (2 días)
 `loader.py`, `calendario.py`, `query.py`, `horarios/calendario.yaml` del curso

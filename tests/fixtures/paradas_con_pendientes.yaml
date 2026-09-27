@@ -1,0 +1,21 @@
+# Variante de paradas_base.yaml con el campo `pendientes:` (design.md 8,
+# "Correcciones de la fase 1", punto 6): P10 afecta a la localidad
+# "pozoblanco", que aquí no usa ninguna línea (solo se usa para comprobar que
+# se resalta en la sección "Pueblos, paradas y zonas").
+zonas:
+  zona-test: Zona de prueba
+  los-pedroches: Los Pedroches
+
+localidades:
+  pueblo-a: { nombre: Pueblo A, zona: zona-test }
+  pueblo-b: { nombre: Pueblo B, zona: zona-test }
+  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pozoblanco: { nombre: Pozoblanco, zona: los-pedroches, alias: [pozo] }
+
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+  POZ: { nombre: Pozoblanco, localidad: pozoblanco }
+
+pendientes: [P10]

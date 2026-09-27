@@ -8,7 +8,7 @@ Para quién: personas que necesitan saber a qué hora sale su autobús sin llama
 
 ## Estado del proyecto
 
-**Solo diseño, sin implementar.** Este repositorio contiene por ahora el andamiaje (estructura de carpetas, configuración vacía, documentación) y el Excel de origen. La lógica de aplicación — formato de horarios y validador, motor de consulta, conversación — llega en las fases 1 a 4.
+**Fase 1 implementada.** Ya existen el formato de horarios (`horarios/`, con 5 líneas de prueba migradas del Excel), el validador y las herramientas `make validar`, `make formatear` y `make revision`. El motor de consulta, la conversación y la infraestructura llegan en las fases 2 a 5. Las 10 líneas restantes se migran en la fase 1b, cuando la empresa responda a `docs/preguntas_negocio.txt`.
 
 **[`design.md`](design.md) es la única fuente de verdad del proyecto.** Ahí está todo: el modelo de datos, el motor de consulta, la conversación completa, qué se reutiliza del bot de la peluquería, la infraestructura, las fases de implementación y las dudas abiertas. Este README no lo duplica.
 
