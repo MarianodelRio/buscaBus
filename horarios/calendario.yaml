@@ -8,15 +8,18 @@
 # Calendario escolar de Córdoba curso 2026-27 (P04, pendiente de confirmar el
 # detalle completo con negocio).
 
-# vigencia_fin ampliada de 31/08/2027 (propuesta original de la RDS) a
-# 31/12/2027: la propia RDS pedía festivos de 2027 hasta el 25/12/2027, que
-# con el fin de vigencia en agosto habrían caído fuera de rango y
-# formato.py los habría rechazado como "festivo fuera de vigencia". Se
-# ensancha solo la ventana de festivos para que quepa lo que la RDS pedía;
-# el límite de curso/lectivo (fin_clases 22/06/2027, curso 2027-28 aún no
-# conocido) no cambia. Corrección de implementación confirmada por negocio
-# durante la fase 2, documentada en design.md (2.3, calendario.yaml).
-vigencia: 01/01/2026 - 31/12/2027
+# vigencia_fin no puede ir más allá de lo que realmente se conoce del curso
+# escolar. El curso cargado (2026-27) termina el 22/06/2027 y no dice nada
+# del curso 2027-28, así que la vigencia se cierra el 31/08/2027 (fin del
+# verano de ese curso). Ampliarla a 31/12/2027, como se hizo por error
+# durante la fase 2, habría dado por buenos 5 festivos de después del fin de
+# curso sin tener el calendario escolar 2027-28 — una suposición no
+# verificada, no algo confirmado por negocio. Corregido el 2026-09-27.
+#
+# Ciclo anual: cuando llegue el calendario escolar del curso siguiente,
+# añadir su bloque `curso`, descomentar los festivos ya conocidos que caigan
+# dentro y ampliar `vigencia` hasta el nuevo 31/08.
+vigencia: 01/01/2026 - 31/08/2027
 
 festivos:
   # 2026 — Decreto 101/2025
@@ -40,11 +43,14 @@ festivos:
   26/03/2027: Viernes Santo
   01/05/2027: Fiesta del Trabajo
   16/08/2027: Asunción (trasladado)
-  12/10/2027: Fiesta Nacional
-  01/11/2027: Todos los Santos
-  06/12/2027: Constitución
-  08/12/2027: Inmaculada
-  25/12/2027: Navidad
+  # Los siguientes caen después del fin de vigencia (31/08/2027, ver arriba)
+  # porque el curso 2027-28 todavía no está cargado. Se reactivan cuando se
+  # amplíe la vigencia con ese curso.
+  # 12/10/2027: Fiesta Nacional
+  # 01/11/2027: Todos los Santos
+  # 06/12/2027: Constitución
+  # 08/12/2027: Inmaculada
+  # 25/12/2027: Navidad
 
 curso:
   inicio_clases: 10/09/2026

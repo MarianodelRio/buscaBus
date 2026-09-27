@@ -325,7 +325,7 @@ un campo de vigencia por viaje.
 #### `calendario.yaml`
 
 ```yaml
-vigencia: 01/01/2026 - 31/12/2027   # fechas con año real (a diferencia de las
+vigencia: 01/01/2026 - 31/08/2027   # fechas con año real (a diferencia de las
                                      # temporadas de línea, que no lo llevan)
 
 festivos:
@@ -353,17 +353,18 @@ pendientes: [P03, P04]
 - `calendario.py` (fase 2) es lógica pura sobre este objeto ya validado: no
   vuelve a parsear YAML ni lee el reloj salvo en `hoy()`/`ahora()`, pensadas
   para quien las llame en fases posteriores, no para uso interno del motor.
-- **`vigencia_fin` ampliada de 31/08/2027 a 31/12/2027.** Esta RDS proponía
-  originalmente `vigencia: 01/01/2026 - 31/08/2027`, pero la misma RDS pedía
-  cargar festivos de 2027 hasta el 25/12/2027. Con el fin de vigencia en
-  agosto, esos festivos de fin de año habrían quedado fuera de rango y
-  `formato.py` los habría rechazado como "festivo fuera de vigencia" al
-  validar `horarios/` real. Se amplió `vigencia_fin` a 31/12/2027 para que
-  quepan los festivos que la propia RDS pedía. Es una corrección de
-  implementación confirmada por negocio durante la fase 2, no un pendiente
-  nuevo: el razonamiento original de la RDS (el curso 2027-28 aún no se
-  conoce más allá del 22/06/2027) se mantiene intacto — solo se ensanchó la
-  ventana de vigencia de `festivos`, no el límite de `curso`/lectivo.
+- **`vigencia_fin` no puede ir más allá de lo que realmente se conoce del
+  curso escolar.** Durante la implementación de la fase 2 se ensanchó
+  `vigencia_fin` de 31/08/2027 a 31/12/2027 para que cupieran 5 festivos de
+  2027 pedidos por esta RDS (12/10, 01/11, 06/12, 08/12 y 25/12/2027), que de
+  otro modo habrían caído fuera de vigencia y `formato.py` los habría
+  rechazado. Ese ensanchamiento fue un error: daba por buenos festivos de
+  después del fin del curso cargado (fin_clases 22/06/2027) sin tener el
+  calendario escolar 2027-28, una suposición no verificada — pese a llevar en
+  el código una nota de "confirmado por negocio" que no era cierta. Corregido
+  el 2026-09-27: `vigencia_fin` vuelve a 31/08/2027 y los 5 festivos
+  afectados quedan comentados en `calendario.yaml` con una nota, hasta que se
+  cargue el curso 2027-28 y se pueda ampliar la vigencia con base cierta.
 
 #### Decisiones provisionales de la fase 2 (P03, P04)
 
@@ -954,6 +955,12 @@ autobuses y `a_demanda` en origen frente a parada intermedia. `make validar`,
 `formatear` y `revision` sin regresión sobre las 5 líneas de la fase 1.
 `calendario.yaml` deja P03 y P04 abiertos, visibles como avisos en
 `make validar`.
+
+Corregido el 2026-09-27: se detectó y corrigió un ensanchamiento indebido de
+`vigencia_fin` (31/08/2027 → 31/12/2027) hecho durante esta fase para que
+cupieran festivos de después del curso cargado; ver "`vigencia_fin` no puede
+ir más allá de lo que realmente se conoce del curso escolar" en la sección
+2.3.
 
 ### Fase 3 · Coincidencia de texto (1 día)
 `matcher.py`, `fechas.py`, tabla de alias, zonas.

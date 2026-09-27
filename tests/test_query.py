@@ -122,6 +122,13 @@ def test_pozoblanco_cordoba_fuera_de_calendario():
     assert c.salidas == ()
 
 
+def test_pozoblanco_cordoba_fuera_de_calendario_2027_10_01():
+    # El curso 2027-28 no está cargado: vigencia termina el 31/08/2027.
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2027, 10, 1))
+    assert c.estado == "sin_datos"
+    assert c.fuera_de_calendario is True
+
+
 def test_origen_igual_destino_lanza_valueerror():
     with pytest.raises(ValueError):
         query.consultar(HORARIOS, "cordoba", "cordoba", date(2026, 9, 30))
@@ -212,3 +219,16 @@ def test_a_demanda_en_parada_intermedia_no_lleva_nota():
     c = query.consultar(MOTOR, "pueblo-k", "pueblo-l", date(2026, 9, 2))
     salida_normal = next(s for s in c.salidas if s.hora_salida == time(11, 0))
     assert salida_normal.notas == ()
+
+
+def test_siguiente_con_servicio_nunca_pasa_de_vigencia_fin():
+    # linea-agosto (pueblo-n <-> pueblo-o) no circula en agosto de ningún año
+    # y retoma el 1 de septiembre. En 2027 ese 1 de septiembre cae fuera de
+    # la vigencia del calendario (que termina el 31/08/2027, ver
+    # tests/fixtures/horarios_motor/calendario.yaml): aunque el servicio
+    # "existiría" ese día si se mirase solo el horario de la línea,
+    # siguiente_con_servicio debe ser None en vez de devolver una fecha sin
+    # calendario cargado.
+    c = query.consultar(MOTOR, "pueblo-n", "pueblo-o", date(2027, 8, 25))
+    assert c.estado == "sin_servicio"
+    assert c.siguiente_con_servicio is None

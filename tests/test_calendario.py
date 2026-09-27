@@ -69,6 +69,35 @@ def test_fecha_fuera_de_vigencia_lanza_excepcion():
         calendario.info_dia(CAL_REAL, date(2010, 1, 1))
 
 
+def test_fecha_posterior_a_vigencia_2027_lanza_excepcion():
+    # El curso 2027-28 no está cargado: no hay datos más allá del 31/08/2027.
+    with pytest.raises(calendario.FueraDeCalendario):
+        calendario.info_dia(CAL_REAL, date(2027, 10, 1))
+
+
+def test_31_de_agosto_de_2027_dentro_de_vigencia():
+    info = calendario.info_dia(CAL_REAL, date(2027, 8, 31))
+    assert info.es_lectivo is False
+
+
+def test_1_de_septiembre_de_2027_fuera_de_vigencia():
+    with pytest.raises(calendario.FueraDeCalendario):
+        calendario.info_dia(CAL_REAL, date(2027, 9, 1))
+
+
+def test_vigencia_no_se_amplia_mas_alla_del_curso_cargado():
+    # Protección contra volver a ensanchar vigencia_fin sin cargar el curso
+    # siguiente (el bug corregido el 2026-09-27): vigencia_fin no puede caer
+    # después del 31/08 del año escolar cuyo fin_clases ya conocemos.
+    limite = date(CAL_REAL.fin_clases.year, 8, 31)
+    assert CAL_REAL.vigencia_fin <= limite, (
+        "vigencia_fin se ha ampliado más allá del 31/08 del curso cargado "
+        "(fin_clases) sin haber cargado el curso escolar siguiente; esto "
+        "reproduce el bug de 2026-09-27 (festivos de 2027-28 dados por "
+        "buenos sin confirmación de negocio)."
+    )
+
+
 def test_temporada_de_pozoblanco_cambia_el_14_y_15_de_septiembre():
     linea = _RESULTADO_REAL.modelo.lineas["pozoblanco-cordoba"]
     t14 = calendario.temporada_de(linea, date(2026, 9, 14))
