@@ -2,11 +2,17 @@
 #
 # Fuente de verdad editada a mano, validada por app/services/horarios/formato.py
 # como el resto de horarios/. Festivos de Andalucía (BOJA): Decreto 101/2025
-# para 2026 y Decreto 84/2026 para 2027. No incluye festivos locales por
-# municipio (P03, pendiente).
+# para 2026 y Decreto 84/2026 para 2027.
 #
-# Calendario escolar de Córdoba curso 2026-27 (P04, pendiente de confirmar el
-# detalle completo con negocio).
+# P03 (festivos), respuesta de negocio: a, b, c, d y f confirmados; e: se
+# aplican los festivos nacionales, los de Andalucía y, en las líneas con
+# origen o destino Córdoba, los locales de Córdoba; g: 25/12 y 01/01 sin
+# servicio. Todo ello se implementa en el ciclo B; este fichero aún no incluye
+# festivos locales por municipio (P03 sigue abierta hasta entonces).
+#
+# P04 (calendario escolar): Delegación de Educación de Córdoba (respuesta de
+# negocio); verificado contra la Resolución de 21/05/2026. El 07/01/2027 es no
+# lectivo provincial y por eso va dentro del rango de Navidad.
 
 # vigencia_fin no puede ir más allá de lo que realmente se conoce del curso
 # escolar. El curso cargado (2026-27) termina el 22/06/2027 y no dice nada
@@ -60,4 +66,4 @@ curso:
     - 22/03/2027 - 28/03/2027   # Semana Santa
   no_lectivos: [26/02/2027]
 
-pendientes: [P03, P04]
+pendientes: [P03]

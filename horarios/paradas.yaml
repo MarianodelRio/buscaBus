@@ -5,9 +5,9 @@
 # (Ochavillos-Córdoba, Pozoblanco-Córdoba, Belalcázar-Córdoba, Adamuz-Córdoba,
 # Badajoz-Córdoba). Las 10 líneas restantes se añaden en la fase 1b.
 #
-# Zonas y localidades: propuesta de negocio en P18 (docs/preguntas_negocio.txt),
-# todavía sin confirmar. Los pendientes que afectan a este fichero (zonas,
-# localidades y paradas) están declarados en `pendientes:`, al final.
+# Zonas y localidades: negocio ha confirmado las de Coronada (Valle del
+# Guadiato) y Cabeza del Buey (Los Pedroches). Lo que sigue abierto está
+# declarado en `pendientes:`, al final (P12, P18, P32).
 
 zonas:
   cordoba: Córdoba
@@ -34,7 +34,7 @@ localidades:                             # lo que elige el usuario
   villaharta: { nombre: Villaharta, zona: guadiato }
   cruce-de-villaharta: { nombre: Cruce de Villaharta, zona: guadiato, alias: [el cruce] }
   el-vacar: { nombre: El Vacar, zona: guadiato }
-  cabeza-del-buey: { nombre: Cabeza del Buey, zona: extremadura }              # P18: ¿zona Los Pedroches en vez de Extremadura?
+  cabeza-del-buey: { nombre: Cabeza del Buey, zona: los-pedroches }
   belalcazar: { nombre: Belalcázar, zona: los-pedroches }
   hinojosa-del-duque: { nombre: Hinojosa del Duque, zona: los-pedroches }
   fuente-la-lancha: { nombre: Fuente La Lancha, zona: los-pedroches }
@@ -49,7 +49,7 @@ localidades:                             # lo que elige el usuario
   belmez: { nombre: Belmez, zona: guadiato }
   penarroya-pueblonuevo: { nombre: Peñarroya-Pueblonuevo, zona: guadiato }
   fuente-obejuna: { nombre: Fuente Obejuna, zona: guadiato }
-  coronada: { nombre: Coronada, zona: extremadura }
+  coronada: { nombre: Coronada, zona: guadiato }
   granja-de-torrehermosa: { nombre: Granja de Torrehermosa, zona: extremadura }
   azuaga: { nombre: Azuaga, zona: extremadura }
   berlanga: { nombre: Berlanga, zona: extremadura }
@@ -108,10 +108,8 @@ paradas:                                 # lo que muestra el resultado
   BAD: { nombre: Badajoz, localidad: badajoz }
 
 # Preguntas abiertas que afectan a zonas, localidades o paradas de este
-# fichero (docs/preguntas_negocio.txt): P18 zonas y localidades propuestas
-# por negocio sin confirmar (incluida la zona de Cabeza del Buey); P12 las
-# tres paradas de la zona de Córdoba (Córdoba/Rabanales/Alcolea); P10 las
-# paradas de Pozoblanco (pueblo/hospital); P14 Villaharta y Cruce de
-# Villaharta; P17 la ambigüedad de "Villafranca" (de Córdoba y de los
-# Barros); P13 Aquasierra, Coronada y Granja de Torrehermosa.
-pendientes: [P10, P12, P13, P14, P17, P18]
+# fichero (docs/preguntas_negocio.txt): P12 las tres paradas de la zona de
+# Córdoba (Córdoba/Rabanales/Alcolea), pares no vendibles (ciclo B); P18
+# negocio prefiere zonas por línea en vez de las actuales (ciclo C); P32
+# posición de Rivero de Posadas y Los Mochos en la ruta.
+pendientes: [P12, P18, P32]

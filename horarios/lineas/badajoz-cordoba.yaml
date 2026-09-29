@@ -1,9 +1,9 @@
 # horarios/lineas/badajoz-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS.xlsx, hoja BADAJOZ (traspuesta:
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja BADAJOZ (traspuesta:
 # las paradas están en filas, no en columnas).
 #
 # De lunes a jueves la ida termina en Zafra; de lunes a viernes la vuelta
-# empieza en Zafra (P07): se modelan como viajes independientes que no cubren
+# empieza en Zafra (confirmado por negocio): se modelan como viajes independientes que no cubren
 # el tramo Zafra-Badajoz, no como un único viaje forzado.
 nombre: Badajoz – Córdoba
 telefono_demanda: "957 42 90 30"
@@ -17,12 +17,12 @@ dias:
   anual: { lunes-jueves: horario, viernes: horario, sabado: sin_servicio, domingos-festivos: horario }
 
 horarios:
-  # ── Ida: lunes a jueves (termina en Zafra, P07) ─────────────────────────
+  # ── Ida: lunes a jueves (termina en Zafra, confirmado) ─────────────────────────
   - temporada: anual
     dias: lunes-jueves
     tabla: |
       COR    VAC  CVH  ESP    VRE    BEL    PNR    FOB    CRN     GRA    AZU    BER    AHI    LLE    VGT     ZAF    VFB  ALM  MER  BAD
-      15:00  -    -    15:40  15:55  16:05  16:20  16:40  16:45D  17:00  17:15  17:25  17:30  17:45  17:50D  18:15  -    -    -    -  | P07
+      15:00  -    -    15:40  15:55  16:05  16:20  16:40  16:45D  17:00  17:15  17:25  17:30  17:45  17:50D  18:15  -    -    -    -
 
   # ── Ida: viernes ─────────────────────────────────────────────────────────
   - temporada: anual
@@ -36,20 +36,20 @@ horarios:
     dias: domingos-festivos
     tabla: |
       COR    VAC  CVH  ESP    VRE    BEL    PNR    FOB    CRN     GRA    AZU    BER    AHI    LLE    VGT     ZAF    VFB    ALM    MER    BAD
-      14:45  -    -    15:30  15:40  15:55  16:10  16:20  16:20D  16:40  16:50  17:00  17:05  17:30  17:30D  17:40  18:10  18:25  18:50  19:40  | P25
+      14:45  -    -    15:30  15:40  15:55  16:10  16:20  16:20D  16:40  16:50  17:00  17:05  17:30  17:30D  17:40  18:10  18:25  18:50  19:40
 
-  # ── Vuelta: lunes a viernes (empieza en Zafra, P07) ─────────────────────
+  # ── Vuelta: lunes a viernes (empieza en Zafra, confirmado) ─────────────────────
   - temporada: anual
     dias: lunes-viernes
     tabla: |
       BAD  MER  ALM  VFB  ZAF    VGT     LLE    AHI    BER    AZU    GRA    CRN    FOB    PNR    BEL    VRE    ESP    CVH  VAC  COR
-      -    -    -    -    10:30  10:55D  11:05  11:15  11:20  11:35  11:45  12:00  12:05  12:30  12:40  12:50  13:00  -    -    13:45  | P07
+      -    -    -    -    10:30  10:55D  11:05  11:15  11:20  11:35  11:45  12:00  12:05  12:30  12:40  12:50  13:00  -    -    13:45
 
   # ── Vuelta: domingos y festivos ──────────────────────────────────────────
   - temporada: anual
     dias: domingos-festivos
     tabla: |
       BAD    MER    ALM    VFB    ZAF    VGT     LLE    AHI    BER    AZU    GRA    CRN    FOB    PNR    BEL    VRE    ESP    CVH  VAC  COR
-      14:30  15:20  15:45  16:00  16:30  16:55D  17:30  17:45  17:50  18:00  18:10  18:20  18:30  18:50  19:00  19:10  19:20  -    -    20:10
+      14:30  15:20  15:45  16:00  16:30  16:55D  17:30  17:45  17:50  18:00  18:10  18:20  18:30  18:50  19:00  19:10  19:20  -    -    20:10  | P33
 
-pendientes: [P03, P07, P13, P19, P25]
+pendientes: [P03, P31, P33]

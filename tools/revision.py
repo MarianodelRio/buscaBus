@@ -41,18 +41,10 @@ PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {
     "cordoba": ("P12",),
     "campus-de-rabanales": ("P12",),
     "alcolea": ("P12",),
-    "pozoblanco": ("P10",),
-    "villaharta": ("P14",),
-    "cruce-de-villaharta": ("P14",),
     "cabeza-del-buey": ("P18",),
-    "villafranca-de-cordoba": ("P17",),
-    "villafranca-de-los-barros": ("P17",),
-    "aquasierra": ("P13",),
-    "coronada": ("P13",),
-    "granja-de-torrehermosa": ("P13",),
 }
-# P18 (zonas y localidades, propuesta de negocio sin confirmar) afecta a
-# todas las zonas por igual.
+# Solo quedan abiertas P12 (tres paradas de Córdoba) y P18 (Cabeza del Buey).
+# P18 (negocio prefiere zonas por línea) afecta a todas las zonas por igual.
 PENDIENTE_ZONAS_GLOBAL = "P18"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent

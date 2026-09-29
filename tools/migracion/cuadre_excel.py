@@ -6,6 +6,10 @@ visibles cuyo valor completo es una hora, con asterisco(s) opcional, fuera de
 las columnas RUTA y VALIDADORA) con el multiconjunto de horas de la tabla YAML
 de la línea y temporada correspondientes.
 
+Única discrepancia aceptada: hoja POZOB VER, fila 48, 17:50 (x1) y 19:05 (x1).
+Negocio indica (P09b) que ese viaje no está en vigor en verano; se borró del
+YAML y el Excel modificado conserva la fila. El cuadre sale con código 1.
+
 Uso: python -m tools.migracion.cuadre_excel
 """
 
@@ -23,7 +27,7 @@ import yaml
 from app.services.horarios.formato import _parse_tabla
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
-EXCEL_PATH = RAIZ / "horarios_fuente" / "HORARIOS NUEVOS.xlsx"
+EXCEL_PATH = RAIZ / "horarios_fuente" / "HORARIOS NUEVOS MODIFICADO.xlsx"
 HORARIOS_DIR = RAIZ / "horarios"
 
 _HORA_EXCEL_RE = re.compile(r"^\d{1,2}:\d{2}\*{0,2}$")

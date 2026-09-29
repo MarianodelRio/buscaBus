@@ -1,18 +1,18 @@
 # horarios/lineas/pozoblanco-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS.xlsx, hojas POZOB INV y POZOB VER.
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas POZOB INV y POZOB VER.
 #
-# Villaharta (VHA) es parada a demanda todo el año (D-i, docs/preguntas_negocio.txt):
-# en la hoja de invierno casi todas sus celdas están en amarillo salvo una
-# (fila 11), y en la de verano ninguna lo está. Se marca D en las dos
-# temporadas, en toda celda donde el autobús para en Villaharta.
+# Villaharta (VHA) es parada a demanda todo el año (D-f, docs/preguntas_negocio.txt),
+# salvo en el viaje de las 10:35 (Pozoblanco → Córdoba, lunes a viernes), que
+# no es a demanda. Se marca D en toda celda donde el autobús para en Villaharta,
+# excepto en ese viaje.
 nombre: Pozoblanco – Córdoba
 telefono_demanda: "957 42 90 30"
 avisos: []
 no_circula: []
 
 temporadas:
-  invierno: 15/09 - 22/06   # P02
-  verano: 23/06 - 14/09     # P02
+  invierno: 15/09 - 22/06   # confirmado por negocio
+  verano: 23/06 - 14/09     # confirmado por negocio; los horarios de verano aún no son definitivos
 
 dias:
   invierno: { lunes-viernes: horario, sabado: horario, domingos-festivos: horario }
@@ -26,7 +26,7 @@ horarios:
       CON     VVC     PZH    POZ    ALC    VHA     CVH    COR
       -       06:25D  06:45  06:55  07:05  -       -      08:15
       07:20D  07:45   08:05  08:15  08:25  08:50D  08:55  09:30
-      -       09:30   09:50  10:00  10:10  10:35D  10:40  11:25
+      -       09:30   09:50  10:00  10:10  10:35   10:40  11:25
       -       14:45   15:05  15:15  15:25  15:50D  15:55  16:30
       -       17:30   -      18:00  18:10  -       18:40  19:15
 
@@ -80,7 +80,7 @@ horarios:
       CON     VVC     PZH    POZ    ALC    VHA     CVH    COR
       -       06:25D  06:45  06:55  07:05  -       -      08:15
       07:20D  07:45   08:05  08:15  08:25  08:50D  08:55  09:30
-      -       09:30   09:50  10:00  10:10  10:35D  10:40  11:25
+      -       09:30   09:50  10:00  10:10  10:35   10:40  11:25
       -       14:45   15:05  15:15  15:25  15:50D  15:55  16:30
       -       17:30   -      18:00  18:10  -       18:40  19:15
 
@@ -111,20 +111,21 @@ horarios:
       20:00  20:30  20:35D  21:00  21:10  21:15  21:45C
 
   # ── VERANO — domingos y festivos ─────────────────────────────────────────
+  # P09b: negocio indica que el viaje de las 17:50 → 19:05 no está en vigor en
+  # verano; el Excel modificado conserva la fila 48, discrepancia aceptada del cuadre.
   - temporada: verano
     dias: domingos-festivos
     tabla: |
       VVC    PZH    POZ    ALC    VHA     CVH    COR
       07:45  08:05  08:15  08:25  08:50D  08:55  09:30
       14:45  15:05  15:15  15:25  15:50D  15:55  16:30
-      -      -      17:50  -      -       -      19:05  | P09
 
   - temporada: verano
     dias: domingos-festivos
     tabla: |
       COR    CVH    VHA     ALC    POZ    PZH    VVC
       13:00  13:30  13:35D  14:00  14:10  14:15  14:40
-      14:30  15:00  15:05D  15:30  15:40  -      16:15  | P09
+      14:30  15:00  15:05D  15:30  15:40  -      16:15
       20:00  20:30  20:35D  21:00  21:10  21:15  21:45C
 
-pendientes: [P02, P03, P09, P10, P14, P19]
+pendientes: [P03]

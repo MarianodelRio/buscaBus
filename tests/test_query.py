@@ -81,6 +81,14 @@ def test_cordoba_villaharta_a_demanda():
         assert any("957 42 90 30" in n for n in s.notas)
 
 
+def test_villaharta_cordoba_invierno_laborable():
+    c = query.consultar(HORARIOS, "villaharta", "cordoba", date(2026, 9, 30))
+    assert _horas(c) == [("08:50", "09:30"), ("10:35", "11:25"), ("15:50", "16:30")]
+    a_demanda = [any("957 42 90 30" in n for n in s.notas) for s in c.salidas]
+    # 10:35 no es a demanda; 08:50 y 15:50 sí.
+    assert a_demanda == [True, False, True]
+
+
 def test_cordoba_villanueva_de_cordoba_solo_una_con_viajeros_desde_cordoba():
     c = query.consultar(
         HORARIOS, "cordoba", "villanueva-de-cordoba", date(2026, 9, 30)

@@ -452,9 +452,9 @@ pendientes: []
         tmp_path, "paradas_con_pendientes.yaml", {"linea-prueba": linea_yaml}
     )
     assert "Pueblos, paradas y zonas" in html_doc
-    assert "Pozoblanco" in html_doc
-    # el pendiente P10 (Pozoblanco) debe verse resaltado en esa sección.
+    assert "Córdoba" in html_doc
+    # el pendiente P12 (Córdoba) debe verse resaltado en esa sección.
     idx_seccion = html_doc.index("Pueblos, paradas y zonas")
-    idx_pozoblanco = html_doc.index("Pozoblanco", idx_seccion)
-    fragmento = html_doc[idx_pozoblanco : idx_pozoblanco + 200]
-    assert "P10" in fragmento
+    idx_cordoba = html_doc.index("Córdoba", idx_seccion)
+    fragmento = html_doc[idx_cordoba : idx_cordoba + 200]
+    assert "P12" in fragmento

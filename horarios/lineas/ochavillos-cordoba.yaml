@@ -1,5 +1,5 @@
 # horarios/lineas/ochavillos-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS.xlsx, hoja OCHAVILLOS.
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja OCHAVILLOS.
 nombre: Ochavillos – Córdoba
 avisos: []
 no_circula: []
@@ -21,6 +21,6 @@ horarios:
     dias: lunes-viernes
     tabla: |
       COR    FCU    VEN    FPA    HER    OCH
-      13:30  14:10  14:20  14:25  14:35  14:40
+      12:30  13:10  13:20  13:25  13:35  13:40
 
 pendientes: []
