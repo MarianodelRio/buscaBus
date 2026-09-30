@@ -50,24 +50,71 @@ def test_prefijo_cor_elegir_cordoba_coronada():
     assert set(_nombres(h, r)) == {"Córdoba", "Coronada"}
 
 
-def test_prefijo_fuente_elegir_tres():
+def test_prefijo_fuente_elegir_cuatro():
     h = _horarios_real()
     m = matcher.Matcher(h)
     r = m.buscar("fuente")
     assert r.tipo == "elegir"
     assert set(_nombres(h, r)) == {
+        "Fuente Carreteros",
         "Fuente La Lancha",
         "Fuente Obejuna",
         "Fuente Palmera",
     }
 
 
-def test_prefijo_vil_elegir_ocho():
+def test_prefijo_vil_elegir_nueve():
     h = _horarios_real()
     m = matcher.Matcher(h)
     r = m.buscar("vil")
     assert r.tipo == "elegir"
-    assert len(r.localidades) == 8
+    assert len(r.localidades) == 9
+
+
+def test_villanueva_elegir_tres_sin_estacion_ave():
+    h = _horarios_real()
+    r = matcher.Matcher(h).buscar("villanueva")
+    assert r.tipo == "elegir"
+    assert set(_nombres(h, r)) == {
+        "Villanueva de Córdoba",
+        "Villanueva del Duque",
+        "Villanueva del Rey",
+    }
+
+
+def test_villanueva_de_cordoba_unico_y_estacion_unico():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("villanueva de cordoba")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Villanueva de Córdoba"]
+    r = m.buscar("estacion")
+    assert r.tipo == "unico"
+    assert _nombres(h, r) == ["Estación AVE Villanueva de Córdoba"]
+
+
+def test_el_viso_el_vacar_santa_eufemia_pantano_unicos():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    esperado = {
+        "el viso": "El Viso",
+        "el vacar": "El Vacar",
+        "santa eufemia": "Santa Eufemia",
+        "pantano": "Pantano",
+    }
+    for texto, nombre in esperado.items():
+        r = m.buscar(texto)
+        assert r.tipo == "unico", texto
+        assert _nombres(h, r) == [nombre], texto
+
+
+def test_sta_eufemia_confirma_y_st_eufemia_no_coincide():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    r = m.buscar("sta eufemia")
+    assert r.tipo == "confirmar"
+    assert _nombres(h, r) == ["Santa Eufemia"]
+    assert m.buscar("st eufemia").tipo == "sin_coincidencia"
 
 
 def test_villanueva_duque_unico():

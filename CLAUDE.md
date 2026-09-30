@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 5 líneas de prueba, motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 12 líneas migradas (fase 1b-1; faltan 3 en la fase 1b-2/ciclo C), motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -52,7 +52,7 @@ tools/
   formatear.py                 — make formatear: realinea tablas sin tocar datos
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
-horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 5 líneas de prueba; las 10 restantes en la fase 1b
+horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 12 líneas; las 3 restantes en la fase 1b-2/ciclo C
 tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio

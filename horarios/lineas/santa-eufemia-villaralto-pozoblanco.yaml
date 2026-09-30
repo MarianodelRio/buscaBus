@@ -1,0 +1,69 @@
+# horarios/lineas/santa-eufemia-villaralto-pozoblanco.yaml
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas TORR INV y TORR VER (filas 20-32 de INV y VER).
+# Cuatro tablas, una por cabecera del Excel: Santa Eufemia y Villaralto son dos
+# ramales distintos; ningún viaje pasa por los dos.
+# POZ. HOSPITAL = PZH y POZOBLANCO / POZO.EST = POZ (P10).
+nombre: Santa Eufemia – Villaralto
+avisos: []
+no_circula: []
+
+temporadas:
+  invierno: 15/09 - 22/06
+  verano: 23/06 - 14/09
+
+dias:
+  invierno: { lunes-viernes: horario, sabado: sin_servicio, domingos-festivos: sin_servicio }
+  verano:   { lunes-viernes: horario, sabado: sin_servicio, domingos-festivos: sin_servicio }
+
+horarios:
+  # ── INVIERNO — lunes a viernes ──────────────────────────────
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      STE    VIS    DTO    ANO    PZH    POZ
+      07:50  08:00  08:10  08:15  08:25  08:30
+
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      VRT    VIS    DTO    ANO    PZH    POZ
+      09:15  09:25  09:30  09:35  09:50  10:00
+
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      PZH    POZ    ANO    DTO    VIS    VRT
+      13:00  13:05  13:10  13:15  13:20  13:25
+
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      POZ    ANO    DTO    VIS    STE
+      16:45  16:50  16:55  17:05  17:15
+
+  # ── VERANO — lunes a viernes ──────────────────────────────
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      STE    VIS    DTO    ANO    PZH    POZ
+      07:50  08:00  08:10  08:15  08:25  08:30
+
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      VRT    VIS    DTO    ANO    PZH    POZ
+      09:15  09:25  09:30  09:35  09:50  10:00
+
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      PZH    POZ    ANO    DTO    VIS    VRT
+      13:00  13:05  13:10  13:15  13:20  13:25
+
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      POZ    ANO    DTO    VIS    STE
+      16:45  16:50  16:55  17:05  17:15
+
+pendientes: []

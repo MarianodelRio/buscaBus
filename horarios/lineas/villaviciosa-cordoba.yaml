@@ -1,0 +1,93 @@
+# horarios/lineas/villaviciosa-cordoba.yaml
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas VILLAVIC INV y VILLAVIC VER.
+#
+# El viaje de las 16:00 desde Córdoba (martes a viernes, invierno) es solo
+# los viernes en periodo escolar (D-j): la celda del Excel dice "VIERNES
+# ESCOLAR 16:00" y aquí pasa a la condición del viaje.
+# Las celdas F39 y F44 de VILLAVIC VER (40503, 40002) son números sueltos, no horas.
+nombre: Villaviciosa – Córdoba
+avisos: []
+no_circula: []
+
+temporadas:
+  invierno: 15/09 - 22/06   # confirmado por negocio (P02)
+  verano: 23/06 - 14/09     # confirmado por negocio (P02)
+
+dias:
+  invierno: { lunes: horario, martes-viernes: horario, sabado: horario, domingos-festivos: sin_servicio }
+  verano:   { lunes-viernes: horario, sabado: horario, domingos-festivos: sin_servicio }
+
+horarios:
+  # ── INVIERNO — lunes ────────────────────────────────────────────────────
+  - temporada: invierno
+    dias: lunes
+    tabla: |
+      VVS    PAN    VAC    COR
+      06:40  06:50  07:00  07:30
+      10:30  10:40  10:50  11:20
+
+  - temporada: invierno
+    dias: lunes
+    tabla: |
+      COR    VAC    PAN    VVS
+      13:10  13:35  13:45  14:00
+      18:30  18:55  19:05  19:20
+
+  # ── INVIERNO — martes a viernes ─────────────────────────────────────────
+  - temporada: invierno
+    dias: martes-viernes
+    tabla: |
+      VVS    PAN    VAC    COR
+      07:10  07:20  07:30  08:00
+      10:30  10:40  10:50  11:20
+
+  - temporada: invierno
+    dias: martes-viernes
+    tabla: |
+      COR    VAC    PAN    VVS
+      13:10  13:35  13:45  14:00
+      16:00  16:25  16:35  16:50  | solo_viernes_lectivo
+      18:30  18:55  19:05  19:20
+
+  # ── INVIERNO — sábado (P23: confirmado por negocio) ─────────────────────
+  - temporada: invierno
+    dias: sabado
+    tabla: |
+      VVS    PAN    VAC    COR
+      08:25  08:35  09:00  09:15
+
+  - temporada: invierno
+    dias: sabado
+    tabla: |
+      COR    VAC    PAN    VVS
+      13:00  13:25  13:35  13:50
+
+  # ── VERANO — lunes a viernes ────────────────────────────────────────────
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      VVS    PAN    VAC    COR
+      07:10  07:20  07:30  08:00
+      10:30  10:40  10:50  11:20
+
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      COR    VAC    PAN    VVS
+      13:10  13:35  13:45  14:00
+      18:30  18:55  19:05  19:20
+
+  # ── VERANO — sábado (P23: confirmado por negocio) ───────────────────────
+  - temporada: verano
+    dias: sabado
+    tabla: |
+      VVS    PAN    VAC    COR
+      08:25  08:35  09:00  09:15
+
+  - temporada: verano
+    dias: sabado
+    tabla: |
+      COR    VAC    PAN    VVS
+      13:00  13:25  13:35  13:50
+
+pendientes: []

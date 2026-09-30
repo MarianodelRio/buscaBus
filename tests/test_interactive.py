@@ -239,3 +239,58 @@ def test_lista_de_destinos_con_no_vendibles_filtrados_respeta_limites():
         )
         _assert_list_limits(payload)
         assert len(_rows(payload)) <= MAX_ROWS
+
+
+# ── Fase 1b-1: Pozoblanco con 19 destinos y nombre largo de la Estación AVE ──
+
+NOMBRE_LARGO = "Estación AVE Villanueva de Córdoba"
+
+
+def test_destinos_de_pozoblanco_son_10_filas_con_los_8_esperados():
+    datos = horarios_datos.actual()
+    horarios = datos.horarios
+    alcanzables = list(query.destinos_desde(horarios, "pozoblanco"))
+    assert len(alcanzables) > 9
+    nombres = {lid: horarios.modelo.localidades[lid].nombre for lid in alcanzables}
+    ordenados = flujo.ordenar_destinos(alcanzables, list(datos.menu_origen), nombres)
+    payload = build_destinos("Pozoblanco", ordenados)
+    _assert_list_limits(payload)
+    filas = _rows(payload)
+    assert len(filas) == 10
+    assert [f["title"] for f in filas[:8]] == [
+        "Córdoba",
+        "Villanueva de Córdoba",
+        "Hinojosa del Duque",
+        "Belalcázar",
+        "Alcaracejos",
+        "Añora",
+        "Cardeña",
+        "Conquista",
+    ]
+    assert [f["id"] for f in filas[8:]] == ["escribir", "cambiar_origen"]
+
+
+def test_nombre_largo_estacion_ave_respeta_limites_en_todos_los_constructores():
+    assert len(NOMBRE_LARGO) > MAX_ROW_TITLE
+    fila = _rows(build_origen([("estacion-ave-villanueva", NOMBRE_LARGO)]))[0]
+    assert len(fila["title"]) <= MAX_ROW_TITLE
+    assert fila["description"] == NOMBRE_LARGO
+
+    _assert_button_limits(build_confirmar(NOMBRE_LARGO))
+
+    # nombre largo: build_candidatas pasa de botones a lista
+    cands = build_candidatas(
+        [
+            ("estacion-ave-villanueva", NOMBRE_LARGO),
+            ("villanueva-de-cordoba", "Villanueva"),
+        ],
+        "destino",
+    )
+    _assert_list_limits(cands)
+    assert NOMBRE_LARGO in [r.get("description") for r in _rows(cands)]
+
+    _assert_list_limits(
+        build_dias(
+            "Pozoblanco", NOMBRE_LARGO, [("dia:2026-10-01", "Jueves 1", "2 salidas")]
+        )
+    )

@@ -411,3 +411,89 @@ def test_destinos_desde_filtra_los_no_vendibles():
     assert "cordoba" not in query.destinos_desde(HORARIOS, "alcolea")
     # el resto de destinos de Alcolea no se toca
     assert "adamuz" in query.destinos_desde(HORARIOS, "alcolea")
+
+
+# ── Fase 1b-1: Fuente Carreteros, Villaviciosa, Belalcázar-Pozoblanco y TORR ─
+
+
+def _por_hora(c: query.Consulta) -> dict[str, query.Salida]:
+    return {s.hora_salida.strftime("%H:%M"): s for s in c.salidas}
+
+
+def test_villaviciosa_viernes_lectivo_incluye_las_16_00():
+    c = query.consultar(
+        HORARIOS, "cordoba", "villaviciosa-de-cordoba", date(2026, 10, 2)
+    )
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("13:10", "14:00"), ("16:00", "16:50"), ("18:30", "19:20")]
+
+
+def test_villaviciosa_viernes_no_lectivo_jueves_y_lunes_sin_las_16_00():
+    esperado = [("13:10", "14:00"), ("18:30", "19:20")]
+    for fecha in (date(2027, 2, 26), date(2026, 10, 1), date(2026, 10, 5)):
+        c = query.consultar(HORARIOS, "cordoba", "villaviciosa-de-cordoba", fecha)
+        assert c.estado == "con_salidas", fecha
+        assert _horas(c) == esperado, fecha
+
+
+def test_cardena_pozoblanco_en_agosto_es_sin_servicio_no_sin_datos():
+    c = query.consultar(HORARIOS, "cardena", "pozoblanco", date(2027, 8, 4))
+    assert c.estado == "sin_servicio"
+    assert c.salidas == ()
+    assert c.lineas_sin_datos == ()
+    c = query.consultar(HORARIOS, "cardena", "pozoblanco", date(2027, 7, 7))
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("09:00", "10:00")]
+
+
+def test_pozoblanco_villanueva_cordoba_agosto_sin_la_linea_de_cardena():
+    # pozoblanco-cordoba ya tiene salidas POZ -> VVC en verano (p.ej. 13:15
+    # desde PZH, llegada 13:35): no se puede asertar la ausencia de esa
+    # hora. Se asierta por línea: la de Cardeña no aparece y la de la
+    # Estación AVE sí.
+    c = query.consultar(
+        HORARIOS, "pozoblanco", "villanueva-de-cordoba", date(2027, 8, 4)
+    )
+    assert c.estado == "con_salidas"
+    assert all("cardena-pozoblanco" not in s.lineas for s in c.salidas)
+    por_hora = _por_hora(c)
+    assert por_hora["15:55"].lineas == ("pozoblanco-estacion-ave",)
+    assert por_hora["15:55"].parada_origen == "POZ"
+    assert por_hora["15:55"].hora_llegada == time(16, 10)
+    assert por_hora["13:15"].lineas == ("pozoblanco-cordoba",)
+
+
+def test_torrecampo_pozoblanco_sabado_sin_servicio_y_siguiente_lunes():
+    c = query.consultar(HORARIOS, "torrecampo", "pozoblanco", date(2026, 10, 3))
+    assert c.estado == "sin_servicio"
+    assert c.siguiente_con_servicio == date(2026, 10, 5)
+    c = query.consultar(HORARIOS, "torrecampo", "pozoblanco", date(2026, 10, 5))
+    assert c.estado == "con_salidas"
+    assert [s.parada_destino for s in c.salidas] == ["PZH"]
+
+
+def test_pozoblanco_estacion_ave_dia_laborable_de_invierno():
+    c = query.consultar(
+        HORARIOS, "pozoblanco", "estacion-ave-villanueva", date(2026, 10, 1)
+    )
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("15:55", "16:25"), ("17:45", "18:30")]
+    assert all(
+        s.parada_origen == "POZ" and s.parada_destino == "EAV" for s in c.salidas
+    )
+
+
+def test_festivo_local_de_cordoba_solo_afecta_a_las_lineas_que_tocan_cordoba():
+    fecha = date(2026, 9, 8)
+    for origen in ("fuente-carreteros", "villaviciosa-de-cordoba"):
+        c = query.consultar(HORARIOS, origen, "cordoba", fecha)
+        assert c.estado == "sin_servicio", origen
+        assert c.festivo_local == ("Virgen de la Fuensanta", "cordoba"), origen
+    c = query.consultar(HORARIOS, "torrecampo", "pozoblanco", fecha)
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("09:00", "09:20")]
+    assert c.festivo_local is None
+    c = query.consultar(HORARIOS, "belalcazar", "pozoblanco", fecha)
+    assert c.estado == "con_salidas"
+    assert _horas(c)[0] == ("09:20", "10:15")
+    assert c.festivo_local is None

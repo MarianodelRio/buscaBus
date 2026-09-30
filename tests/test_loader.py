@@ -50,14 +50,25 @@ def test_cargar_motor_fixture():
     assert set(horarios.localidad_paradas["pueblo-a"]) == {"AAA"}
 
 
-def test_festivos_por_linea_real_las_5_lineas_aplican_los_de_cordoba():
+def test_festivos_por_linea_real_las_7_lineas_que_tocan_cordoba():
     horarios = loader.cargar(HORARIOS_REAL)
     esperado = {
         date(2026, 9, 8): ("Virgen de la Fuensanta", "cordoba"),
         date(2026, 10, 24): ("San Rafael", "cordoba"),
     }
-    assert set(horarios.festivos_por_linea) == set(horarios.modelo.lineas)
-    assert len(horarios.festivos_por_linea) == 5
+    sin_cordoba = {
+        "belalcazar-pozoblanco",
+        "torrecampo-pozoblanco",
+        "santa-eufemia-villaralto-pozoblanco",
+        "cardena-pozoblanco",
+        "pozoblanco-estacion-ave",
+    }
+    assert set(horarios.modelo.lineas) >= sin_cordoba
+    assert set(horarios.festivos_por_linea) == set(horarios.modelo.lineas) - sin_cordoba
+    assert len(horarios.festivos_por_linea) == 7
+    assert {"fuente-carreteros-cordoba", "villaviciosa-cordoba"} <= set(
+        horarios.festivos_por_linea
+    )
     for lid, festivos in horarios.festivos_por_linea.items():
         assert festivos == esperado, lid
 

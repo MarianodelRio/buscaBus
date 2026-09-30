@@ -468,6 +468,29 @@ def test_zonas_en_origen_pagina(mock_wa, freeze_calendario):
     assert "zona:extremadura:2" not in _row_ids(payload)
 
 
+def test_zona_los_pedroches_tres_paginas(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000115"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    conv.handle_message(phone, phone, None, "zonas")
+
+    conv.handle_message(phone, phone, None, "zona:los-pedroches:0")
+    rows = _row_ids(_last_interactive(mock_wa))
+    assert "zona:los-pedroches:1" in rows
+    assert len([r for r in rows if r.startswith("loc:")]) == 8
+
+    conv.handle_message(phone, phone, None, "zona:los-pedroches:1")
+    rows = _row_ids(_last_interactive(mock_wa))
+    assert "zona:los-pedroches:2" in rows
+    assert len([r for r in rows if r.startswith("loc:")]) == 8
+
+    conv.handle_message(phone, phone, None, "zona:los-pedroches:2")
+    rows = _row_ids(_last_interactive(mock_wa))
+    assert len([r for r in rows if r.startswith("loc:")]) == 2
+    assert not any(r.startswith("zona:los-pedroches:") for r in rows)
+
+
 def test_zonas_en_destino_solo_alcanzables(mock_wa, freeze_calendario):
     freeze_calendario(HOY)
     phone = "34600000114"

@@ -796,9 +796,9 @@ Nunca se resuelve solo, ni escrito con errata.
 
 **`Ver todos por zona`** es la red de seguridad para quien no sabe escribir el
 nombre. 7 zonas: Los Pedroches, Guadiato, Vega del Guadalquivir, Adamuz,
-Campiña, Extremadura, Córdoba. Las zonas grandes (Los Pedroches tiene 20
-paradas, Guadiato 14, Extremadura 11) se parten en dos listas con una fila
-"ver más". No es el camino principal, pero ningún usuario se queda sin salida.
+Campiña, Extremadura, Córdoba. Las zonas grandes (Los Pedroches tiene 18
+localidades en uso, en 3 páginas de 8+8+2; Guadiato 14, Extremadura 11) se
+parten en varias listas con una fila "ver más". No es el camino principal, pero ningún usuario se queda sin salida.
 Se muestran en el orden de `paradas.yaml`, **ocultando las zonas sin
 localidades en uso** (hoy Campiña); dentro de cada zona, localidades en orden
 alfabético y solo las que alguna línea usa. Zonas pendientes de negocio (P18).
@@ -1085,6 +1085,17 @@ todo el PDF con negocio. Después se borra `tools/migracion/`, se quita
 desarrollan con las 5 líneas de prueba.
 **Criterio:** las 15 líneas validan; el cuadre de horas con el Excel es del
 100 % salvo las correcciones documentadas; negocio aprueba el PDF.
+
+**Avance (fase 1b-1, `docs/rds_fase1b1_siete_lineas.md`):** migradas 7 líneas
+que caben en el formato actual: Fuente Carreteros – Córdoba, Villaviciosa –
+Córdoba, Belalcázar – Pozoblanco y las 4 de la hoja TORR (Línea Torrecampo,
+Santa Eufemia – Villaralto, Cardeña, Estación AVE Vva de Córdoba). El bot pasa
+a 12 líneas; el cuadre con el Excel es del 100 % en las hojas nuevas y la
+única discrepancia sigue siendo POZOB VER, fila 48.
+**Faltan 3 líneas (fase 1b-2 / ciclo C):** Posadas/Hornachuelos (P15, P32,
+P16), Peñarroya (P20, P21, P33 y el `sin_datos` de verano, P01) y Los
+Blázquez (P21, P27, D-e). Dependen de preguntas abiertas de negocio y de T-1
+(mismo autobús en dos líneas) y de las zonas por línea (P18).
 
 ### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27
 Resueltas en un ciclo propio (`docs/rds_fase1_correcciones.md`). Verificado el

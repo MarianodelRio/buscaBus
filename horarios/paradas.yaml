@@ -1,9 +1,11 @@
 # horarios/paradas.yaml — zonas, localidades y paradas.
 #
 # Fuente de verdad editada a mano (design.md, 2.3). Solo se incluyen las
-# zonas, localidades y paradas que usan las 5 líneas de prueba de la fase 1
+# zonas, localidades y paradas que usan las 12 líneas migradas hasta ahora
 # (Ochavillos-Córdoba, Pozoblanco-Córdoba, Belalcázar-Córdoba, Adamuz-Córdoba,
-# Badajoz-Córdoba). Las 10 líneas restantes se añaden en la fase 1b.
+# Badajoz-Córdoba, Fuente Carreteros-Córdoba, Villaviciosa-Córdoba,
+# Belalcázar-Pozoblanco y las 4 líneas de la hoja TORR). Las 3 restantes se
+# añaden en la fase 1b-2.
 #
 # Zonas y localidades: negocio ha confirmado las de Coronada (Valle del
 # Guadiato) y Cabeza del Buey (Los Pedroches). Lo que sigue abierto está
@@ -61,6 +63,19 @@ localidades:                             # lo que elige el usuario
   almendralejo: { nombre: Almendralejo, zona: extremadura }
   merida: { nombre: Mérida, zona: extremadura }
   badajoz: { nombre: Badajoz, zona: extremadura }
+  fuente-carreteros: { nombre: Fuente Carreteros, zona: vega-guadalquivir }
+  silillos: { nombre: Silillos, zona: vega-guadalquivir }
+  guadalcazar: { nombre: Guadalcázar, zona: vega-guadalquivir }
+  villaviciosa-de-cordoba: { nombre: Villaviciosa de Córdoba, zona: guadiato }
+  pantano: { nombre: Pantano, zona: guadiato }
+  torrecampo: { nombre: Torrecampo, zona: los-pedroches }
+  pedroche: { nombre: Pedroche, zona: los-pedroches }
+  santa-eufemia: { nombre: Santa Eufemia, zona: los-pedroches }
+  el-viso: { nombre: El Viso, zona: los-pedroches }
+  dos-torres: { nombre: Dos Torres, zona: los-pedroches }
+  anora: { nombre: Añora, zona: los-pedroches }
+  cardena: { nombre: Cardeña, zona: los-pedroches }
+  estacion-ave-villanueva: { nombre: Estación AVE Villanueva de Córdoba, zona: los-pedroches }
 
 paradas:                                 # lo que muestra el resultado
   COR: { nombre: Córdoba, localidad: cordoba }
@@ -106,6 +121,19 @@ paradas:                                 # lo que muestra el resultado
   ALM: { nombre: Almendralejo, localidad: almendralejo }
   MER: { nombre: Mérida, localidad: merida }
   BAD: { nombre: Badajoz, localidad: badajoz }
+  FCA: { nombre: Fuente Carreteros, localidad: fuente-carreteros }
+  SIL: { nombre: Silillos, localidad: silillos }
+  GDZ: { nombre: Guadalcázar, localidad: guadalcazar }
+  VVS: { nombre: Villaviciosa de Córdoba, localidad: villaviciosa-de-cordoba }
+  PAN: { nombre: Pantano, localidad: pantano }
+  TOR: { nombre: Torrecampo, localidad: torrecampo }
+  PED: { nombre: Pedroche, localidad: pedroche }
+  STE: { nombre: Santa Eufemia, localidad: santa-eufemia }
+  VIS: { nombre: El Viso, localidad: el-viso }
+  DTO: { nombre: Dos Torres, localidad: dos-torres }
+  ANO: { nombre: Añora, localidad: anora }
+  CAR: { nombre: Cardeña, localidad: cardena }
+  EAV: { nombre: Estación AVE Villanueva de Córdoba, localidad: estacion-ave-villanueva }
 
 # Preguntas abiertas que afectan a zonas, localidades o paradas de este
 # fichero (docs/preguntas_negocio.txt): P18 negocio prefiere zonas por línea
