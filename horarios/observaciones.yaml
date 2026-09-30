@@ -27,12 +27,6 @@ solo_si_viajeros_desde_cordoba:
   ambitos: [parada]
   texto: "Llega hasta aquí solo si el autobús sale de Córdoba con viajeros para este destino."
 
-entra_en_pueblo:
-  letra: P
-  tipo: aviso
-  ambitos: [parada]
-  texto: "Este autobús entra en el pueblo."
-
 solo_virgen_remedios:
   letra: R
   tipo: aviso
@@ -40,19 +34,20 @@ solo_virgen_remedios:
   texto: "Solo para en la parada de Virgen de los Remedios."
 
 hora_aproximada:
+  letra: A
   tipo: aviso
-  ambitos: [linea]
+  ambitos: [linea, parada]
   texto: "Horarios de paso aproximados."
 
 pasa_por_rivero:
   tipo: aviso
   ambitos: [viaje]
-  texto: "Pasa por Rivero de Posadas."
+  texto: "Para en Rivero de Posadas, a unos 4 minutos de Posadas."
 
 para_en_los_mochos:
   tipo: aviso
   ambitos: [viaje]
-  texto: "Tiene parada dentro de Los Mochos."
+  texto: "Para dentro de Los Mochos, a unos 7 minutos de Almodóvar del Río."
 
 no_para_en_el_pedrera:
   tipo: aviso

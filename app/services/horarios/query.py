@@ -301,8 +301,8 @@ def _resolver_fecha(
 
             paso_origen = viaje.pasos[i_origen]
             paso_destino = viaje.pasos[i_destino]
-            hora_salida = _parse_hora(paso_origen.hora)
-            hora_llegada = _parse_hora(paso_destino.hora)
+            hora_salida = _parse_hora(paso_origen.salida)
+            hora_llegada = _parse_hora(paso_destino.llegada)
             clave = (hora_salida, hora_llegada, paso_origen.parada, paso_destino.parada)
             entrada = agrupadas.setdefault(
                 clave,

@@ -3,6 +3,7 @@ mensaje concreto; horarios/ real valida sin errores."""
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 
@@ -666,3 +667,335 @@ def test_horarios_real_declara_los_tres_no_vendibles_de_p12b():
         }
     )
     assert not any("no_vendibles" in a for a in resultado.avisos)
+
+
+# ── celda `llegada>salida` (ciclo C1, P21) ───────────────────────────────────
+
+
+def _validar_fila(tmp_path, fila):
+    return formato.validar(_build(tmp_path, BASE_VALIDA.format(fila=fila)))
+
+
+def test_celda_llegada_salida_valida_en_parada_intermedia(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:45  09:00")
+    assert resultado.errores == []
+    viaje = resultado.modelo.lineas["linea-prueba"].viajes[0]
+    assert (viaje.pasos[0].llegada, viaje.pasos[0].salida) == ("08:00", "08:00")
+    assert (viaje.pasos[1].llegada, viaje.pasos[1].salida) == ("08:10", "08:45")
+
+
+def test_celda_llegada_salida_admite_letra_de_parada_al_final(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:45P  09:00")
+    assert resultado.errores == []
+    paso = resultado.modelo.lineas["linea-prueba"].viajes[0].pasos[1]
+    assert paso.observaciones == ("entra_en_pueblo",)
+
+
+def test_llegada_salida_en_la_primera_celda_es_error(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00>08:05  08:10  09:00")
+    assert any(
+        "fila 1: llegada y salida solo en una parada intermedia del viaje ('AAA')"
+        in e
+        for e in resultado.errores
+    )
+
+
+def test_llegada_salida_en_la_ultima_celda_con_hora_es_error(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10  09:00>09:10")
+    assert any(
+        "llegada y salida solo en una parada intermedia del viaje ('CCC')" in e
+        for e in resultado.errores
+    )
+
+
+def test_llegada_salida_en_la_ultima_celda_con_hora_aunque_siga_un_guion(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:20  -")
+    assert any(
+        "('BBB')" in e and "solo en una parada intermedia" in e
+        for e in resultado.errores
+    )
+
+
+def test_misma_hora_dos_veces_es_error(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:10  09:00")
+    assert any(
+        "fila 1: misma hora dos veces en 'BBB'; escribe una sola" in e
+        for e in resultado.errores
+    )
+
+
+def test_salida_anterior_a_la_llegada_es_error(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  12:30>11:55  13:00")
+    assert any(
+        "fila 1: la llegada debe ser anterior a la salida en 'BBB' (12:30>11:55)" in e
+        for e in resultado.errores
+    )
+
+
+def test_llegada_siguiente_anterior_a_la_salida_previa_es_retroceso(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:45  08:30")
+    assert any("las horas retroceden en 'CCC' (08:30)" in e for e in resultado.errores)
+
+
+def test_llegada_igual_a_la_salida_previa_no_es_retroceso(tmp_path):
+    resultado = _validar_fila(tmp_path, "08:00  08:10>08:45  08:45")
+    assert resultado.errores == []
+
+
+# ── mismo autobús: `bus:<id>` y aviso heurístico (ciclo C1, T-1) ─────────────
+
+CICLO_C = FIXTURES / "horarios_cicloC"
+
+LINEA_TPL = """\
+nombre: {nombre}
+avisos: []
+no_circula: []
+temporadas:
+  anual: todo el año
+dias:
+  anual: {{ lunes: sin_datos, martes: sin_datos, miercoles: sin_datos,
+    jueves: sin_datos, viernes: sin_datos, sabado: sin_datos,
+    domingo: sin_datos, festivos: sin_datos }}
+horarios:
+{tablas}
+pendientes: []
+"""
+
+
+def _tabla(dias: str, cabecera: str, *filas: str) -> str:
+    cuerpo = "\n".join(f"      {f}" for f in (cabecera, *filas))
+    return f"  - temporada: anual\n    dias: {dias}\n    tabla: |\n{cuerpo}\n"
+
+
+def _linea(nombre: str, *tablas: str) -> str:
+    return LINEA_TPL.format(nombre=nombre, tablas="".join(tablas))
+
+
+def _lv(nombre: str, cabecera: str, fila: str) -> str:
+    return _linea(nombre, _tabla("lunes-viernes", cabecera, fila))
+
+
+def _ciclo_c(tmp_path: Path, extra: dict[str, str] | None = None,
+             quitar: tuple[str, ...] = ()) -> Path:
+    destino = tmp_path / "horarios"
+    shutil.copytree(CICLO_C, destino)
+    for nombre in quitar:
+        (destino / "lineas" / f"{nombre}.yaml").unlink()
+    for nombre, texto in (extra or {}).items():
+        (destino / "lineas" / f"{nombre}.yaml").write_text(texto, encoding="utf-8")
+    return destino
+
+
+def _errores_bus(tmp_path, **lineas):
+    """Valida la fixture sin vecina/larga/corta/paso más las líneas dadas."""
+    destino = _ciclo_c(
+        tmp_path,
+        extra=lineas,
+        quitar=("larga", "corta", "paso", "vecina"),
+    )
+    return formato.validar(destino)
+
+
+def test_fixture_ciclo_c_valida_sin_errores():
+    resultado = formato.validar(CICLO_C)
+    assert resultado.errores == []
+    assert resultado.modelo is not None
+
+
+def test_fixture_ciclo_c_lee_llegada_salida_y_bus():
+    modelo = formato.validar(CICLO_C).modelo
+    viaje = modelo.lineas["larga"].viajes[0]
+    pnr = next(p for p in viaje.pasos if p.parada == "PNR")
+    assert (pnr.llegada, pnr.salida) == ("11:55", "12:30")
+    assert viaje.bus == "cor-1030"
+    assert modelo.lineas["corta"].viajes[1].bus is None
+
+
+def test_bus_compartido_por_dos_tablas_de_una_linea_y_un_viaje_de_otra_es_valido():
+    # paso.yaml (lunes-jueves y viernes) + un viaje lunes-viernes de corta.yaml
+    resultado = formato.validar(CICLO_C)
+    assert resultado.errores == []
+    ids = [
+        v.bus
+        for lid in ("paso", "corta")
+        for v in resultado.modelo.lineas[lid].viajes
+        if v.bus == "pas-1500"
+    ]
+    assert len(ids) == 3
+
+
+def test_aviso_heuristico_texto_y_un_solo_aviso_por_par(tmp_path):
+    resultado = formato.validar(CICLO_C)
+    avisos = [a for a in resultado.avisos if "posible mismo autobús" in a]
+    # vecina discrepa con larga y con corta; vecina tiene dos tablas
+    # (lunes-viernes y lunes-jueves) pero cada par sale una sola vez.
+    assert len(avisos) == 2
+    for aviso in avisos:
+        assert (
+            "posible mismo autobús con horas distintas: " in aviso
+            and aviso.endswith("(no se fusionará)")
+        )
+        assert "Córdoba 10:30 en ambas y Espiel 11:15 frente a 11:20" in aviso
+    par_larga = "'Los Blázquez – Córdoba' y 'Vecina – Córdoba'"
+    par_corta = "'Peñarroya – Córdoba' y 'Vecina – Córdoba'"
+    assert sum(par_larga in a for a in avisos) == 1
+    assert sum(par_corta in a for a in avisos) == 1
+
+
+def test_no_hay_aviso_si_el_par_esta_declarado_con_el_mismo_bus(tmp_path):
+    resultado = formato.validar(CICLO_C)
+    assert not any(
+        "'Los Blázquez – Córdoba' y 'Peñarroya – Córdoba'" in a
+        or "'Peñarroya – Córdoba' y 'Los Blázquez – Córdoba'" in a
+        for a in resultado.avisos
+    )
+
+
+def test_bus_en_un_solo_viaje_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC ESP", "10:00 10:30 11:00 | bus:solo-1"),
+    )
+    assert any(
+        "bus:solo-1 aparece en un solo viaje" in e and "a.yaml" in e and "fila 1" in e
+        for e in resultado.errores
+    )
+
+
+def test_bus_sin_ningun_dia_en_comun_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_linea(
+            "A",
+            _tabla("lunes-jueves", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+            _tabla("lunes-jueves", "COR VAC BEL", "12:00 12:30 13:00"),
+        ),
+        b=_linea("B", _tabla("sabado", "COR VAC ESP", "10:00 10:30 11:00 | bus:x")),
+    )
+    assert any(
+        "bus:x: los viajes no coinciden en ningún día" in e for e in resultado.errores
+    )
+
+
+def test_bus_con_menos_de_2_localidades_comunes_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC", "10:00 10:30 | bus:x"),
+        b=_lv("B", "COR ESP", "10:00 10:40 | bus:x"),
+    )
+    assert any(
+        "bus:x: comparten menos de 2 localidades" in e for e in resultado.errores
+    )
+
+
+def test_bus_con_horas_distintas_en_parada_comun_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+        b=_lv("B", "COR VAC ESP", "10:00 10:35 11:00 | bus:x"),
+    )
+    errores = [e for e in resultado.errores if "bus:x: horas distintas en 'VAC'" in e]
+    assert len(errores) == 1
+    assert "a.yaml" in errores[0] and "b.yaml" in errores[0]
+    assert "10:30" in errores[0] and "10:35" in errores[0]
+
+
+def test_bus_salida_distinta_en_parada_intermedia_es_error(tmp_path):
+    # VAC no es la última de ninguno de los dos viajes: la salida cuenta.
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC ESP", "10:00 10:30>10:40 11:00 | bus:x"),
+        b=_lv("B", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+    )
+    assert any(
+        "horas distintas en 'VAC'" in e and "10:30>10:40" in e
+        for e in resultado.errores
+    )
+
+
+def test_bus_salida_de_la_ultima_parada_de_un_viaje_no_se_compara(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+        b=_lv("B", "COR VAC ESP BEL", "10:00 10:30 11:00>11:10 11:30 | bus:x"),
+    )
+    assert resultado.errores == []
+
+
+def test_bus_con_paradas_distintas_en_una_localidad_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VRE BEL", "10:00 10:30 11:00 | bus:x"),
+        b=_lv("B", "COR VRC BEL", "10:00 10:30 11:00 | bus:x"),
+    )
+    assert any(
+        "bus:x: paradas distintas en Villanueva del Rey (VRE / VRC" in e
+        for e in resultado.errores
+    )
+
+
+def test_bus_dos_viajes_de_la_misma_linea_con_dias_solapados_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_linea(
+            "A",
+            _tabla("lunes-viernes", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+            _tabla("lunes-jueves", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+        ),
+    )
+    assert any(
+        "bus:x: dos viajes de la misma línea 'a' con días solapados" in e
+        for e in resultado.errores
+    )
+
+
+def test_bus_de_la_misma_linea_sin_dias_comunes_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_linea(
+            "A",
+            _tabla("lunes-jueves", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+            _tabla("sabado", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+        ),
+    )
+    assert any("los viajes no coinciden en ningún día" in e for e in resultado.errores)
+
+
+def test_bus_con_identificador_mal_formado_es_error(tmp_path):
+    for numero, malo in enumerate(("Cor1", "cor_1", "cor.1", "")):
+        sub = tmp_path / f"caso{numero}"
+        sub.mkdir()
+        resultado = _errores_bus(
+            sub,
+            a=_lv("A", "COR VAC", f"10:00 10:30 | bus:{malo}"),
+        )
+        assert any(
+            f"identificador de autobús inválido 'bus:{malo}'" in e
+            for e in resultado.errores
+        ), malo
+
+
+def test_dos_bus_en_el_mismo_viaje_es_error(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC", "10:00 10:30 | bus:x bus:y"),
+    )
+    assert any("más de un 'bus:' en el mismo viaje" in e for e in resultado.errores)
+
+
+def test_bus_y_pendiente_conviven_en_la_misma_fila(tmp_path):
+    resultado = _errores_bus(
+        tmp_path,
+        a=_lv("A", "COR VAC ESP", "10:00 10:30 11:00 | bus:x P01"),
+        b=_lv("B", "COR VAC ESP", "10:00 10:30 11:00 | bus:x"),
+    )
+    assert resultado.errores == []
+    viaje = resultado.modelo.lineas["a"].viajes[0]
+    assert viaje.bus == "x" and viaje.pendientes == ("P01",)
+
+
+def test_horarios_real_tiene_exactamente_3_avisos_de_posible_mismo_autobus():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.errores == []
+    posibles = [a for a in resultado.avisos if "posible mismo autobús" in a]
+    assert len(posibles) == 3

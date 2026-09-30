@@ -209,7 +209,11 @@ def _celda_paso(modelo: Modelo, paso) -> str:
         for oid in paso.observaciones
         if oid in modelo.observaciones
     )
-    return f"<td>{html.escape(paso.hora)}{html.escape(letras)}</td>"
+    if paso.llegada != paso.salida:
+        hora = f"llega {paso.llegada} · sale {paso.salida}"
+    else:
+        hora = paso.salida
+    return f"<td>{html.escape(hora)}{html.escape(letras)}</td>"
 
 
 def _render_tabla_normal(modelo: Modelo, codigos: list[str], viajes: list) -> str:
@@ -245,7 +249,7 @@ def _render_tabla_transpuesta(modelo: Modelo, codigos: list[str], viajes: list) 
         if not bloque:
             continue
         cabecera = "<th>Parada</th>" + "".join(
-            f"<th>{html.escape(v.pasos[0].hora) if v.pasos else ''}</th>"
+            f"<th>{html.escape(v.pasos[0].salida) if v.pasos else ''}</th>"
             for v in bloque
         )
         filas_html = []
@@ -286,6 +290,45 @@ def _render_tabla_horario(modelo: Modelo, linea, tabla, viajes: list) -> str:
 def _nombre_parada(modelo: Modelo, codigo: str) -> str:
     parada = modelo.paradas.get(codigo)
     return parada.nombre if parada is not None else codigo
+
+
+def _indice_buses(modelo: Modelo) -> dict[str, list]:
+    """id de `bus:` -> viajes que lo llevan, en el orden de líneas y viajes."""
+    indice: dict[str, list] = {}
+    for _, linea in sorted(modelo.lineas.items()):
+        for viaje in linea.viajes:
+            if viaje.bus is not None:
+                indice.setdefault(viaje.bus, []).append(viaje)
+    return indice
+
+
+def _render_mismo_autobus(modelo: Modelo, tabla, viajes: list, buses: dict) -> str:
+    """Bajo cada tabla: con qué otras tablas comparten autobús sus viajes
+    (`bus:<id>`), para que negocio lo compruebe. Nada si ninguno lo declara;
+    nunca se cita la propia tabla."""
+    entradas: list[str] = []
+    for viaje in viajes:
+        if viaje.bus is None:
+            continue
+        for otro in buses.get(viaje.bus, []):
+            if otro.tabla == tabla:
+                continue
+            linea_otra = modelo.lineas.get(otro.linea)
+            nombre = linea_otra.nombre if linea_otra is not None else otro.linea
+            paradas = otro.tabla.paradas
+            sentido = (
+                f"de {_nombre_parada(modelo, paradas[0])} "
+                f"a {_nombre_parada(modelo, paradas[-1])}"
+                if paradas
+                else ""
+            )
+            texto = f"{nombre} ({diff.clase_en_palabras(otro.dias)}, {sentido})"
+            if texto not in entradas:
+                entradas.append(texto)
+    if not entradas:
+        return ""
+    texto = html.escape("; ".join(entradas))
+    return f"<p class='mismo-bus'>mismo autobús que: {texto}</p>"
 
 
 def _render_estado_dias(linea) -> str:
@@ -333,7 +376,11 @@ def _render_avisos_linea(modelo: Modelo, linea) -> str:
     return f"<h3>Avisos de la línea</h3>{lista}{no_circula_html}"
 
 
-def _render_seccion_linea(modelo: Modelo, linea) -> str:
+def _render_seccion_linea(
+    modelo: Modelo, linea, buses: dict[str, list] | None = None
+) -> str:
+    if buses is None:
+        buses = _indice_buses(modelo)
     partes = [f"<h2>{html.escape(linea.nombre)}</h2>"]
 
     temporadas_txt = "".join(
@@ -372,6 +419,7 @@ def _render_seccion_linea(modelo: Modelo, linea) -> str:
         )
         partes.append(f"<h4>{titulo}</h4>")
         partes.append(_render_tabla_horario(modelo, linea, tabla, viajes_tabla))
+        partes.append(_render_mismo_autobus(modelo, tabla, viajes_tabla, buses))
 
     return "".join(partes)
 
@@ -534,6 +582,7 @@ th, td {
 table.horario { font-size: 8pt; }
 table.horario.transpuesta { font-size: 8pt; }
 table.leyenda, ul.leyenda { list-style: none; padding-left: 0; font-size: 9pt; }
+p.mismo-bus { font-size: 9pt; font-style: italic; }
 td.sin-servicio { background: #f5c6c6; }
 td.sin-datos { background: #f5e6a6; font-style: italic; }
 td.horario { background: #d6f0d6; }
@@ -572,8 +621,9 @@ def generar_html(
         "<h2>Cambios desde la versión publicada</h2>" + _render_cambios(cambios)
     )
 
+    buses = _indice_buses(actual_modelo)
     secciones = "".join(
-        _render_seccion_linea(actual_modelo, linea)
+        _render_seccion_linea(actual_modelo, linea, buses)
         for _, linea in sorted(actual_modelo.lineas.items())
     )
 

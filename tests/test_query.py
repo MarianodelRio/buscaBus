@@ -497,3 +497,72 @@ def test_festivo_local_de_cordoba_solo_afecta_a_las_lineas_que_tocan_cordoba():
     assert c.estado == "con_salidas"
     assert _horas(c)[0] == ("09:20", "10:15")
     assert c.festivo_local is None
+
+
+# ── Ciclo C1: llegada>salida y mismo autobús (fixture horarios_cicloC) ───────
+
+CICLO_C = loader.cargar(FIXTURES / "horarios_cicloC")
+MIERCOLES = date(2026, 9, 30)
+NOTA_APROXIMADA = "Horarios de paso aproximados."
+
+
+def test_cicloc_cordoba_penarroya_una_salida_con_las_dos_lineas():
+    c = query.consultar(CICLO_C, "cordoba", "penarroya", MIERCOLES)
+    assert c.estado == "con_salidas"
+    primera = c.salidas[0]
+    assert (
+        primera.hora_salida.strftime("%H:%M"),
+        primera.hora_llegada.strftime("%H:%M"),
+    ) == ("10:30", "11:55")
+    assert sorted(primera.lineas) == ["corta", "larga"]
+    # el autobús compartido no sale duplicado
+    assert sum(1 for s in c.salidas if s.hora_salida == time(10, 30)) == 1
+    assert (primera.parada_origen, primera.parada_destino) == ("COR", "PNR")
+
+
+def test_cicloc_penarroya_los_blazquez_sale_a_la_salida_de_penarroya():
+    c = query.consultar(CICLO_C, "penarroya", "los-blazquez", MIERCOLES)
+    assert _horas(c) == [("12:30", "13:20")]
+    assert c.salidas[0].lineas == ("larga",)
+    assert c.salidas[0].duracion_min == 50
+
+
+def test_cicloc_cordoba_los_blazquez_una_sola_salida_de_punta_a_punta():
+    c = query.consultar(CICLO_C, "cordoba", "los-blazquez", MIERCOLES)
+    assert _horas(c) == [("10:30", "13:20")]
+    assert c.salidas[0].duracion_min == 170
+
+
+def test_cicloc_ya_salio_usa_la_salida_no_la_llegada():
+    # A las 12:00 el autobús ya llegó a Peñarroya (11:55) pero aún no salió
+    # (12:30): Peñarroya -> Los Blázquez no ha salido.
+    ahora = datetime(2026, 9, 30, 12, 0, tzinfo=MADRID)
+    c = query.consultar(
+        CICLO_C, "penarroya", "los-blazquez", MIERCOLES, ahora=ahora
+    )
+    assert [s.ya_salio for s in c.salidas] == [False]
+    ahora = datetime(2026, 9, 30, 12, 31, tzinfo=MADRID)
+    c = query.consultar(
+        CICLO_C, "penarroya", "los-blazquez", MIERCOLES, ahora=ahora
+    )
+    assert [s.ya_salio for s in c.salidas] == [True]
+
+
+def test_cicloc_villanueva_del_rey_da_la_parada_de_cada_salida():
+    c = query.consultar(CICLO_C, "cordoba", "villanueva-del-rey", MIERCOLES)
+    paradas = {
+        s.hora_salida.strftime("%H:%M"): s.parada_destino for s in c.salidas
+    }
+    assert paradas["10:30"] == "VRE"
+    assert paradas["13:10"] == "VRC"
+
+
+def test_cicloc_nota_a_solo_cuando_la_parada_es_origen_o_destino():
+    # PVN (12:50A) es intermedia de Córdoba -> Los Blázquez: sin nota.
+    c = query.consultar(CICLO_C, "cordoba", "los-blazquez", MIERCOLES)
+    assert NOTA_APROXIMADA not in c.salidas[0].notas
+    # Origen o destino en PVN: con nota.
+    c = query.consultar(CICLO_C, "cordoba", "el-porvenir", MIERCOLES)
+    assert any(NOTA_APROXIMADA in s.notas for s in c.salidas)
+    c = query.consultar(CICLO_C, "el-porvenir", "los-blazquez", MIERCOLES)
+    assert NOTA_APROXIMADA in c.salidas[0].notas

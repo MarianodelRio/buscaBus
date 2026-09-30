@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 12 líneas migradas (fase 1b-1; faltan 3 en la fase 1b-2/ciclo C), motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 12 líneas migradas (fase 1b-1; faltan 3 en la fase 1b-2/ciclo C), motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp; ciclo C1 hecho: celda `llegada>salida` (P21), `bus:<id>` para el mismo autobús con validación y aviso heurístico (T-1); C2 y C3 pendientes); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -30,7 +30,7 @@ app/
     whatsapp.py                — copiado tal cual de Peluquería
     scheduler.py                — 1 job: limpieza de estados cada 10 min
     horarios/
-      modelo.py                — entidades inmutables (design.md 2.4)
+      modelo.py                — entidades inmutables (design.md 2.4); `Paso` con `llegada` y `salida`, `Viaje.bus`
       formato.py               — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
       diff.py                  — diferencias entre dos versiones de horarios/ en lenguaje de negocio
       loader.py                — carga horarios/ a memoria al arrancar usando formato.py
@@ -53,7 +53,7 @@ tools/
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
 horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 12 líneas; las 3 restantes en la fase 1b-2/ciclo C
-tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9)
+tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9). `fixtures/horarios_cicloC/`: llegada>salida y `bus:` (esquema con zonas; el ciclo C3 debe migrarla)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```
@@ -75,6 +75,8 @@ Estos son invariantes del diseño aprobado, no de código existente — guían l
 ### Datos
 - **`horarios/` es la fuente de verdad y se edita a mano** cuando negocio comunica un cambio. Se versiona en git (diff, historial y vuelta atrás). No hay CSV ni `data/`. El Excel (`horarios_fuente/`) es de un solo uso para la migración inicial.
 - **El validador no deja pasar nada ambiguo; nunca adivina.** Parada, letra u observación sin definir, horas que retroceden, clase de día sin declarar o temporadas que no cubren el año detienen `make validar`, el arranque y los tests con un mensaje concreto (fichero, tabla, fila, motivo). Hay un único parser/validador (`formato.py`).
+- **Llegada y salida** (P21): una celda `11:55>12:30` (solo en paradas intermedias) es la llegada y la salida de la misma parada. El motor usa la `salida` en el origen y la `llegada` en el destino.
+- **Mismo autobús**: se declara con `bus:<id>` tras el `|` y el validador da error si no cuadra; entre pares no declarados solo hay un aviso heurístico (design.md 2.3). "Tramo con tiempo anómalo" se descartó (T-1 cerrado).
 - **`sin_servicio` y `sin_datos` son distintos.** El bot nunca presenta un día sin datos como "no hay servicio".
 - Las condiciones (`a_demanda`, `solo_viernes_lectivo`, `solo_si_viajeros_desde_cordoba`) tienen ámbito: línea, viaje o **una parada concreta de un viaje**. El texto al cliente de cada observación vive en `horarios/observaciones.yaml`.
 - Lo pendiente de negocio se marca con su número (`P01`-`P27`, ver `docs/preguntas_negocio.txt`). Nunca se resuelve una pregunta abierta en silencio.

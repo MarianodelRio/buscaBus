@@ -17,7 +17,7 @@ from __future__ import annotations
 import calendar
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -39,7 +39,11 @@ from app.services.horarios.modelo import (
 
 PENDIENTE_RE = re.compile(r"^P\d{2}$")
 CODIGO_PARADA_RE = re.compile(r"^[A-Z]{3}$")
-HORA_CON_LETRAS_RE = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)([A-Z]*)$")
+# Celda de hora: `HH:MM`, o `HH:MM>HH:MM` (llegada>salida en la misma parada,
+# solo en paradas intermedias), seguida de letras de observación de parada.
+_HH_MM = r"(?:[01]\d|2[0-3]):[0-5]\d"
+CELDA_HORA_RE = re.compile(rf"^({_HH_MM})(?:>({_HH_MM}))?([A-Z]*)$")
+BUS_ID_RE = re.compile(r"^[a-z0-9-]+$")
 MARCADOR_RE = re.compile(r"\{([^}]*)\}")
 
 DIAS_INDIVIDUALES = (
@@ -811,6 +815,8 @@ class _FilaTabla:
     obs_viaje: list[str]
     pendientes: list[str]
     numero: int  # fila dentro de la tabla (1-based, sin cabecera ni comentarios)
+    # ids escritos como `bus:<id>` tras el `|` (sin validar; puede haber 0, 1 o más)
+    bus: list[str] = field(default_factory=list)
 
 
 def _parse_tabla(texto: str) -> tuple[list[str] | None, list[_FilaTabla]]:
@@ -832,11 +838,17 @@ def _parse_tabla(texto: str) -> tuple[list[str] | None, list[_FilaTabla]]:
         else:
             valores = linea.split()
             resto = []
+        buses = [tok[len("bus:") :] for tok in resto if tok.startswith("bus:")]
+        resto = [tok for tok in resto if not tok.startswith("bus:")]
         obs_viaje = [tok for tok in resto if not PENDIENTE_RE.match(tok)]
         pendientes = [tok for tok in resto if PENDIENTE_RE.match(tok)]
         filas.append(
             _FilaTabla(
-                valores=valores, obs_viaje=obs_viaje, pendientes=pendientes, numero=i
+                valores=valores,
+                obs_viaje=obs_viaje,
+                pendientes=pendientes,
+                numero=i,
+                bus=buses,
             )
         )
     return cabecera, filas
@@ -847,6 +859,18 @@ def _hora_a_minutos(hhmm: str) -> int:
     return int(h) * 60 + int(m)
 
 
+@dataclass
+class _InfoViaje:
+    """Datos auxiliares de un viaje para las comprobaciones entre líneas
+    (grupos `bus:` y aviso heurístico). No forma parte del modelo publicado."""
+
+    viaje: Viaje
+    ruta: str  # fichero de la línea
+    etiqueta: str  # "fichero [temporada, dias, tabla], fila N"
+    indices: frozenset[int]  # días del año (índices de _DIAS_DEL_ANIO)
+    clases: frozenset[str]  # clases de día de la tabla
+
+
 def _validar_linea(
     lid: str,
     datos: dict[str, Any],
@@ -855,6 +879,7 @@ def _validar_linea(
     observaciones: dict[str, Observacion],
     errores: list[str],
     avisos: list[str],
+    infos_viaje: list[_InfoViaje] | None = None,
 ) -> Linea | None:
     campos_desconocidos = set(datos.keys()) - CAMPOS_LINEA_PERMITIDOS
     if campos_desconocidos:
@@ -867,13 +892,6 @@ def _validar_linea(
             f"{path}: falta(n) campo(s) obligatorio(s): {sorted(campos_ausentes)}"
         )
         return None
-
-    # TODO(design.md 2.3, avisos): dos comprobaciones de la tabla de avisos no
-    # están implementadas: "el mismo autobús en dos líneas (se fusiona al
-    # consultar)" y "tramo con un tiempo anómalo frente al resto de viajes de
-    # ese tramo". Ninguna de las 5 líneas de prueba de la fase 1 ejercita
-    # estos casos. Implementar cuando haga falta (probablemente fase 1b, ver
-    # también docs/preguntas_negocio.txt).
 
     nombre = datos["nombre"]
     telefono_demanda = datos.get("telefono_demanda")
@@ -907,6 +925,7 @@ def _validar_linea(
         temporadas_raw = {}
 
     temporadas: list[Temporada] = []
+    indices_temporada: dict[str, frozenset[int]] = {}
     cobertura = [0] * len(_DIAS_DEL_ANIO)
     for nombre_temp, rango in temporadas_raw.items():
         indices = _parse_temporada_rango(str(rango))
@@ -919,6 +938,7 @@ def _validar_linea(
         for i in indices:
             cobertura[i] += 1
         temporadas.append(Temporada(nombre=nombre_temp, rango=str(rango)))
+        indices_temporada[nombre_temp] = frozenset(indices)
 
     dias_sin_cubrir = sum(1 for c in cobertura if c == 0)
     dias_solapados = sum(1 for c in cobertura if c > 1)
@@ -1076,12 +1096,18 @@ def _validar_linea(
                 continue
 
             pasos: list[Paso] = []
-            horas_validas: list[int] = []
+            # (llegada, salida) en minutos de cada celda con hora válida
+            horas_validas: list[tuple[int, int]] = []
             fila_valida = True
-            for codigo, valor in zip(cabecera, fila.valores):
+            indices_con_valor = [
+                i for i, v in enumerate(fila.valores) if v != "-"
+            ]
+            primero = indices_con_valor[0] if indices_con_valor else -1
+            ultimo = indices_con_valor[-1] if indices_con_valor else -1
+            for indice, (codigo, valor) in enumerate(zip(cabecera, fila.valores)):
                 if valor == "-":
                     continue
-                m = HORA_CON_LETRAS_RE.match(valor)
+                m = CELDA_HORA_RE.match(valor)
                 if not m:
                     errores.append(
                         f"{etiqueta_tabla}, fila {fila.numero}: valor inválido "
@@ -1089,15 +1115,38 @@ def _validar_linea(
                     )
                     fila_valida = False
                     continue
-                hhmm = f"{m.group(1)}:{m.group(2)}"
+                llegada_txt = m.group(1)
+                salida_txt = m.group(2) or llegada_txt
                 letras = m.group(3)
-                minutos = _hora_a_minutos(hhmm)
-                if horas_validas and minutos < horas_validas[-1]:
+                llegada_min = _hora_a_minutos(llegada_txt)
+                salida_min = _hora_a_minutos(salida_txt)
+                if m.group(2) is not None:
+                    if indice in (primero, ultimo):
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: llegada y "
+                            "salida solo en una parada intermedia del viaje "
+                            f"('{codigo}')"
+                        )
+                        fila_valida = False
+                    elif salida_min == llegada_min:
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: misma hora "
+                            f"dos veces en '{codigo}'; escribe una sola"
+                        )
+                        fila_valida = False
+                    elif salida_min < llegada_min:
+                        errores.append(
+                            f"{etiqueta_tabla}, fila {fila.numero}: la llegada "
+                            f"debe ser anterior a la salida en '{codigo}' "
+                            f"({llegada_txt}>{salida_txt})"
+                        )
+                        fila_valida = False
+                if horas_validas and llegada_min < horas_validas[-1][1]:
                     errores.append(
                         f"{etiqueta_tabla}, fila {fila.numero}: las horas "
-                        f"retroceden en '{codigo}' ({hhmm})"
+                        f"retroceden en '{codigo}' ({llegada_txt})"
                     )
-                horas_validas.append(minutos)
+                horas_validas.append((llegada_min, salida_min))
 
                 obs_parada: list[str] = []
                 for letra in letras:
@@ -1124,7 +1173,12 @@ def _validar_linea(
                         usa_a_demanda = True
                     obs_parada.append(obs.id)
                 pasos.append(
-                    Paso(parada=codigo, hora=hhmm, observaciones=tuple(obs_parada))
+                    Paso(
+                        parada=codigo,
+                        llegada=llegada_txt,
+                        salida=salida_txt,
+                        observaciones=tuple(obs_parada),
+                    )
                 )
 
             if fila_valida and len(horas_validas) < 2:
@@ -1167,17 +1221,43 @@ def _validar_linea(
                 pendientes_fila.append(tok)
                 avisos.append(f"{etiqueta_tabla}, fila {fila.numero}: pendiente {tok}")
 
-            viajes.append(
-                Viaje(
-                    linea=lid,
-                    temporada=temporada_e,
-                    dias=dias_e,
-                    tabla=tabla_actual,
-                    observaciones=tuple(obs_viaje_ids),
-                    pendientes=tuple(pendientes_fila),
-                    pasos=tuple(pasos),
+            bus_id: str | None = None
+            if len(fila.bus) > 1:
+                errores.append(
+                    f"{etiqueta_tabla}, fila {fila.numero}: más de un 'bus:' en "
+                    f"el mismo viaje ({['bus:' + b for b in fila.bus]})"
                 )
+            for candidato in fila.bus[:1]:
+                if BUS_ID_RE.match(candidato):
+                    bus_id = candidato
+                else:
+                    errores.append(
+                        f"{etiqueta_tabla}, fila {fila.numero}: identificador "
+                        f"de autobús inválido 'bus:{candidato}' (solo minúsculas, "
+                        "cifras y guiones)"
+                    )
+
+            viaje_nuevo = Viaje(
+                linea=lid,
+                temporada=temporada_e,
+                dias=dias_e,
+                tabla=tabla_actual,
+                observaciones=tuple(obs_viaje_ids),
+                pendientes=tuple(pendientes_fila),
+                pasos=tuple(pasos),
+                bus=bus_id,
             )
+            viajes.append(viaje_nuevo)
+            if infos_viaje is not None:
+                infos_viaje.append(
+                    _InfoViaje(
+                        viaje=viaje_nuevo,
+                        ruta=str(path),
+                        etiqueta=f"{etiqueta_tabla}, fila {fila.numero}",
+                        indices=indices_temporada.get(temporada_e, frozenset()),
+                        clases=GRUPOS_DIA[dias_e],
+                    )
+                )
 
         clases_cubiertas.setdefault(temporada_e, set()).update(GRUPOS_DIA[dias_e])
 
@@ -1235,6 +1315,200 @@ def _validar_linea(
     )
 
 
+def _solapan(a: _InfoViaje, b: _InfoViaje) -> bool:
+    """True si los dos viajes pueden circular el mismo día del año: sus
+    temporadas comparten alguna fecha Y sus clases de día comparten alguna."""
+    return not a.indices.isdisjoint(b.indices) and not a.clases.isdisjoint(b.clases)
+
+
+def _texto_hora_paso(paso: Paso) -> str:
+    if paso.llegada == paso.salida:
+        return paso.llegada
+    return f"{paso.llegada}>{paso.salida}"
+
+
+def _horas_distintas_en_comunes(
+    a: Viaje, b: Viaje, codigos: list[str]
+) -> list[tuple[str, Paso, Paso]]:
+    """Paradas comunes de `codigos` (en orden) cuyas horas no cuadran entre los
+    dos viajes: la llegada siempre, y la salida solo si la parada no es la
+    última de ninguno de los dos viajes (un viaje que termina ahí no tiene
+    salida que comparar)."""
+    idx_a = {p.parada: i for i, p in enumerate(a.pasos)}
+    idx_b = {p.parada: i for i, p in enumerate(b.pasos)}
+    distintas: list[tuple[str, Paso, Paso]] = []
+    for codigo in codigos:
+        ia, ib = idx_a[codigo], idx_b[codigo]
+        pa, pb = a.pasos[ia], b.pasos[ib]
+        ultima_alguno = ia == len(a.pasos) - 1 or ib == len(b.pasos) - 1
+        if pa.llegada != pb.llegada or (not ultima_alguno and pa.salida != pb.salida):
+            distintas.append((codigo, pa, pb))
+    return distintas
+
+
+def _validar_buses(
+    infos: list[_InfoViaje],
+    paradas: dict[str, Parada],
+    localidades: dict[str, Localidad],
+    errores: list[str],
+) -> None:
+    """Grupos `bus:<id>` declarados (design.md 2.3): todo lo declarado tiene
+    que cuadrar; si no, error concreto. Solo compara entre sí los miembros que
+    circulan algún mismo día (el mismo `bus:` puede repartirse entre viajes
+    de días distintos, p.ej. Badajoz lunes-jueves y viernes)."""
+    grupos: dict[str, list[_InfoViaje]] = {}
+    for info in infos:
+        if info.viaje.bus is not None:
+            grupos.setdefault(info.viaje.bus, []).append(info)
+
+    def loc_de(codigo: str) -> str | None:
+        parada = paradas.get(codigo)
+        return parada.localidad if parada is not None else None
+
+    for bus_id in sorted(grupos):
+        miembros = grupos[bus_id]
+        if len(miembros) == 1:
+            errores.append(
+                f"bus:{bus_id} aparece en un solo viaje ({miembros[0].etiqueta}); "
+                "¿errata en el identificador?"
+            )
+            continue
+
+        sin_pareja = [
+            m
+            for m in miembros
+            if not any(o is not m and _solapan(m, o) for o in miembros)
+        ]
+        if sin_pareja:
+            errores.append(
+                f"bus:{bus_id}: los viajes no coinciden en ningún día "
+                f"({' / '.join(m.etiqueta for m in sin_pareja)})"
+            )
+
+        vistos: set[str] = set()
+
+        def registrar(mensaje: str) -> None:
+            if mensaje not in vistos:
+                vistos.add(mensaje)
+                errores.append(mensaje)
+
+        for i, a in enumerate(miembros):
+            for b in miembros[i + 1 :]:
+                if not _solapan(a, b):
+                    continue
+                par = f"{a.etiqueta} / {b.etiqueta}"
+                if a.viaje.linea == b.viaje.linea:
+                    registrar(
+                        f"bus:{bus_id}: dos viajes de la misma línea "
+                        f"'{a.viaje.linea}' con días solapados ({par}); "
+                        "¿son dos autobuses?"
+                    )
+                locs_a = {loc_de(p.parada) for p in a.viaje.pasos} - {None}
+                locs_b = {loc_de(p.parada) for p in b.viaje.pasos} - {None}
+                comunes = locs_a & locs_b
+                if len(comunes) < 2:
+                    registrar(
+                        f"bus:{bus_id}: comparten menos de 2 localidades ({par})"
+                    )
+                    continue
+                for loc in sorted(comunes):  # type: ignore[type-var]
+                    seq_a = [p.parada for p in a.viaje.pasos if loc_de(p.parada) == loc]
+                    seq_b = [p.parada for p in b.viaje.pasos if loc_de(p.parada) == loc]
+                    if seq_a != seq_b:
+                        nombre = localidades[loc].nombre if loc in localidades else loc
+                        registrar(
+                            f"bus:{bus_id}: paradas distintas en {nombre} "
+                            f"({'+'.join(seq_a)} / {'+'.join(seq_b)}; {par})"
+                        )
+                codigos_comunes = [
+                    p.parada
+                    for p in a.viaje.pasos
+                    if p.parada in {q.parada for q in b.viaje.pasos}
+                ]
+                for codigo, pa, pb in _horas_distintas_en_comunes(
+                    a.viaje, b.viaje, codigos_comunes
+                ):
+                    registrar(
+                        f"bus:{bus_id}: horas distintas en '{codigo}' "
+                        f"({a.etiqueta}: {_texto_hora_paso(pa)} / "
+                        f"{b.etiqueta}: {_texto_hora_paso(pb)})"
+                    )
+
+
+def _avisos_mismo_bus(
+    infos: list[_InfoViaje],
+    paradas: dict[str, Parada],
+    lineas: dict[str, Linea],
+    avisos: list[str],
+) -> None:
+    """Aviso heurístico (design.md 2.3): pares de viajes de líneas distintas y
+    NO declarados como el mismo `bus:` que parecen el mismo autobús (2 o más
+    localidades comunes en el mismo orden, días solapados y la misma hora en la
+    primera parada común) pero discrepan más adelante. Solo avisa: la fusión
+    del motor sigue siendo por horas idénticas. Un aviso por (línea, línea,
+    primera parada común, parada discrepante), sin repetirlo por temporada."""
+    codigos_de = [frozenset(p.parada for p in i.viaje.pasos) for i in infos]
+
+    def nombre_linea(lid: str) -> str:
+        linea = lineas.get(lid)
+        return linea.nombre if linea is not None else lid
+
+    def nombre_parada(codigo: str) -> str:
+        parada = paradas.get(codigo)
+        return parada.nombre if parada is not None else codigo
+
+    claves: dict[tuple[str, str, str, str], dict[str, list[str]]] = {}
+    cabeceras: dict[tuple[str, str, str, str], str] = {}
+    for i, a in enumerate(infos):
+        for j in range(i + 1, len(infos)):
+            b = infos[j]
+            if a.viaje.linea == b.viaje.linea:
+                continue
+            if a.viaje.bus is not None and a.viaje.bus == b.viaje.bus:
+                continue
+            comunes = codigos_de[i] & codigos_de[j]
+            if len(comunes) < 2 or not _solapan(a, b):
+                continue
+            seq_a = [p.parada for p in a.viaje.pasos if p.parada in comunes]
+            seq_b = [p.parada for p in b.viaje.pasos if p.parada in comunes]
+            if seq_a != seq_b:
+                continue
+            locs = {paradas[c].localidad for c in seq_a if c in paradas}
+            if len(locs) < 2:
+                continue
+            distintas = _horas_distintas_en_comunes(a.viaje, b.viaje, seq_a)
+            if not distintas or distintas[0][0] == seq_a[0]:
+                continue  # todo igual, o ya discrepa en la primera parada común
+            primera = seq_a[0]
+            codigo, pa, pb = distintas[0]
+            clave = (a.viaje.linea, b.viaje.linea, primera, codigo)
+            orden_a = [p.parada for p in a.viaje.pasos]
+            paso_primero = a.viaje.pasos[orden_a.index(primera)]
+            dias = (
+                a.viaje.dias
+                if a.viaje.dias == b.viaje.dias
+                else f"{a.viaje.dias} / {b.viaje.dias}"
+            )
+            detalle = (
+                f"{nombre_parada(primera)} {_texto_hora_paso(paso_primero)} en "
+                f"ambas y {nombre_parada(codigo)} {_texto_hora_paso(pa)} frente a "
+                f"{_texto_hora_paso(pb)}"
+            )
+            cabeceras[clave] = (
+                f"{a.ruta}: posible mismo autobús con horas distintas: "
+                f"'{nombre_linea(a.viaje.linea)}' y '{nombre_linea(b.viaje.linea)}'"
+            )
+            dias_previos = claves.setdefault(clave, {}).setdefault(detalle, [])
+            if dias not in dias_previos:
+                dias_previos.append(dias)
+
+    for clave, detalles in claves.items():
+        texto = "; ".join(
+            f"{detalle} ({', '.join(dias)})" for detalle, dias in detalles.items()
+        )
+        avisos.append(f"{cabeceras[clave]}: {texto} (no se fusionará)")
+
+
 def validar(directorio: Path | str) -> Resultado:
     """Valida `horarios/` al completo y devuelve (modelo, errores, avisos).
 
@@ -1269,6 +1543,7 @@ def validar(directorio: Path | str) -> Resultado:
 
     lineas: dict[str, Linea] = {}
     paradas_usadas: set[str] = set()
+    infos_viaje: list[_InfoViaje] = []
     if lineas_dir.is_dir():
         for path in sorted(lineas_dir.glob("*.yaml")):
             lid = path.stem
@@ -1276,7 +1551,14 @@ def validar(directorio: Path | str) -> Resultado:
             if datos_linea is None:
                 continue
             linea = _validar_linea(
-                lid, datos_linea, path, paradas, observaciones, errores, avisos
+                lid,
+                datos_linea,
+                path,
+                paradas,
+                observaciones,
+                errores,
+                avisos,
+                infos_viaje,
             )
             if linea is not None:
                 lineas[lid] = linea
@@ -1285,6 +1567,9 @@ def validar(directorio: Path | str) -> Resultado:
                         paradas_usadas.add(paso.parada)
     else:
         errores.append(f"{lineas_dir}: no existe el directorio de líneas")
+
+    _validar_buses(infos_viaje, paradas, localidades, errores)
+    _avisos_mismo_bus(infos_viaje, paradas, lineas, avisos)
 
     paradas_sin_usar = sorted(set(paradas.keys()) - paradas_usadas)
     if paradas_sin_usar:

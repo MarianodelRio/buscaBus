@@ -50,7 +50,8 @@ class Temporada:
 @dataclass(frozen=True)
 class Paso:
     parada: str  # código de parada
-    hora: str  # "HH:MM"
+    llegada: str  # "HH:MM"; en una celda simple, igual que `salida`
+    salida: str  # "HH:MM"
     observaciones: tuple[str, ...] = ()  # ids de observaciones de ámbito parada
 
 
@@ -76,6 +77,7 @@ class Viaje:
     observaciones: tuple[str, ...] = ()  # ids de observaciones de ámbito viaje
     pendientes: tuple[str, ...] = ()
     pasos: tuple[Paso, ...] = ()
+    bus: str | None = None  # id de `bus:<id>`: mismo autobús declarado
 
 
 @dataclass(frozen=True)

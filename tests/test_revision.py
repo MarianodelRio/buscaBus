@@ -519,3 +519,65 @@ def test_seccion_calendario_sin_festivos_locales_ni_no_vendibles(tmp_path):
     seccion = html_doc[html_doc.index("<h2>Calendario</h2>") :]
     assert "Días sin servicio en ninguna línea" in seccion
     assert seccion.count("<p>Ninguno.</p>") == 3  # sin servicio, locales, no vendibles
+
+
+# ── Ciclo C1: llegada/salida y "mismo autobús que" ───────────────────────────
+
+
+def _html_cicloc() -> str:
+    resultado = validar_horarios(FIXTURES / "horarios_cicloC")
+    assert resultado.errores == [], resultado.errores
+    return revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
+
+
+def test_celda_con_espera_muestra_llega_y_sale():
+    html_doc = _html_cicloc()
+    assert "<td>llega 11:55 · sale 12:30</td>" in html_doc
+    # una celda simple sigue mostrando solo la hora
+    assert "<td>11:40</td>" in html_doc
+
+
+def test_celda_con_espera_y_letra_pone_la_letra_al_final():
+    resultado = validar_horarios(FIXTURES / "horarios_cicloC")
+    modelo = resultado.modelo
+    paso = modelo.lineas["larga"].viajes[0].pasos[-2]  # PVN 12:50A
+    assert revision._celda_paso(modelo, paso) == "<td>12:50A</td>"
+
+
+def test_mismo_autobus_que_nombra_la_otra_linea_dias_y_sentido():
+    html_doc = _html_cicloc()
+    assert (
+        "mismo autobús que: Peñarroya – Córdoba "
+        "(lunes a viernes, de Córdoba a Peñarroya)" in html_doc
+    )
+    assert (
+        "mismo autobús que: Los Blázquez – Córdoba "
+        "(lunes a viernes, de Córdoba a Los Blázquez)" in html_doc
+    )
+
+
+def test_mismo_autobus_de_la_misma_linea_cita_la_otra_tabla_no_la_propia():
+    html_doc = _html_cicloc()
+    frases = [
+        f.split("</p>")[0] for f in html_doc.split("<p class='mismo-bus'>")[1:]
+    ]
+    assert len(frases) == 5  # larga, corta (2 tablas) y paso (2 tablas)
+    con_corta = [
+        f
+        for f in frases
+        if "Peñarroya – Córdoba (lunes a viernes, de Córdoba a El Porvenir)" in f
+    ]
+    # tabla lunes a jueves de paso: cita corta y la tabla de viernes, no la suya
+    lj = next(f for f in con_corta if "Paso – Córdoba (viernes" in f)
+    assert "Paso – Córdoba (lunes a jueves" not in lj
+    # tabla de viernes de paso: cita corta y la de lunes a jueves, no la suya
+    v = next(f for f in con_corta if "Paso – Córdoba (lunes a jueves" in f)
+    assert "Paso – Córdoba (viernes" not in v
+
+
+def test_sin_bus_no_hay_frase_de_mismo_autobus(tmp_path):
+    html_doc = _construir_html(
+        tmp_path, "paradas_base.yaml", {"adamuz": ADAMUZ_LINEA_YAML}
+    )
+    assert "mismo-bus'>" not in html_doc
+    assert "mismo autobús que" not in html_doc

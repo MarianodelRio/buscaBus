@@ -109,7 +109,7 @@ def _nombre_parada(modelo: Modelo, codigo: str) -> str:
 
 
 def _hora_primer_paso(viaje: Viaje) -> str:
-    return viaje.pasos[0].hora if viaje.pasos else ""
+    return viaje.pasos[0].salida if viaje.pasos else ""
 
 
 def _minutos(hhmm: str) -> int:
@@ -146,19 +146,27 @@ def _agrupar_por_firma(linea: Linea) -> dict[tuple, list[Viaje]]:
 def _clave_viaje(viaje: Viaje) -> tuple:
     """Identidad de un viaje independiente del orden de sus pasos (para
     detectar viajes idénticos aunque la cabecera de su tabla se haya
-    reordenado sin cambiar ningún dato)."""
+    reordenado sin cambiar ningún dato). Incluye llegada, salida y `bus:`."""
     pasos = frozenset(
-        (p.parada, p.hora, frozenset(p.observaciones)) for p in viaje.pasos
+        (p.parada, p.llegada, p.salida, frozenset(p.observaciones))
+        for p in viaje.pasos
     )
-    return (pasos, frozenset(viaje.observaciones), frozenset(viaje.pendientes))
+    return (
+        pasos,
+        frozenset(viaje.observaciones),
+        frozenset(viaje.pendientes),
+        viaje.bus,
+    )
 
 
+# El emparejado usa la salida de cada parada común (design.md 2.3): la hora
+# a la que el autobús sale de ella.
 def _diferencia_primer_paso_comun(viaje_a: Viaje, viaje_b: Viaje) -> int | None:
-    horas_b = {p.parada: p.hora for p in viaje_b.pasos}
+    horas_b = {p.parada: p.salida for p in viaje_b.pasos}
     for paso in viaje_a.pasos:
         hora_b = horas_b.get(paso.parada)
         if hora_b is not None:
-            return abs(_minutos(paso.hora) - _minutos(hora_b))
+            return abs(_minutos(paso.salida) - _minutos(hora_b))
     return None
 
 
@@ -243,7 +251,7 @@ def _extremos_viaje(modelo: Modelo, viaje: Viaje) -> str:
         return ""
     origen = _nombre_parada(modelo, viaje.pasos[0].parada)
     destino = _nombre_parada(modelo, viaje.pasos[-1].parada)
-    hora = viaje.pasos[0].hora
+    hora = viaje.pasos[0].salida
     return f"{hora} de {origen} a {destino}"
 
 
@@ -393,18 +401,24 @@ def _comparar_viaje_pareado(
     for indice, paso_act in enumerate(viaje_act.pasos):
         nombre_parada = _nombre_parada(modelo_actual, paso_act.parada)
         paso_ant = pasos_ant_por_codigo.get(paso_act.parada)
+        prefijo = f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: "
         if paso_ant is None:
-            mensajes.append(
-                f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: ahora "
-                f"para en {nombre_parada} a las {paso_act.hora}."
-            )
+            if paso_act.llegada != paso_act.salida:
+                mensajes.append(
+                    f"{prefijo}ahora para en {nombre_parada}: llega a las "
+                    f"{paso_act.llegada} y sale a las {paso_act.salida}."
+                )
+            else:
+                mensajes.append(
+                    f"{prefijo}ahora para en {nombre_parada} a las "
+                    f"{paso_act.salida}."
+                )
             continue
-        if paso_ant.hora != paso_act.hora:
-            verbo = _VERBO_POR_POSICION[_posicion(indice, total)]
-            mensajes.append(
-                f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: {verbo} "
-                f"{nombre_parada}: de las {paso_ant.hora} a las {paso_act.hora}."
+        mensajes.extend(
+            _comparar_horas_paso(
+                prefijo, nombre_parada, paso_ant, paso_act, indice, total
             )
+        )
         mensajes.extend(
             _comparar_observaciones_paso(
                 nombre_linea, temporada, dias, nombre_parada, paso_ant, paso_act
@@ -424,7 +438,83 @@ def _comparar_viaje_pareado(
             nombre_linea, temporada, dias, viaje_ant, viaje_act
         )
     )
+    mensajes.extend(
+        _comparar_bus(nombre_linea, temporada, dias, viaje_ant, viaje_act)
+    )
     return mensajes
+
+
+def _comparar_horas_paso(
+    prefijo: str,
+    nombre_parada: str,
+    paso_ant: Paso,
+    paso_act: Paso,
+    indice: int,
+    total: int,
+) -> list[str]:
+    """Cambios de hora de una parada en lenguaje de negocio. Con llegada y
+    salida iguales (celda simple) en ambas versiones, el texto de siempre;
+    si alguna versión tiene espera (llegada distinta de salida), se dice cuál
+    de las dos horas cambia."""
+    ant_simple = paso_ant.llegada == paso_ant.salida
+    act_simple = paso_act.llegada == paso_act.salida
+    if ant_simple and act_simple:
+        if paso_ant.salida == paso_act.salida:
+            return []
+        verbo = _VERBO_POR_POSICION[_posicion(indice, total)]
+        return [
+            f"{prefijo}{verbo} {nombre_parada}: de las {paso_ant.salida} a las "
+            f"{paso_act.salida}."
+        ]
+    if ant_simple:
+        return [
+            f"{prefijo}en {nombre_parada}, ahora llega a las {paso_act.llegada} "
+            f"y sale a las {paso_act.salida} (antes {paso_ant.salida})."
+        ]
+    if act_simple:
+        return [
+            f"{prefijo}en {nombre_parada}, ahora llega y sale a las "
+            f"{paso_act.salida} (antes llegaba a las {paso_ant.llegada} y salía "
+            f"a las {paso_ant.salida})."
+        ]
+    mensajes: list[str] = []
+    if paso_ant.llegada != paso_act.llegada:
+        mensajes.append(
+            f"{prefijo}en {nombre_parada}, la llegada pasa de las "
+            f"{paso_ant.llegada} a las {paso_act.llegada}."
+        )
+    if paso_ant.salida != paso_act.salida:
+        mensajes.append(
+            f"{prefijo}en {nombre_parada}, la salida pasa de las "
+            f"{paso_ant.salida} a las {paso_act.salida}."
+        )
+    return mensajes
+
+
+def _comparar_bus(
+    nombre_linea: str,
+    temporada: str,
+    dias: str,
+    viaje_ant: Viaje,
+    viaje_act: Viaje,
+) -> list[str]:
+    prefijo = f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: "
+    if viaje_ant.bus == viaje_act.bus:
+        return []
+    if viaje_ant.bus is None:
+        return [
+            f"{prefijo}ahora se marca como el mismo autobús que otros viajes "
+            f"('{viaje_act.bus}')."
+        ]
+    if viaje_act.bus is None:
+        return [
+            f"{prefijo}ya no se marca como el mismo autobús que otros viajes "
+            f"('{viaje_ant.bus}')."
+        ]
+    return [
+        f"{prefijo}el identificador de autobús pasa de '{viaje_ant.bus}' a "
+        f"'{viaje_act.bus}'."
+    ]
 
 
 def _comparar_observaciones_paso(

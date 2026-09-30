@@ -79,12 +79,18 @@ def _viaje(
     obs_por_paso=None,
     codigos=("AAA", "BBB", "CCC"),
     tabla=None,
+    llegadas=None,
+    bus=None,
 ) -> Viaje:
+    """`llegadas`: {codigo: hora} para las paradas con espera; su hora de
+    `horas` es entonces la salida."""
     obs_por_paso = obs_por_paso or {}
+    llegadas = llegadas or {}
     pasos = tuple(
         Paso(
             parada=codigo,
-            hora=hora,
+            llegada=llegadas.get(codigo, hora),
+            salida=hora,
             observaciones=tuple(obs_por_paso.get(codigo, ())),
         )
         for codigo, hora in zip(codigos, horas)
@@ -99,6 +105,7 @@ def _viaje(
         observaciones=tuple(obs_viaje),
         pendientes=tuple(pendientes),
         pasos=pasos,
+        bus=bus,
     )
 
 
@@ -402,3 +409,106 @@ def test_linea_eliminada():
     actual = _modelo({})
     mensajes = diff.comparar(anterior, actual)
     assert mensajes == ["Línea eliminada: Línea Vieja."]
+
+
+# ── llegada>salida y bus: (ciclo C1) ────────────────────────────────────────
+
+
+def _comparar_un_viaje(v_ant, v_act):
+    anterior = _modelo({"l1": _linea(viajes=(v_ant,))})
+    actual = _modelo({"l1": _linea(viajes=(v_act,))})
+    return diff.comparar(anterior, actual)
+
+
+def test_cambio_de_la_salida_en_una_celda_con_espera():
+    v_ant = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    v_act = _viaje(horas=("08:00", "09:00", "09:30"), llegadas={"BBB": "08:10"})
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: en Pueblo B, la salida pasa de las "
+        "08:45 a las 09:00."
+    ]
+
+
+def test_cambio_de_la_llegada_en_una_celda_con_espera():
+    v_ant = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    v_act = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:20"})
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: en Pueblo B, la llegada pasa de las "
+        "08:10 a las 08:20."
+    ]
+
+
+def test_cambio_de_llegada_y_salida_da_dos_mensajes():
+    v_ant = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    v_act = _viaje(horas=("08:00", "08:50", "09:30"), llegadas={"BBB": "08:15"})
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert len(mensajes) == 2
+    assert any("la llegada pasa de las 08:10 a las 08:15" in m for m in mensajes)
+    assert any("la salida pasa de las 08:45 a las 08:50" in m for m in mensajes)
+
+
+def test_celda_simple_que_pasa_a_llegada_y_salida():
+    v_ant = _viaje(horas=("08:00", "08:10", "09:30"))
+    v_act = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: en Pueblo B, ahora llega a las 08:10 "
+        "y sale a las 08:45 (antes 08:10)."
+    ]
+
+
+def test_llegada_y_salida_que_pasan_a_celda_simple():
+    v_ant = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    v_act = _viaje(horas=("08:00", "08:10", "09:30"))
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert len(mensajes) == 1
+    assert "en Pueblo B, ahora llega y sale a las 08:10" in mensajes[0]
+
+
+def test_parada_nueva_con_espera_se_describe_con_las_dos_horas():
+    v_ant = _viaje(horas=("08:00", "09:30"), codigos=("AAA", "CCC"))
+    v_act = _viaje(
+        horas=("08:00", "08:45", "09:30"),
+        llegadas={"BBB": "08:10"},
+        tabla=_tabla(codigos=("AAA", "CCC")),
+    )
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert any(
+        "ahora para en Pueblo B: llega a las 08:10 y sale a las 08:45" in m
+        for m in mensajes
+    )
+
+
+def test_emparejado_de_viajes_usa_la_salida():
+    # La llegada cambia mucho pero la salida (>30 min) no: sigue siendo el
+    # mismo viaje y se describe como un cambio de llegada, no alta+baja.
+    v_ant = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:10"})
+    v_act = _viaje(horas=("08:00", "08:45", "09:30"), llegadas={"BBB": "08:40"})
+    mensajes = _comparar_un_viaje(v_ant, v_act)
+    assert not any("añadido" in m or "quitado" in m for m in mensajes)
+
+
+def test_alta_de_bus():
+    mensajes = _comparar_un_viaje(_viaje(), _viaje(bus="cor-1030"))
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: ahora se marca como el mismo autobús "
+        "que otros viajes ('cor-1030')."
+    ]
+
+
+def test_baja_de_bus():
+    mensajes = _comparar_un_viaje(_viaje(bus="cor-1030"), _viaje())
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: ya no se marca como el mismo autobús "
+        "que otros viajes ('cor-1030')."
+    ]
+
+
+def test_cambio_de_bus():
+    mensajes = _comparar_un_viaje(_viaje(bus="a-1"), _viaje(bus="b-2"))
+    assert mensajes == [
+        "Línea 1, anual, lunes a viernes: el identificador de autobús pasa de "
+        "'a-1' a 'b-2'."
+    ]

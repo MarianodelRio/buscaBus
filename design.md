@@ -194,8 +194,9 @@ a_demanda:
   ambitos: [parada]              # parada | viaje | linea
   texto: "A demanda: llama al {telefono} con 24 horas laborables de antelación."
 hora_aproximada:
+  letra: A                       # libre: también se usa en la celda (ámbito parada)
   tipo: aviso
-  ambitos: [linea]
+  ambitos: [linea, parada]
   texto: "Horarios de paso aproximados."
 ```
 
@@ -203,9 +204,13 @@ hora_aproximada:
   que el motor conoce (`a_demanda`, `solo_viernes_lectivo`,
   `solo_si_viajeros_desde_cordoba`); el validador rechaza una condición que el
   código no sepa aplicar.
-- **Aviso**: solo informa (`entra_en_pueblo`, `pasa_por_rivero`,
-  `para_en_los_mochos`, `no_para_en_el_pedrera`, `solo_virgen_remedios`,
-  `hora_aproximada`...). Se pueden añadir libremente.
+- **Aviso**: solo informa (`pasa_por_rivero`, `para_en_los_mochos`,
+  `no_para_en_el_pedrera`, `solo_virgen_remedios`, `hora_aproximada`...). Se
+  pueden añadir libremente. `entra_en_pueblo` ya no existe: en Villanueva del
+  Rey "entrar en el pueblo" es **otra parada** (P20, `VRE` frente a `VRC`), no
+  una nota. `hora_aproximada` lleva la letra `A` y sirve como aviso de línea o
+  de parada; con la letra en una celda, la nota solo sale cuando esa parada es
+  el origen o el destino de la consulta.
 - **El texto al cliente vive aquí**, no en `messages.py`, para que negocio lo
   valide en la vista de revisión. `messages.py` solo le da formato.
 - **El único marcador admitido en `texto` es `{telefono}`**, sustituido por el
@@ -256,6 +261,20 @@ Reglas del formato:
 - **Hora**: `HH:MM` seguida opcionalmente de letras de observación de ámbito
   parada (`06:25D`, `16:35DP`). Cada viaje tiene al menos 2 horas y **las horas
   no retroceden** (no se admite cruzar la medianoche; no hay ningún caso).
+- **Llegada y salida distintas** (P21): `HH:MM>HH:MM[LETRAS]`, p. ej.
+  `11:55>12:30P`. Es la llegada y luego la salida de la misma parada, y solo
+  vale en una parada **intermedia** (ni en la primera ni en la última celda con
+  hora del viaje). Con la llegada igual que la salida se escribe una sola hora;
+  la salida no puede ser anterior a la llegada. "Las horas no retroceden"
+  compara la salida de una parada con la llegada de la siguiente, y la llegada
+  con la salida de la misma parada. Se usa `>` y no `/` (que se leería "una u
+  otra") ni `-` (que significa "no para").
+- **Mismo autobús** (`bus:<id>`, T-1/D-o): un token tras el `|`, con el id en
+  minúsculas, cifras y guiones (`| bus:cor-1030`). Todos los viajes que llevan
+  el mismo id son **un único autobús físico** que negocio o el Excel han
+  confirmado; se declara solo donde hay esa confirmación, nunca por parecido.
+  El validador exige que lo declarado cuadre (ver Comprobaciones). Puede ir
+  junto a observaciones de viaje y `Pnn`: `| bus:cor-1030 pasa_por_rivero P21`.
 - **Observaciones de viaje y pendientes** tras `|` al final de la fila:
   `06:15 06:35 06:50 07:30 | pasa_por_rivero P21`. Los tokens `Pnn` son
   referencias a preguntas abiertas.
@@ -266,8 +285,10 @@ Reglas del formato:
   **exactamente una vez**, con uno de tres estados:
   - `horario`: hay al menos una tabla que la cubre.
   - `sin_servicio`: el horario dice expresamente que no hay autobús.
-  - `sin_datos`: no lo sabemos (por ejemplo, Peñarroya en verano, P01). **El
-    bot nunca lo trata como "sin servicio"** (4.8).
+  - `sin_datos`: no lo sabemos (por ejemplo, el horario de una temporada que
+    negocio aún no ha enviado). **El bot nunca lo trata como "sin servicio"**
+    (4.8). Peñarroya y Los Blázquez ya no son un ejemplo: P01 se respondió "el
+    mismo que en invierno, vale todo el año", así que son anuales.
 - Una tabla puede usar una clave más amplia que las de `dias` (la vuelta de
   Badajoz es `lunes-viernes` aunque `dias` declare `lunes-jueves` y `viernes`),
   siempre que todas sus clases tengan estado `horario`.
@@ -279,12 +300,19 @@ Reglas del formato:
 
 | Error: detiene la validación | Aviso: sale en el informe |
 |---|---|
-| YAML mal formado, campo desconocido u obligatorio ausente | El mismo autobús en dos líneas (se fusiona al consultar) |
-| Código de parada, letra u observación sin definir | Tramo con un tiempo anómalo frente al resto de viajes de ese tramo |
-| Observación usada en un ámbito no permitido | Clases de día en `sin_datos` |
-| Condición que el motor no sabe aplicar | Pendientes abiertos, con su número |
-| Fila con un número de valores distinto al de paradas | Paradas o localidades definidas que ninguna línea usa |
-| Horas que retroceden o viaje con menos de 2 horas | |
+| YAML mal formado, campo desconocido u obligatorio ausente | Posible mismo autobús con horas distintas, entre pares **no declarados** (heurística, ver abajo; no se fusionará) |
+| Código de parada, letra u observación sin definir | Clases de día en `sin_datos` |
+| Observación usada en un ámbito no permitido | Pendientes abiertos, con su número |
+| Condición que el motor no sabe aplicar | Paradas o localidades definidas que ninguna línea usa |
+| Fila con un número de valores distinto al de paradas | |
+| Horas que retroceden (salida anterior frente a llegada siguiente, o llegada frente a la salida de la misma parada) o viaje con menos de 2 horas | |
+| `>` en la primera o la última celda con hora; salida anterior a la llegada; la misma hora dos veces (`11:55>11:55`) | |
+| `bus:` con identificador mal formado o más de un `bus:` en la misma fila | |
+| `bus:X` en un solo viaje (errata en el id) | |
+| `bus:X`: un viaje sin ningún día en común con el resto del grupo, o dos viajes de la **misma línea** con días solapados | |
+| `bus:X`: viajes que comparten menos de 2 localidades | |
+| `bus:X`: horas distintas en una parada común (la llegada siempre; la salida solo si la parada no es la última de ninguno de los dos viajes) | |
+| `bus:X`: paradas distintas dentro de una misma localidad (p. ej. `VRE` frente a `VRC`) | |
 | Temporadas que se solapan o dejan días sin cubrir | |
 | Clase de día sin declarar, declarada dos veces, o `horario` sin tabla | |
 | `a_demanda` usada sin `telefono_demanda` en la línea | |
@@ -296,6 +324,19 @@ Reglas del formato:
 | `no_vendibles`: localidad sin definir, misma localidad dos veces o par repetido (también invertido) | `no_vendibles`: par que ninguna línea conecta |
 | `calendario.yaml`, `sin_servicio_todas_las_lineas`: fecha `DD/MM` inválida (`31/02`), repetida o lista mal formada | `festivos_locales`: localidad que ninguna línea usa |
 | `calendario.yaml`, `festivos_locales`: localidad sin definir, fecha fuera de `vigencia`, repetida en la localidad o ya presente en `festivos` | |
+
+**Mismo autobús, heurística (solo aviso).** Para cada par de viajes de líneas
+distintas que no declaran el mismo `bus:` se avisa si comparten 2 o más
+localidades en el mismo orden, sus días se solapan (temporadas incluidas), llevan
+la misma hora en la primera parada común y alguna otra parada común discrepa.
+El aviso es «posible mismo autobús con horas distintas: … (no se fusionará)»,
+una vez por par de líneas y parada discrepante. Los pares declarados con el
+mismo `bus:` no se avisan (si discrepan es error). La fusión del motor sigue
+siendo por horas idénticas; el aviso solo señala un posible descuido al editar
+a mano. **"Tramo con tiempo anómalo" se descartó** (T-1): P22 era un error de
+datos ya corregido, P23 y P25 son anomalías confirmadas por negocio y la
+espera de P21 también saltaría, así que serían falsos avisos permanentes; esa
+comprobación la hace la revisión del PDF.
 
 El parser y el validador son **un único módulo** (`app/services/horarios/formato.py`)
 que usan `make validar`, los tests y el loader al arrancar el bot.
@@ -430,8 +471,8 @@ El loader convierte `horarios/` en objetos inmutables:
 | `Linea` | Id, nombre, teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
 | `Temporada` | Nombre y rangos día/mes |
 | `Tabla` | Línea, temporada, clave de días y **la lista ordenada de paradas de su cabecera**. Conserva el sentido y el orden de columnas tal como se escribieron; la vista de revisión pinta una tabla por `Tabla`, nunca mezcla tablas |
-| `Viaje` | La tabla a la que pertenece (y, por ella, línea, temporada y días), observaciones de viaje, pendientes y la lista ordenada de pasos |
-| `Paso` | Parada, hora y observaciones de parada |
+| `Viaje` | La tabla a la que pertenece (y, por ella, línea, temporada y días), observaciones de viaje, pendientes, la lista ordenada de pasos y `bus` (id del mismo autobús declarado, o `None`) |
+| `Paso` | Parada, `llegada`, `salida` y observaciones de parada. En una celda simple `llegada == salida`; con `HH:MM>HH:MM` son distintas (P21). No hay campo `hora` |
 
 Puntos clave:
 
@@ -452,7 +493,10 @@ Puntos clave:
 
 Entrada: `(localidad_origen, localidad_destino, fecha)`.
 Salida: lista ordenada de salidas, cada una con hora de salida, hora de
-llegada, duración, parada concreta y notas.
+llegada, duración, parada concreta y notas. La hora de salida es la **salida**
+del `Paso` del origen y la de llegada es la **llegada** del `Paso` del destino
+(P21: Córdoba→Peñarroya 10:30→11:55, Peñarroya→Los Blázquez 12:30→13:20 y
+Córdoba→Los Blázquez una sola salida 10:30→13:20).
 
 Pasos:
 
@@ -472,8 +516,12 @@ Pasos:
    adelante en su orden de paradas*, en una del destino. El orden es lo que
    determina el sentido; no hace falta una columna de sentido para esto.
 4. **Fusionar el mismo autobús**: si dos viajes de líneas distintas tienen la
-   misma hora de salida y de llegada para el par consultado, se muestran una
-   sola vez (decisión D-o).
+   misma hora de salida y de llegada (y las mismas paradas de origen y destino)
+   para el par consultado, se muestran una sola vez, con las líneas y las notas
+   de ambos (decisión D-o). La fusión es siempre por horas idénticas del par
+   consultado; `bus:` no la cambia, porque el validador ya garantiza que lo
+   declarado es idéntico. Las salidas pasadas de hoy (paso 6) se deciden con la
+   **salida** del origen.
 5. **Ordenar por hora de salida** y anotar las condiciones que aplican.
 6. **Si la fecha es hoy**, marcar o retirar las salidas ya pasadas.
 7. **Si alguna línea implicada tiene `sin_datos` para ese día**, el resultado
@@ -1093,8 +1141,17 @@ Santa Eufemia – Villaralto, Cardeña, Estación AVE Vva de Córdoba). El bot p
 a 12 líneas; el cuadre con el Excel es del 100 % en las hojas nuevas y la
 única discrepancia sigue siendo POZOB VER, fila 48.
 **Faltan 3 líneas (fase 1b-2 / ciclo C):** Posadas/Hornachuelos (P15, P32,
-P16), Peñarroya (P20, P21, P33 y el `sin_datos` de verano, P01) y Los
-Blázquez (P21, P27, D-e). Dependen de preguntas abiertas de negocio y de T-1
+P16), Peñarroya (P20, P21, P33) y Los
+Blázquez (P21, D-e). P01 se respondió: ambas son anuales (P27 deja de
+importar).
+
+**Ciclo C1 (`docs/rds_cicloC_extensiones_modelo.md`):** hecho el modelo de
+horas (`Paso.llegada`/`salida`, celda `HH:MM>HH:MM`), el mismo autobús
+declarado (`bus:<id>`, errores y aviso heurístico; T-1 cerrado) y el ajuste de
+`observaciones.yaml` (sin `entra_en_pueblo`). Ninguna línea real usa todavía
+`>` ni `bus:`: es la fase 1b-2. Quedan C2 (localidades pendientes, P15/P32) y
+C3 (pueblos por línea en lugar de zonas, P18); la fixture
+`tests/fixtures/horarios_cicloC/` se migrará en C3. Dependen de preguntas abiertas de negocio y de T-1
 (mismo autobús en dos líneas) y de las zonas por línea (P18).
 
 ### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27

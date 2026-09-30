@@ -1,0 +1,28 @@
+# tests/fixtures/horarios_cicloC/paradas.yaml — paradas sintéticas del ciclo C1
+# (mismo autobús en varias líneas, llegada>salida). Esquema ACTUAL (con
+# zonas): el ciclo C3 (P18) debe migrar esta fixture a `nombre_corto` sin
+# zonas.
+
+zonas:
+  zona-test: Zona de prueba
+
+localidades:
+  cordoba: { nombre: Córdoba, zona: zona-test }
+  el-vacar: { nombre: El Vacar, zona: zona-test }
+  espiel: { nombre: Espiel, zona: zona-test }
+  villanueva-del-rey: { nombre: Villanueva del Rey, zona: zona-test }
+  belmez: { nombre: Belmez, zona: zona-test }
+  penarroya: { nombre: Peñarroya, zona: zona-test }
+  el-porvenir: { nombre: El Porvenir, zona: zona-test }
+  los-blazquez: { nombre: Los Blázquez, zona: zona-test }
+
+paradas:
+  COR: { nombre: Córdoba, localidad: cordoba }
+  VAC: { nombre: El Vacar, localidad: el-vacar }
+  ESP: { nombre: Espiel, localidad: espiel }
+  VRE: { nombre: Villanueva del Rey (pueblo), localidad: villanueva-del-rey }
+  VRC: { nombre: Villanueva del Rey (cruce), localidad: villanueva-del-rey }
+  BEL: { nombre: Belmez, localidad: belmez }
+  PNR: { nombre: Peñarroya, localidad: penarroya }
+  PVN: { nombre: El Porvenir, localidad: el-porvenir }
+  BLQ: { nombre: Los Blázquez, localidad: los-blazquez }
