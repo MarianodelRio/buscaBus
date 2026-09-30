@@ -163,6 +163,8 @@ paradas:                           # lo que muestra el resultado
   PZH: { nombre: Pozoblanco (Hospital), localidad: pozoblanco }
 pendientes: [P18]                  # preguntas abiertas que no son de una línea
                                     # concreta (zonas, localidades, paradas)
+no_vendibles:                      # P12b: pares de localidades sin venta de
+  - [cordoba, alcolea]              # billetes, en ninguno de los dos sentidos
 ```
 
 - **`pendientes:`** (opcional, lista): preguntas abiertas (`P\d{2}`, igual que
@@ -170,6 +172,13 @@ pendientes: [P18]                  # preguntas abiertas que no son de una línea
   línea concreta. Un pendiente mal formado detiene la validación, igual que
   en `lineas/*.yaml`.
 
+- **`no_vendibles:`** (opcional, lista de pares `[localidad, localidad]`):
+  trayectos que la empresa no puede vender, en ambos sentidos (P12b:
+  Córdoba-Campus de Rabanales, Córdoba-Alcolea, Campus de Rabanales-Alcolea).
+  Localidad sin definir, la misma localidad dos veces o un par repetido
+  (también invertido: `[a, b]` y `[b, a]` son el mismo) son errores. Un par
+  que ninguna línea conecta es un aviso. El motor lo trata como un estado
+  propio (`no_vendible`, sección 3), no como "sin trayecto".
 - **Códigos de parada de 3 caracteres** (mayúsculas ASCII, únicos,
   mnemotécnicos: `COR`, `CVH`, `POZ`, `PZH`, `VFC`, `VFB`). Mantienen las
   tablas estrechas; la vista de negocio muestra siempre el nombre completo.
@@ -284,6 +293,9 @@ Reglas del formato:
 | Pendiente mal formado en `pendientes:` de `paradas.yaml` | Ambigüedades declaradas: un alias que comparten varias localidades o que coincide con el nombre de otra (`villafranca`) |
 | Alias que no es texto, que queda vacío al normalizar o repetido en la misma localidad | |
 | Dos localidades cuyo nombre normalizado coincide (ambigüedad no declarada) | |
+| `no_vendibles`: localidad sin definir, misma localidad dos veces o par repetido (también invertido) | `no_vendibles`: par que ninguna línea conecta |
+| `calendario.yaml`, `sin_servicio_todas_las_lineas`: fecha `DD/MM` inválida (`31/02`), repetida o lista mal formada | `festivos_locales`: localidad que ninguna línea usa |
+| `calendario.yaml`, `festivos_locales`: localidad sin definir, fecha fuera de `vigencia`, repetida en la localidad o ya presente en `festivos` | |
 
 El parser y el validador son **un único módulo** (`app/services/horarios/formato.py`)
 que usan `make validar`, los tests y el loader al arrancar el bot.
@@ -342,7 +354,14 @@ curso:
     - 22/03/2027 - 28/03/2027       # Semana Santa
   no_lectivos: [26/02/2027]
 
-pendientes: [P03, P04]
+sin_servicio_todas_las_lineas: [25/12, 01/01]   # DD/MM, todos los años (P03g)
+
+festivos_locales:                  # por localidad, no por municipio suelto (P03e)
+  cordoba:
+    08/09/2026: Virgen de la Fuensanta
+    24/10/2026: San Rafael
+
+pendientes: [P28]
 ```
 
 - Validado por `formato.py`, como el resto de `horarios/`: campo desconocido
@@ -350,6 +369,22 @@ pendientes: [P03, P04]
   tramo de `vacaciones`), festivo duplicado, festivo o fecha de `curso` fuera
   de `vigencia`, `inicio_clases` posterior a `fin_clases` y pendiente mal
   formado son todos errores concretos, nunca avisos.
+- **`sin_servicio_todas_las_lineas`** (opcional, lista `DD/MM`, sin año: vale
+  para todos los años; 29/02 admitido, 31/02 no). Son días sin servicio en
+  ninguna línea (P03g: 25/12 y 01/01). Ambas fechas siguen en `festivos:`
+  para conservar el nombre del festivo. Fecha inválida, repetida, lista mal
+  formada o campo desconocido son errores.
+- **`festivos_locales`** (opcional, mapa `localidad -> {DD/MM/AAAA: nombre}`;
+  P03e). Una línea aplica los festivos locales de una localidad si alguno de
+  sus viajes tiene una parada en ella (se deduce de las paradas, no se
+  declara: `loader.calcular_festivos_por_linea`). Errores: localidad sin
+  definir, fecha fuera de `vigencia`, fecha repetida en la localidad o ya
+  presente en `festivos`. Aviso: localidad que ninguna línea usa. El festivo
+  local solo cambia la clase de día de **esa línea** (`festivos`);
+  `InfoDia` y `es_lectivo` no cambian (P04). Córdoba 2026: Resolución de
+  6/10/2025 de la Dirección General de Trabajo, Seguridad y Salud Laboral
+  (BOJA n.º 197, 14/10/2025). Los de 2027 quedan pendientes de la resolución
+  de 2027 y caerían después de `vigencia_fin`.
 - **Un festivo siempre gana sobre el día de la semana** (decisión 1): un
   festivo en sábado usa la clase de día `festivos`, no `sabado`.
 - `calendario.py` (fase 2) es lógica pura sobre este objeto ya validado: no
@@ -373,11 +408,14 @@ pendientes: [P03, P04]
 | # | Decisión | Pendiente |
 |---|---|---|
 | 1 | Un festivo siempre determina la clase de día (`festivos`), sea cual sea el día de la semana en que caiga. | — |
-| 1b | Los festivos locales por municipio no se cargan en la v1: solo festivos autonómicos (BOJA). | P03 |
-| 1c | No hay festivos declarados más allá de los decretos 2026-2027 conocidos; un año adicional se añadirá cuando salga el decreto correspondiente. | P03 |
+| 1b | Los festivos locales se declaran por localidad en `festivos_locales` (hoy, Córdoba 2026) y cada línea aplica los de las localidades por las que pasa, como clase de día `festivos` solo para esa línea (P03e, ciclo B). | — |
+| 1c | Los festivos locales de 2027 esperan a la resolución de 2027, que caerían después de `vigencia_fin` (31/08/2027); se añadirán al ampliar la vigencia con el curso 2027-28. | — |
 | 2 | El periodo lectivo usa el calendario escolar de Córdoba 2026-27 tal como está publicado, sin margen de confirmación de negocio sobre las fechas exactas. | P04 |
 | 3 | Los días sueltos no lectivos (p.ej. 26/02/2027) se declaran en `no_lectivos`, no como una `vacacion` de un solo día. | P04 |
 | 4 | Si una línea tiene `sin_datos` para una fecha pero otra línea sí cubre ese mismo par con `horario`, el resultado muestra las salidas de la que sí sabe, más el aviso de que otra línea no tiene datos ese día. Si solo la línea `sin_datos` cubre el par, el resultado es `sin_datos`, nunca `sin_servicio`. | — |
+| 5 | Los días sin servicio en ninguna línea (25/12 y 01/01) se declaran en `DD/MM`, fuera de `festivos`, y tienen prioridad sobre `sin_datos` y sobre la vigencia: son un hecho conocido aunque el calendario no llegue a esa fecha. Orden: `no_vendible` → `sin_trayecto` → sin servicio general → vigencia (`sin_datos`) → líneas. | P03g; abierto P28 |
+| 6 | Los festivos locales se agrupan por localidad y la línea afectada se deduce de sus paradas (una línea que pasa por Córdoba aplica los de Córdoba), no se listan por línea. | P03e |
+| 7 | `no_vendible` es un estado propio del motor, con un único filtro (`query.es_no_vendible`) que usan `consultar` y `destinos_desde`; la conversación nunca lo trata como `sin_trayecto`. | P12b |
 
 ### 2.4 Modelo de datos en memoria
 
@@ -418,9 +456,16 @@ llegada, duración, parada concreta y notas.
 
 Pasos:
 
+0. **Casos previos, en este orden:** el par es **no vendible** (P12b, 2.3) →
+   `no_vendible`, sin salidas ni "siguiente día"; ninguna línea conecta el
+   par → `sin_trayecto`; la fecha es un día **sin servicio en ninguna línea**
+   (P03g) → `sin_servicio` (con `sin_servicio_general`), aunque caiga fuera de
+   la vigencia; la fecha está fuera de la vigencia → `sin_datos`.
 1. **Resolver el calendario de esa fecha:** temporada vigente **para esa línea**
-   (cada línea tiene sus fechas), tipo de día (laborable / sábado / domingo y
-   festivos) y banderas (`es_festivo`, `es_lectivo`, `mes`).
+   (cada línea tiene sus fechas), tipo de día **de esa línea** (laborable /
+   sábado / domingo y festivos; un festivo local vuelve `festivos` la clase
+   solo de las líneas que lo aplican, P03e) y banderas (`es_festivo`,
+   `es_lectivo`, `mes`).
 2. **Filtrar servicios** cuya línea, temporada y tipo de día encajen, y cuyas
    condiciones se cumplan (descartar Cardeña-Pozoblanco en agosto, etc.).
 3. **Buscar el par:** el servicio debe parar en una parada del origen y, *más
@@ -441,8 +486,13 @@ costaba una consulta a Google Calendar en Peluquería.
 
 - **Festivos:** BOJA — [Decreto 101/2025](https://www.juntadeandalucia.es/organismos/empleoempresaytrabajoautonomo/areas/relaciones-laborales/calendario-fiestas.html)
   para 2026 y [Decreto 84/2026](https://www.juntadeandalucia.es/boja/2026/84/1.html)
-  para 2027, más 2 festivos locales por municipio. Se cargan a mano en
-  `horarios/calendario.yaml`, una vez al año. Ver duda D3 y P03.
+  para 2027, más los festivos locales de las localidades que declara
+  `festivos_locales` (hoy, los de Córdoba: 08/09 y 24/10/2026), que aplica
+  cada línea que pasa por esa localidad. Se cargan a mano en
+  `horarios/calendario.yaml`, una vez al año. El 25/12 y el 01/01 no hay
+  servicio en ninguna línea (P03g). Los días con horario especial
+  (Nochebuena, Nochevieja, Semana Santa, feria) siguen abiertos (P28): hoy no
+  hay ningún día especial. Ver duda D3, P03 y P28.
 - **Periodo escolar:** calendario escolar de Córdoba 2026-27 — curso del
   10/09/2026 al 22/06/2027, vacaciones de Navidad del 23/12/2026 al
   07/01/2027, Semana Santa del 22 al 28/03/2027, y el 26/02/2027 como día no
@@ -538,6 +588,11 @@ Ya se conoce el origen, así que **solo se ofrecen destinos que existen**.
   ↩️ Cambiar origen
 ```
 
+- **Los destinos no vendibles no se ofrecen** (P12b): `destinos_desde` los
+  filtra (Córdoba no ofrece Alcolea ni Campus de Rabanales, y viceversa). Si
+  el usuario escribe uno, el bot dice "Entre {origen} y {destino} no vendemos
+  billetes, en ninguno de los dos sentidos. Puedes elegir otro destino." y
+  no el "No hay trayecto directo" de un par sin línea; sin recomendaciones.
 - Córdoba siempre primero (la alcanzan 53 de 63 paradas).
 - **Para los 31 orígenes con ≤9 destinos la lista es completa**: no hace falta
   la fila de escribir, y lo que no está, no existe. Cero ambigüedad.
@@ -565,7 +620,8 @@ servicio, y calcularlo es gratis porque los datos están en memoria.
 
 8 filas (`app/handlers/flujo.py`, `_descripcion_dia`, corregido en la
 revisión del 2026-09-27 — `docs/rds_fase4_correcciones.md`). Reglas, en este
-orden, con el prefijo `festivo · ` cuando `info_dia.es_festivo`:
+orden, con el prefijo `festivo · ` cuando `info_dia.es_festivo` o el día es
+festivo local para alguna línea del par (`festivo_local`):
 
 | Consulta | Descripción |
 |---|---|
@@ -574,7 +630,7 @@ orden, con el prefijo `festivo · ` cuando `info_dia.es_festivo`:
 | `con_salidas`, otro día, N ≥ 2 | `N salidas · de HH:MM a HH:MM` |
 | `con_salidas`, otro día, N = 1 | `1 salida · HH:MM` (singular) |
 | cualquiera de las anteriores, si alguna línea de ese par no tiene datos ese día (`lineas_sin_datos`) | + ` · puede haber más` |
-| `sin_servicio` | `sin servicio` |
+| `sin_servicio` (también el día sin servicio en ninguna línea, P03g) | `sin servicio` |
 | `sin_datos` | `horario no disponible` (nunca "sin servicio": son estados distintos, 2.3 y 4.8) |
 
 Un día sin servicio (en una línea como Ochavillos, sábado y domingo saldrían
@@ -661,6 +717,19 @@ no se listan ni participan en la numeración; su recuento sale en
 la última salida completa que entre y se añade
 "…y N salidas más, llama al <teléfono>".
 
+**Cabecera de día especial.** Un festivo general sale `festivo (Navidad)`; un
+festivo local sale `festivo en Córdoba (Virgen de la Fuensanta)`; si coinciden
+gana el general. En el 25/12 y el 01/01 el resultado dice "El 25/12 no hay
+servicio en ninguna línea", añade el siguiente día con salidas si se puede
+calcular, y da el teléfono con el horario de oficina; si el día cae fuera de
+la vigencia y no hay siguiente, da solo el hecho y el teléfono, nunca "no hay
+salidas en los próximos días". El horario de oficina se muestra **por días**
+(`config.yaml`, `negocio.horario_oficina`, P19c), por ejemplo "lunes a
+miércoles laborables de 08:00 a 15:00 y de 17:00 a 19:00; jueves y viernes
+laborables de 08:00 a 15:00": solo para mostrar, el bot nunca calcula si la
+oficina está abierta. Un par no vendible da el mensaje de 4.4, con un único
+botón `Otra consulta` si llegara a mostrarse como resultado.
+
 Los tres botones cubren lo que de verdad se repite: mismo trayecto otro día,
 el viaje de vuelta, y empezar de cero. `Otra consulta` va directo al paso de
 origen, sin pasar por el menú.
@@ -739,6 +808,8 @@ alfabético y solo las que alguna línea usa. Zonas pendientes de negocio (P18).
 | Caso | Respuesta |
 |---|---|
 | Día sin servicio | Dice cuál es el siguiente día con servicio y lo ofrece en un botón |
+| 25/12 y 01/01 (sin servicio en ninguna línea, P03g) | "El 25/12 no hay servicio en ninguna línea" + teléfono con horario de oficina, y el siguiente día con salidas si existe |
+| Trayecto no vendible (P12b) | "Entre X y Y no vendemos billetes, en ninguno de los dos sentidos. Puedes elegir otro destino." Nunca se ofrece como destino |
 | Día sin datos (`sin_datos`) | Dice que no tiene ese horario y da el teléfono con horario de oficina. **Nunca lo presenta como "no hay servicio"** |
 | Sin trayecto directo | Lo dice, enseña los destinos que sí existen desde ese origen y da el teléfono con horario de oficina. **No inventa trasbordos** |
 | Origen = destino | "Elige un destino distinto" |
@@ -1203,7 +1274,9 @@ longitud depende del origen elegido.
 - **D3.** Festivos: ¿solo los nacionales y andaluces, o también los locales de
   cada municipio? Si un festivo cae en sábado, ¿se aplica el horario de sábado
   o el de "domingos y festivos"? ¿Hay servicios especiales en Nochebuena,
-  Semana Santa o feria?
+  Semana Santa o feria? *(Nota, ciclo B: negocio ha respondido P03 (festivos
+  locales, 25/12 y 01/01 sin servicio) y está implementado, ver 2.3; los días
+  con horario especial siguen abiertos como P28.)*
 - **D4.** Temporadas: fechas exactas de inicio y fin por línea, incluidos los
   arranques del 01/09 y del 15/09 y el "fin de verano" sin fecha. ¿Y después
   del verano de 2027?
@@ -1219,10 +1292,13 @@ longitud depende del origen elegido.
   un Abono Único. ¿Cambian en festivos? ¿Hay ida y vuelta?
 - **D9.** ¿Confirmamos que el operador es Autocares San Sebastián y que hay
   encargo suyo? El diseño asume su teléfono, su horario de oficina y sus
-  enlaces.
+  enlaces. *(Nota, ciclo B: el horario de oficina ya está cargado por días en
+  `config.yaml` (P19c); el operador y los enlaces siguen sin confirmar.)*
 - **D10.** ¿Qué enlaces van en "Información"? Propuesta: teléfono, horario de
   oficina (L-V 9:00-14:00 y 17:00-19:30), compra online, bonos y PDF de
-  horarios.
+  horarios. *(Nota, ciclo B: el horario de oficina propuesto queda
+  sustituido por el de P19c, por días, en `config.yaml`; los enlaces siguen
+  abiertos.)*
 - **D11.** ¿Solo español? El diseño lo asume.
 
 ### Técnicas

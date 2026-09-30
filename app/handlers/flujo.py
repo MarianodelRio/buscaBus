@@ -198,10 +198,11 @@ def _elegir(identifier: str, state, campo: str, localidad_id: str) -> None:
     if localidad_id not in alcanzables:
         origen_nombre = _nombre_localidad(datos, state.origen)
         destino_nombre = _nombre_localidad(datos, localidad_id)
-        _mostrar_paso(
-            identifier, state, "destino",
-            aviso=msg.msg_sin_trayecto(origen_nombre, destino_nombre),
-        )
+        if query.es_no_vendible(datos.horarios, state.origen, localidad_id):
+            aviso = msg.msg_no_vendible(origen_nombre, destino_nombre)
+        else:
+            aviso = msg.msg_sin_trayecto(origen_nombre, destino_nombre)
+        _mostrar_paso(identifier, state, "destino", aviso=aviso)
         return
     state.destino = localidad_id
     state.campo = None
@@ -276,7 +277,9 @@ def _titulo_dia(fecha: date, indice: int) -> str:
 
 def _descripcion_dia(consulta, es_hoy: bool) -> str:
     """Descripción de una fila de la lista de días (design.md, 4.5)."""
-    es_festivo = consulta.info_dia is not None and consulta.info_dia.es_festivo
+    es_festivo = (
+        consulta.info_dia is not None and consulta.info_dia.es_festivo
+    ) or consulta.festivo_local is not None
     prefijo = "festivo · " if es_festivo else ""
     sufijo = " · puede haber más" if consulta.lineas_sin_datos else ""
 
@@ -295,9 +298,11 @@ def _descripcion_dia(consulta, es_hoy: bool) -> str:
         ultima = consulta.salidas[-1].hora_salida.strftime("%H:%M")
         return prefijo + f"{n} salidas · de {primera} a {ultima}" + sufijo
     if consulta.estado == "sin_servicio":
-        return prefijo + "sin servicio"
+        return prefijo + "sin servicio"  # también sin_servicio_general (P03g)
     if consulta.estado == "sin_datos":
         return prefijo + "horario no disponible"
+    if consulta.estado == "no_vendible":
+        return "no vendemos este trayecto"  # defensivo: no debería llegar aquí
     return prefijo + "—"
 
 
@@ -354,6 +359,10 @@ def _botones_resultado(datos, consulta, fecha: date) -> list[tuple[str, str]]:
     hoy = calendario.hoy()
     vigencia_fin = datos.horarios.modelo.calendario.vigencia_fin
     botones: list[tuple[str, str]] = []
+
+    if consulta.estado == "no_vendible":
+        # defensivo: sin "otro día" ni "vuelta" (tampoco se vende la vuelta)
+        return [("otra_consulta", "🔍 Otra consulta")]
 
     if consulta.estado == "con_salidas":
         pendientes = [s for s in consulta.salidas if not s.ya_salio]
@@ -493,9 +502,11 @@ def _handle_resultado(identifier: str, state, value: str) -> None:
         if nuevo_destino not in alcanzables:
             origen_nombre = _nombre_localidad(datos, nuevo_origen)
             destino_nombre = _nombre_localidad(datos, nuevo_destino)
-            wa.send_text_message(
-                identifier, msg.msg_sin_trayecto(origen_nombre, destino_nombre)
-            )
+            if query.es_no_vendible(datos.horarios, nuevo_origen, nuevo_destino):
+                texto = msg.msg_no_vendible(origen_nombre, destino_nombre)
+            else:
+                texto = msg.msg_sin_trayecto(origen_nombre, destino_nombre)
+            wa.send_text_message(identifier, texto)
             to_menu(identifier, state)
             return
         state.origen, state.destino = nuevo_origen, nuevo_destino

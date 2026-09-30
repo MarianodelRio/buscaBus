@@ -664,3 +664,117 @@ def test_admin_status_solo_desde_admin_phone(mock_wa, freeze_calendario, monkeyp
     # no es un comando de administrador: se trata como texto normal, vuelve
     # al menú (id/texto desconocido)
     assert "necesitas" in payload["interactive"]["body"]["text"].lower()
+
+
+# ── Sin servicio en ninguna línea (P03g) ────────────────────────────────────
+
+
+def test_lista_de_dias_muestra_sin_servicio_el_25_12(mock_wa, freeze_calendario):
+    freeze_calendario(date(2026, 12, 22))
+    phone = "34600000201"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    payload = _last_interactive(mock_wa)
+    filas = {
+        row["id"]: row
+        for section in payload["interactive"]["action"]["sections"]
+        for row in section["rows"]
+    }
+    fila = filas["dia:2026-12-25"]
+    assert fila["description"] == "festivo · sin servicio"
+    assert len(fila["description"]) <= 72
+
+
+def test_resultado_25_12_sin_servicio_en_ninguna_linea(mock_wa, freeze_calendario):
+    freeze_calendario(date(2026, 12, 22))
+    phone = "34600000202"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    conv.handle_message(phone, phone, None, "dia:2026-12-25")
+    payload = _last_interactive(mock_wa)
+    body = payload["interactive"]["body"]["text"]
+    assert "festivo (Navidad)" in body
+    assert "El 25/12 no hay servicio en ninguna línea" in body
+    assert "957 42 90 30" in body
+    assert "sábado 26/12" in body
+    assert "dia:2026-12-26" in _button_ids(payload)
+    assert "No hay salidas en los próximos días" not in body
+
+
+# ── Festivos locales (P03e) ────────────────────────────────────────────────
+
+
+def test_festivo_local_de_cordoba_en_lista_y_resultado(mock_wa, freeze_calendario):
+    freeze_calendario(date(2026, 10, 20))
+    phone = "34600000203"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    payload = _last_interactive(mock_wa)
+    filas = {
+        row["id"]: row
+        for section in payload["interactive"]["action"]["sections"]
+        for row in section["rows"]
+    }
+    descripcion = filas["dia:2026-10-24"]["description"]
+    assert descripcion.startswith("festivo · ")
+    assert len(descripcion) <= 72
+    assert not filas["dia:2026-10-23"]["description"].startswith("festivo")
+
+    conv.handle_message(phone, phone, None, "dia:2026-10-24")
+    body = _last_interactive(mock_wa)["interactive"]["body"]["text"]
+    assert "festivo en Córdoba (San Rafael)" in body
+    assert "17:45" in body
+
+
+# ── Trayectos no vendibles (P12b) ──────────────────────────────────────────
+
+
+def test_destino_escrito_no_vendible_da_mensaje_propio(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000204"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    conv.handle_message(phone, phone, "Alcolea", None)
+    payload = _last_interactive(mock_wa)
+    body = payload["interactive"]["body"]["text"]
+    assert "no vendemos billetes" in body
+    assert "Córdoba" in body and "Alcolea" in body
+    assert "No hay trayecto directo" not in body
+    assert conv._get(phone).step == conv.flujo.SEL_DESTINO
+    # y Alcolea no aparece como destino ofrecido
+    assert "loc:alcolea" not in _row_ids(payload)
+
+
+def test_destino_escrito_sin_trayecto_sigue_dando_sin_trayecto(
+    mock_wa, freeze_calendario
+):
+    freeze_calendario(HOY)
+    phone = "34600000205"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, "badajoz", None)
+    body = _last_interactive(mock_wa)["interactive"]["body"]["text"]
+    assert "No hay trayecto directo" in body
+    assert "no vendemos" not in body
+
+
+def test_cambio_de_origen_a_par_no_vendible_da_mensaje_propio(
+    mock_wa, freeze_calendario
+):
+    # Rama defensiva de "ver la vuelta": se fuerza un estado cuyo par
+    # invertido (alcolea -> campus-de-rabanales) es no vendible.
+    freeze_calendario(HOY)
+    phone = "34600000206"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, None, f"dia:{HOY.isoformat()}")
+    state = conv._get(phone)
+    state.origen, state.destino = "campus-de-rabanales", "alcolea"
+    conv.handle_message(phone, phone, None, "vuelta")
+    text = _last_text(mock_wa)
+    assert "no vendemos billetes" in text
+    assert "No hay trayecto directo" not in text

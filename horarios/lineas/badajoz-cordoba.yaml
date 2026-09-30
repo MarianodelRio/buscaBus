@@ -52,4 +52,4 @@ horarios:
       BAD    MER    ALM    VFB    ZAF    VGT     LLE    AHI    BER    AZU    GRA    CRN    FOB    PNR    BEL    VRE    ESP    CVH  VAC  COR
       14:30  15:20  15:45  16:00  16:30  16:55D  17:30  17:45  17:50  18:00  18:10  18:20  18:30  18:50  19:00  19:10  19:20  -    -    20:10  | P33
 
-pendientes: [P03, P31, P33]
+pendientes: [P31, P33]

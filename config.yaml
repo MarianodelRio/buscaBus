@@ -10,9 +10,15 @@ negocio:
   admin_phone: ""         # Fallback si no se define ADMIN_PHONE en .env. Solo dígitos, sin '+' ni espacios.
 
   horario_oficina:
-    # Rangos [inicio, fin] en HH:MM por franja. Propuesta del design (D10): L-V 9:00-14:00 y 17:00-19:30.
-    - ["09:00", "14:00"]
-    - ["17:00", "19:30"]
+    # Bloques de días con sus franjas [inicio, fin] en HH:MM (P19c). Solo se
+    # muestra al cliente; el bot nunca calcula si la oficina está abierta.
+    - dias: [lunes, martes, miercoles]
+      franjas:
+        - ["08:00", "15:00"]
+        - ["17:00", "19:00"]
+    - dias: [jueves, viernes]
+      franjas:
+        - ["08:00", "15:00"]
 
   enlaces:
     # TODO D10: confirmar qué enlaces van en el paso "Información" del menú.

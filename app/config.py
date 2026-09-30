@@ -17,6 +17,11 @@ load_dotenv()
 
 _TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 
+# Días válidos de `negocio.horario_oficina` (sin tildes, como en horarios/).
+DIAS_OFICINA_VALIDOS = (
+    "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo",
+)
+
 
 def _ranges_overlap(ranges: list) -> bool:
     """Return True if any two ranges in the list overlap."""
@@ -71,35 +76,72 @@ def _load_and_validate_yaml(path: str) -> dict:
             "[CONFIG] Rule: 'negocio.telefono_contacto' must be a non-empty string"
         )
 
-    # Rule: negocio.horario_oficina — non-empty list of [HH:MM,HH:MM],
-    # start < end, no overlaps
+    # Rule: negocio.horario_oficina — non-empty list of blocks
+    # {dias: [...], franjas: [[HH:MM, HH:MM], ...]}. Days valid and in at
+    # most one block; per franja start < end; no overlaps within a block.
     horario = negocio.get("horario_oficina")
     if not isinstance(horario, list) or len(horario) == 0:
         raise RuntimeError(
             "[CONFIG] Rule: 'negocio.horario_oficina' must be a non-empty list"
-            " of ranges"
+            " of blocks {dias, franjas}"
         )
-    for rng in horario:
-        if not (isinstance(rng, list) and len(rng) == 2):
+    dias_vistos: set[str] = set()
+    for bloque in horario:
+        if not (
+            isinstance(bloque, dict) and set(bloque.keys()) == {"dias", "franjas"}
+        ):
             raise RuntimeError(
-                "[CONFIG] Rule: each range in 'negocio.horario_oficina'"
-                " must be a 2-element list [inicio, fin]"
+                "[CONFIG] Rule: each block in 'negocio.horario_oficina' must"
+                " be a mapping with exactly 'dias' and 'franjas'"
             )
-        inicio, fin = rng
-        if not (_TIME_RE.match(str(inicio)) and _TIME_RE.match(str(fin))):
+        dias = bloque["dias"]
+        if not isinstance(dias, list) or len(dias) == 0:
             raise RuntimeError(
-                "[CONFIG] Rule: range values in 'negocio.horario_oficina'"
-                " must be 'HH:MM' strings"
+                "[CONFIG] Rule: 'dias' of a block in 'negocio.horario_oficina'"
+                " must be a non-empty list"
             )
-        if fin <= inicio:
+        for dia in dias:
+            if dia not in DIAS_OFICINA_VALIDOS:
+                raise RuntimeError(
+                    f"[CONFIG] Rule: invalid day '{dia}' in"
+                    f" 'negocio.horario_oficina' (valid: "
+                    f"{', '.join(DIAS_OFICINA_VALIDOS)})"
+                )
+            if dia in dias_vistos:
+                raise RuntimeError(
+                    f"[CONFIG] Rule: day '{dia}' appears more than once in"
+                    " 'negocio.horario_oficina'"
+                )
+            dias_vistos.add(dia)
+        franjas = bloque["franjas"]
+        if not isinstance(franjas, list) or len(franjas) == 0:
             raise RuntimeError(
-                f"[CONFIG] Rule: 'negocio.horario_oficina' has range where"
-                f" fin ('{fin}') <= inicio ('{inicio}')"
+                "[CONFIG] Rule: 'franjas' of a block in"
+                " 'negocio.horario_oficina' must be a non-empty list of"
+                " ranges"
             )
-    if len(horario) > 1 and _ranges_overlap(horario):
-        raise RuntimeError(
-            "[CONFIG] Rule: 'negocio.horario_oficina' has overlapping time ranges"
-        )
+        for rng in franjas:
+            if not (isinstance(rng, list) and len(rng) == 2):
+                raise RuntimeError(
+                    "[CONFIG] Rule: each range in 'negocio.horario_oficina'"
+                    " must be a 2-element list [inicio, fin]"
+                )
+            inicio, fin = rng
+            if not (_TIME_RE.match(str(inicio)) and _TIME_RE.match(str(fin))):
+                raise RuntimeError(
+                    "[CONFIG] Rule: range values in 'negocio.horario_oficina'"
+                    " must be 'HH:MM' strings"
+                )
+            if fin <= inicio:
+                raise RuntimeError(
+                    f"[CONFIG] Rule: 'negocio.horario_oficina' has range where"
+                    f" fin ('{fin}') <= inicio ('{inicio}')"
+                )
+        if len(franjas) > 1 and _ranges_overlap(franjas):
+            raise RuntimeError(
+                "[CONFIG] Rule: 'negocio.horario_oficina' has overlapping time"
+                " ranges within a block"
+            )
 
     # Rule: negocio.enlaces — map of strings (empty values allowed)
     enlaces = negocio.get("enlaces")
@@ -157,7 +199,13 @@ _cfg = _load_and_validate_yaml(_CONFIG_PATH)
 # ── Business constants from YAML ───────────────────────────────────────────
 NEGOCIO_NOMBRE: str = _cfg["negocio"]["nombre"]
 NEGOCIO_TELEFONO: str = _cfg["negocio"]["telefono_contacto"]
-NEGOCIO_HORARIO_OFICINA: list = [tuple(r) for r in _cfg["negocio"]["horario_oficina"]]
+# Lista de bloques (dias, franjas): dias es una tupla de días, franjas una
+# tupla de (inicio, fin) "HH:MM". Solo para mostrar; nunca se calcula
+# abierto/cerrado.
+NEGOCIO_HORARIO_OFICINA: list = [
+    (tuple(b["dias"]), tuple(tuple(f) for f in b["franjas"]))
+    for b in _cfg["negocio"]["horario_oficina"]
+]
 NEGOCIO_ENLACES: dict = dict(_cfg["negocio"].get("enlaces") or {})
 
 PUEBLOS_MENU_INICIO: list = list(_cfg["pueblos_menu_inicio"])

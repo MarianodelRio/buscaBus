@@ -21,9 +21,10 @@ import sys
 import tempfile
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from datetime import datetime
+from datetime import date, datetime
 
 from app.services.horarios import diff
+from app.services.horarios.loader import calcular_festivos_por_linea
 from app.services.horarios.formato import (
     DIAS_INDIVIDUALES,
     Modelo,
@@ -31,6 +32,7 @@ from app.services.horarios.formato import (
     texto_observacion,
     validar,
 )
+from app.utils.messages import msg_no_vendible
 
 # Pendientes (docs/preguntas_negocio.txt) que afectan a una localidad concreta
 # de paradas.yaml, más allá de la propuesta general de zonas/localidades
@@ -38,12 +40,8 @@ from app.services.horarios.formato import (
 # `pendientes:` en paradas.yaml (design.md, 8, "Correcciones de la fase 1",
 # punto 6): antes vivía solo en comentarios `# Pxx` junto a cada entrada.
 PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {
-    "cordoba": ("P12",),
-    "campus-de-rabanales": ("P12",),
-    "alcolea": ("P12",),
     "cabeza-del-buey": ("P18",),
 }
-# Solo quedan abiertas P12 (tres paradas de Córdoba) y P18 (Cabeza del Buey).
 # P18 (negocio prefiere zonas por línea) afecta a todas las zonas por igual.
 PENDIENTE_ZONAS_GLOBAL = "P18"
 
@@ -131,6 +129,8 @@ def resolver_anterior(
 
 def _pendientes_del_modelo(modelo: Modelo) -> set[str]:
     pendientes: set[str] = set(modelo.pendientes)
+    if modelo.calendario is not None:
+        pendientes.update(modelo.calendario.pendientes)
     for linea in modelo.lineas.values():
         pendientes.update(linea.pendientes)
         for viaje in linea.viajes:
@@ -425,6 +425,79 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
     return "".join(partes)
 
 
+def _fecha_es(fecha: date) -> str:
+    return fecha.strftime("%d/%m/%Y")
+
+
+def _render_seccion_calendario(modelo: Modelo) -> str:
+    """"Calendario": lo que el bot hace con los días especiales, para que
+    negocio lo confirme (P03e, P03g, P12b)."""
+    calendario = modelo.calendario
+    if calendario is None:
+        return ""
+    partes = ["<h2>Calendario</h2>"]
+
+    partes.append("<h3>Días sin servicio en ninguna línea (todos los años)</h3>")
+    if calendario.sin_servicio_todas_las_lineas:
+        items = "".join(
+            f"<li>{dia:02d}/{mes:02d}</li>"
+            for mes, dia in sorted(calendario.sin_servicio_todas_las_lineas)
+        )
+        partes.append(f"<ul>{items}</ul>")
+    else:
+        partes.append("<p>Ninguno.</p>")
+
+    partes.append("<h3>Festivos generales</h3>")
+    items = "".join(
+        f"<li>{_fecha_es(fecha)} — {html.escape(nombre)}</li>"
+        for fecha, nombre in sorted(calendario.festivos.items())
+    )
+    partes.append(f"<ul>{items}</ul>")
+
+    partes.append("<h3>Festivos locales</h3>")
+    if calendario.festivos_locales:
+        por_linea = calcular_festivos_por_linea(modelo)
+        for loc_id in sorted(calendario.festivos_locales):
+            localidad = modelo.localidades.get(loc_id)
+            nombre_loc = localidad.nombre if localidad is not None else loc_id
+            lineas = sorted(
+                modelo.lineas[lid].nombre
+                for lid, festivos in por_linea.items()
+                if any(loc == loc_id for _, loc in festivos.values())
+            )
+            lineas_txt = (
+                html.escape(", ".join(lineas)) if lineas else "ninguna línea"
+            )
+            items = "".join(
+                f"<li>{_fecha_es(fecha)} — {html.escape(nombre)}</li>"
+                for fecha, nombre in sorted(
+                    calendario.festivos_locales[loc_id].items()
+                )
+            )
+            partes.append(
+                f"<p><b>{html.escape(nombre_loc)}</b> — líneas que los aplican: "
+                f"{lineas_txt}</p><ul>{items}</ul>"
+            )
+    else:
+        partes.append("<p>Ninguno.</p>")
+
+    partes.append("<h3>Trayectos que no se venden</h3>")
+    if modelo.no_vendibles:
+        items = []
+        for par in sorted(modelo.no_vendibles, key=lambda p: sorted(p)):
+            a, b = sorted(par, key=lambda lid: modelo.localidades[lid].nombre)
+            nombre_a = modelo.localidades[a].nombre
+            nombre_b = modelo.localidades[b].nombre
+            items.append(
+                f"<li>{html.escape(nombre_a)} ↔ {html.escape(nombre_b)} — el bot "
+                f"responde: «{html.escape(msg_no_vendible(nombre_a, nombre_b))}»</li>"
+            )
+        partes.append(f"<ul>{''.join(items)}</ul>")
+    else:
+        partes.append("<p>Ninguno.</p>")
+    return "".join(partes)
+
+
 def _render_cambios(cambios: list[str] | None) -> str:
     if cambios is None:
         return "<p>Primera versión.</p>"
@@ -508,12 +581,14 @@ def generar_html(
         "<h2>Pueblos, paradas y zonas</h2>" + _render_seccion_pueblos(actual_modelo)
     )
 
+    calendario_html = _render_seccion_calendario(actual_modelo)
+
     anexo = "<h2>Anexo: preguntas pendientes</h2>" + _render_anexo(pendientes, titulos)
 
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         f"<style>{_ESTILO}</style></head><body>"
-        f"{portada}{cambios_html}{secciones}{pueblos_html}{anexo}"
+        f"{portada}{cambios_html}{secciones}{pueblos_html}{calendario_html}{anexo}"
         "</body></html>"
     )
 

@@ -1,7 +1,7 @@
 # Variante de paradas_base.yaml con el campo `pendientes:` (design.md 8,
-# "Correcciones de la fase 1", punto 6): P12 afecta a la localidad
-# "cordoba", que aquí no usa ninguna línea (solo se usa para comprobar que
-# se resalta en la sección "Pueblos, paradas y zonas").
+# "Correcciones de la fase 1", punto 6): P18 afecta a la localidad
+# "cabeza-del-buey", que aquí no usa ninguna línea (solo se usa para
+# comprobar que se resalta en la sección "Pueblos, paradas y zonas").
 zonas:
   zona-test: Zona de prueba
 
@@ -9,12 +9,12 @@ localidades:
   pueblo-a: { nombre: Pueblo A, zona: zona-test }
   pueblo-b: { nombre: Pueblo B, zona: zona-test }
   pueblo-c: { nombre: Pueblo C, zona: zona-test }
-  cordoba: { nombre: Córdoba, zona: zona-test }
+  cabeza-del-buey: { nombre: Cabeza del Buey, zona: zona-test }
 
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-b }
   CCC: { nombre: Pueblo C, localidad: pueblo-c }
-  COR: { nombre: Córdoba, localidad: cordoba }
+  CDB: { nombre: Cabeza del Buey, localidad: cabeza-del-buey }
 
-pendientes: [P12]
+pendientes: [P18]

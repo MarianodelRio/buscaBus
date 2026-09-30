@@ -7,7 +7,7 @@
 #
 # Zonas y localidades: negocio ha confirmado las de Coronada (Valle del
 # Guadiato) y Cabeza del Buey (Los Pedroches). Lo que sigue abierto está
-# declarado en `pendientes:`, al final (P12, P18, P32).
+# declarado en `pendientes:`, al final (P18, P32).
 
 zonas:
   cordoba: Córdoba
@@ -108,8 +108,15 @@ paradas:                                 # lo que muestra el resultado
   BAD: { nombre: Badajoz, localidad: badajoz }
 
 # Preguntas abiertas que afectan a zonas, localidades o paradas de este
-# fichero (docs/preguntas_negocio.txt): P12 las tres paradas de la zona de
-# Córdoba (Córdoba/Rabanales/Alcolea), pares no vendibles (ciclo B); P18
-# negocio prefiere zonas por línea en vez de las actuales (ciclo C); P32
-# posición de Rivero de Posadas y Los Mochos en la ruta.
-pendientes: [P12, P18, P32]
+# fichero (docs/preguntas_negocio.txt): P18 negocio prefiere zonas por línea
+# en vez de las actuales (ciclo C); P32 posición de Rivero de Posadas y Los
+# Mochos en la ruta.
+pendientes: [P18, P32]
+
+# Pares de localidades entre los que la empresa no vende billetes, en ninguno
+# de los dos sentidos (P12b, respuesta de negocio). El bot no ofrece esos
+# destinos y, si el usuario los escribe, lo dice con un mensaje propio.
+no_vendibles:
+  - [cordoba, campus-de-rabanales]
+  - [cordoba, alcolea]
+  - [campus-de-rabanales, alcolea]

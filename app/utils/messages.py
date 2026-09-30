@@ -38,8 +38,53 @@ def nombre_mes_es(fecha: date) -> str:
     return _MESES_ES[fecha.month - 1]
 
 
+_DIAS_OFICINA = {
+    "lunes": "lunes",
+    "martes": "martes",
+    "miercoles": "miércoles",
+    "jueves": "jueves",
+    "viernes": "viernes",
+    "sabado": "sábado",
+    "domingo": "domingo",
+}
+_ORDEN_DIAS_OFICINA = tuple(_DIAS_OFICINA)
+_LABORABLES = frozenset(_ORDEN_DIAS_OFICINA[:5])
+
+
+def _unir(partes: list[str]) -> str:
+    if len(partes) <= 1:
+        return "".join(partes)
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
+def _dias_oficina_txt(dias: tuple[str, ...]) -> str:
+    """'lunes a miércoles' para 3 o más días consecutivos; 'jueves y viernes'
+    para dos; lista con 'y' si no son consecutivos."""
+    indices = sorted(_ORDEN_DIAS_OFICINA.index(d) for d in dias)
+    tramos: list[list[int]] = []
+    for i in indices:
+        if tramos and i == tramos[-1][-1] + 1:
+            tramos[-1].append(i)
+        else:
+            tramos.append([i])
+    partes: list[str] = []
+    for tramo in tramos:
+        nombres = [_DIAS_OFICINA[_ORDEN_DIAS_OFICINA[i]] for i in tramo]
+        if len(nombres) >= 3:
+            partes.append(f"{nombres[0]} a {nombres[-1]}")
+        else:
+            partes.append(" y ".join(nombres))
+    return _unir(partes)
+
+
 def _horario_oficina_txt() -> str:
-    return " y ".join(f"{ini}-{fin}" for ini, fin in NEGOCIO_HORARIO_OFICINA)
+    """Texto del horario de oficina por bloques de días (solo para mostrar)."""
+    bloques = []
+    for dias, franjas in NEGOCIO_HORARIO_OFICINA:
+        laborables = " laborables" if set(dias) <= _LABORABLES else ""
+        horas = " y ".join(f"de {ini} a {fin}" for ini, fin in franjas)
+        bloques.append(f"{_dias_oficina_txt(dias)}{laborables} {horas}")
+    return "; ".join(bloques)
 
 
 def tel_y_horario() -> str:
@@ -116,6 +161,13 @@ def msg_sin_trayecto(origen_nombre: str, destino_nombre: str) -> str:
     )
 
 
+def msg_no_vendible(origen_nombre: str, destino_nombre: str) -> str:
+    return (
+        f"Entre {origen_nombre} y {destino_nombre} no vendemos billetes, en"
+        " ninguno de los dos sentidos. Puedes elegir otro destino."
+    )
+
+
 # ── Fechas ─────────────────────────────────────────────────────────────
 
 def msg_formato_fecha() -> str:
@@ -156,11 +208,17 @@ def _nombre_parada(horarios, codigo: str) -> str:
     return parada.nombre if parada is not None else codigo
 
 
-def _cabecera_fecha(consulta, fecha: date) -> str:
+def _cabecera_fecha(consulta, fecha: date, horarios) -> str:
     info = consulta.info_dia
     dia_txt = f"{nombre_dia_es(fecha).capitalize()} {fecha.day:02d}/{fecha.month:02d}"
     if info is not None and info.es_festivo:
+        # el festivo general gana sobre el local si coinciden
         return f"📅 {dia_txt} · festivo ({info.nombre_festivo})"
+    if consulta.festivo_local is not None:
+        nombre_festivo, localidad_id = consulta.festivo_local
+        localidad = horarios.modelo.localidades.get(localidad_id)
+        nombre_localidad = localidad.nombre if localidad is not None else localidad_id
+        return f"📅 {dia_txt} · festivo en {nombre_localidad} ({nombre_festivo})"
     if consulta.temporadas:
         nombres_temporada = sorted({t.nombre for _, t in consulta.temporadas})
         temp_txt = " / ".join(nombres_temporada)
@@ -175,18 +233,35 @@ def msg_resultado(consulta, horarios, origen_nombre: str, destino_nombre: str,
     también produce salidas vacías)."""
     cabecera = f"🚌 {origen_nombre} → {destino_nombre}"
 
+    if consulta.estado == "no_vendible":
+        return f"{cabecera}\n\n" + msg_no_vendible(origen_nombre, destino_nombre)
+
     if consulta.estado == "sin_trayecto":
         return f"{cabecera}\n\n" + msg_sin_trayecto(origen_nombre, destino_nombre)
 
     if consulta.estado == "sin_datos":
         return (
-            f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+            f"{cabecera}\n{_cabecera_fecha(consulta, fecha, horarios)}\n\n"
             "No tengo el horario de ese día.\n"
             f"{tel_y_horario()}"
         )
 
+    if consulta.estado == "sin_servicio" and consulta.sin_servicio_general:
+        cuerpo = (
+            f"{cabecera}\n{_cabecera_fecha(consulta, fecha, horarios)}\n\n"
+            f"El {fecha.day:02d}/{fecha.month:02d} no hay servicio en ninguna"
+            " línea.\n"
+        )
+        if consulta.siguiente_con_servicio is not None:
+            sig = consulta.siguiente_con_servicio
+            cuerpo += (
+                f"El siguiente día con salidas es {nombre_dia_es(sig)}"
+                f" {sig.day:02d}/{sig.month:02d}.\n"
+            )
+        return cuerpo + tel_y_horario()
+
     if consulta.estado == "sin_servicio":
-        cuerpo = f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+        cuerpo = f"{cabecera}\n{_cabecera_fecha(consulta, fecha, horarios)}\n\n"
         if consulta.siguiente_con_servicio is not None:
             sig = consulta.siguiente_con_servicio
             cuerpo += (
@@ -205,7 +280,7 @@ def msg_resultado(consulta, horarios, origen_nombre: str, destino_nombre: str,
 
     if not listadas:
         return (
-            f"{cabecera}\n{_cabecera_fecha(consulta, fecha)}\n\n"
+            f"{cabecera}\n{_cabecera_fecha(consulta, fecha, horarios)}\n\n"
             "Hoy ya no quedan salidas."
         )
 
@@ -254,7 +329,7 @@ def msg_resultado(consulta, horarios, origen_nombre: str, destino_nombre: str,
             fila += f"  ({origen_parada} → {destino_parada})"
         lineas_salidas.append(fila)
 
-    partes = [cabecera, _cabecera_fecha(consulta, fecha), ""]
+    partes = [cabecera, _cabecera_fecha(consulta, fecha, horarios), ""]
     partes.extend(lineas_salidas)
     partes.append("")
 

@@ -124,7 +124,7 @@ def test_ochavillos_pozoblanco_sin_trayecto():
 
 
 def test_pozoblanco_cordoba_fuera_de_calendario():
-    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2028, 1, 1))
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2028, 1, 2))
     assert c.estado == "sin_datos"
     assert c.fuera_de_calendario is True
     assert c.salidas == ()
@@ -240,3 +240,174 @@ def test_siguiente_con_servicio_nunca_pasa_de_vigencia_fin():
     c = query.consultar(MOTOR, "pueblo-n", "pueblo-o", date(2027, 8, 25))
     assert c.estado == "sin_servicio"
     assert c.siguiente_con_servicio is None
+
+
+# ── Días sin servicio en ninguna línea (P03g) ───────────────────────────────
+
+
+def _pares_con_trayecto(horarios):
+    return [
+        (o, d)
+        for o in horarios.modelo.localidades
+        for d in sorted(query.destinos_desde(horarios, o))
+    ]
+
+
+@pytest.mark.parametrize("fecha", [date(2026, 12, 25), date(2027, 1, 1)])
+def test_sin_servicio_general_en_todos_los_pares_de_las_lineas(fecha):
+    pares = _pares_con_trayecto(HORARIOS)
+    assert pares
+    for origen, destino in pares:
+        c = query.consultar(HORARIOS, origen, destino, fecha)
+        assert c.estado == "sin_servicio", (origen, destino)
+        assert c.sin_servicio_general is True
+        assert c.salidas == ()
+        assert c.lineas_sin_datos == ()
+
+
+def test_sin_servicio_general_cabecera_conserva_nombre_del_festivo():
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2027, 1, 1))
+    assert c.info_dia.nombre_festivo == "Año Nuevo"
+    assert c.siguiente_con_servicio == date(2027, 1, 2)
+
+
+def test_sin_servicio_general_siguiente_es_el_primer_dia_con_salidas():
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 12, 25))
+    assert c.siguiente_con_servicio == date(2026, 12, 26)
+    real = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 12, 26))
+    assert real.estado == "con_salidas"
+
+
+def test_siguiente_con_servicio_desde_24_12_salta_el_25_12():
+    # Córdoba -> Badajoz no tiene salidas el 24, 25 ni 26/12/2026; el
+    # siguiente día con salidas es el domingo 27 (el 25 se salta).
+    c = query.consultar(HORARIOS, "cordoba", "badajoz", date(2026, 12, 24))
+    assert c.estado == "sin_servicio"
+    assert c.sin_servicio_general is False
+    assert c.siguiente_con_servicio == date(2026, 12, 27)
+
+
+def test_sin_servicio_general_no_pisa_sin_trayecto():
+    c = query.consultar(HORARIOS, "ochavillos", "pozoblanco", date(2026, 12, 25))
+    assert c.estado == "sin_trayecto"
+    assert c.sin_servicio_general is False
+
+
+def test_sin_servicio_general_tiene_prioridad_sobre_la_vigencia():
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2027, 12, 25))
+    assert c.estado == "sin_servicio"
+    assert c.sin_servicio_general is True
+    assert c.fuera_de_calendario is False
+    # sin calendario más allá de 31/08/2027 no se puede calcular el siguiente.
+    assert c.siguiente_con_servicio is None
+    assert c.info_dia is not None and c.info_dia.nombre_festivo is None
+
+
+def test_dia_fuera_de_vigencia_que_no_es_general_sigue_siendo_sin_datos():
+    c = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2027, 12, 24))
+    assert c.estado == "sin_datos"
+    assert c.fuera_de_calendario is True
+
+
+# ── Festivos locales por línea (P03e) ───────────────────────────────────────
+
+FESTIVO_LOCAL = loader.cargar(FIXTURES / "horarios_festivo_local")
+
+
+def test_festivo_local_de_cordoba_usa_las_salidas_de_festivos():
+    # 08/09/2026 (martes, verano, Virgen de la Fuensanta) = mismas salidas
+    # que un festivo general de verano (15/08/2026), no las del martes.
+    local = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 9, 8))
+    general = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 8, 15))
+    laborable = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 9, 9))
+    assert local.estado == "con_salidas"
+    assert _horas(local) == _horas(general) == [("08:15", "09:30"), ("15:15", "16:30")]
+    assert _horas(local) != _horas(laborable)
+    assert local.festivo_local == ("Virgen de la Fuensanta", "cordoba")
+    assert local.info_dia.es_festivo is False  # InfoDia no cambia (P04)
+
+
+def test_festivo_local_en_sabado_usa_festivos_no_sabado():
+    # 24/10/2026 (sábado, San Rafael): 3 salidas como en domingo/festivo; un
+    # sábado normal (17/10) tiene 2.
+    local = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 10, 24))
+    sabado = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 10, 17))
+    assert _horas(local) == [("08:15", "09:30"), ("15:15", "16:30"), ("17:45", "19:00")]
+    assert len(sabado.salidas) == 2
+    assert sabado.festivo_local is None
+
+
+def test_festivo_general_sin_festivo_local_no_rellena_festivo_local():
+    # El validador impide que una fecha sea a la vez festivo general y local
+    # (el caso combinado se prueba en test_calendario con clase_dia_linea).
+    c = query.consultar(FESTIVO_LOCAL, "pueblo-b", "pueblo-c", date(2026, 12, 25))
+    assert c.sin_servicio_general is False  # el fixture no declara 25/12
+    assert c.info_dia.es_festivo is True
+    assert c.festivo_local is None
+
+
+def test_festivo_local_caso_mixto_cada_linea_con_su_clase():
+    # 14/10/2026 (miércoles): linea-con-a (toca pueblo-a) usa festivos
+    # (09:10), linea-sin-a usa miércoles (10:00). Una sola lista.
+    c = query.consultar(FESTIVO_LOCAL, "pueblo-b", "pueblo-c", date(2026, 10, 14))
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("09:10", "09:20"), ("10:00", "10:10")]
+    por_hora = {s.hora_salida.strftime("%H:%M"): s.lineas for s in c.salidas}
+    assert por_hora["09:10"] == ("linea-con-a",)
+    assert por_hora["10:00"] == ("linea-sin-a",)
+    assert c.festivo_local == ("Fiesta local de A", "pueblo-a")
+    # un miércoles sin festivo local: linea-con-a a su hora laborable
+    normal = query.consultar(FESTIVO_LOCAL, "pueblo-b", "pueblo-c", date(2026, 10, 15))
+    assert _horas(normal) == [("08:10", "08:20"), ("10:00", "10:10")]
+    assert normal.festivo_local is None
+
+
+def test_festivo_local_no_activa_solo_viernes_lectivo_en_clase_festivos():
+    # 16/10/2026 es viernes lectivo y festivo local de A. La tabla de
+    # festivos de linea-viernes-a lleva "solo viernes lectivo": no puede
+    # activarse porque la línea está en la clase festivos.
+    c = query.consultar(FESTIVO_LOCAL, "pueblo-d", "pueblo-e", date(2026, 10, 16))
+    assert c.salidas == ()
+    assert c.estado == "sin_servicio"
+    assert c.festivo_local == ("Feria de A", "pueblo-a")
+    # el viernes lectivo anterior sin festivo: sale la de lunes-viernes
+    normal = query.consultar(FESTIVO_LOCAL, "pueblo-d", "pueblo-e", date(2026, 10, 9))
+    assert _horas(normal) == [("06:10", "06:20")]
+
+
+# ── Trayectos no vendibles (P12b) ───────────────────────────────────────────
+
+_NO_VENDIBLES = ("cordoba", "campus-de-rabanales", "alcolea")
+
+
+def test_no_vendible_las_seis_direcciones_sin_salidas():
+    for origen in _NO_VENDIBLES:
+        for destino in _NO_VENDIBLES:
+            if origen == destino:
+                continue
+            assert query.es_no_vendible(HORARIOS, origen, destino)
+            c = query.consultar(HORARIOS, origen, destino, date(2026, 9, 30))
+            assert c.estado == "no_vendible", (origen, destino)
+            assert c.salidas == ()
+            assert c.siguiente_con_servicio is None
+
+
+def test_no_vendible_tiene_prioridad_sobre_sin_servicio_general_y_vigencia():
+    for fecha in (date(2026, 12, 25), date(2030, 6, 1)):
+        c = query.consultar(HORARIOS, "cordoba", "alcolea", fecha)
+        assert c.estado == "no_vendible"
+        assert c.sin_servicio_general is False
+
+
+def test_es_no_vendible_es_falso_para_pares_normales():
+    assert not query.es_no_vendible(HORARIOS, "cordoba", "pozoblanco")
+    assert not query.es_no_vendible(HORARIOS, "alcolea", "adamuz")
+
+
+def test_destinos_desde_filtra_los_no_vendibles():
+    assert "alcolea" not in query.destinos_desde(HORARIOS, "cordoba")
+    assert "campus-de-rabanales" not in query.destinos_desde(HORARIOS, "cordoba")
+    assert "alcolea" not in query.destinos_desde(HORARIOS, "campus-de-rabanales")
+    assert "cordoba" not in query.destinos_desde(HORARIOS, "alcolea")
+    # el resto de destinos de Alcolea no se toca
+    assert "adamuz" in query.destinos_desde(HORARIOS, "alcolea")

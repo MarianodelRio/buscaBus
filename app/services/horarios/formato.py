@@ -96,7 +96,12 @@ RANGO_FECHA_RE = re.compile(
 )
 
 CAMPOS_CALENDARIO_OBLIGATORIOS = {"vigencia", "festivos", "curso"}
-CAMPOS_CALENDARIO_PERMITIDOS = CAMPOS_CALENDARIO_OBLIGATORIOS | {"pendientes"}
+CAMPOS_CALENDARIO_PERMITIDOS = CAMPOS_CALENDARIO_OBLIGATORIOS | {
+    "pendientes",
+    "sin_servicio_todas_las_lineas",
+    "festivos_locales",
+}
+DIA_MES_RE = re.compile(r"^(\d{2})/(\d{2})$")
 CAMPOS_CURSO_OBLIGATORIOS = {"inicio_clases", "fin_clases", "vacaciones", "no_lectivos"}
 
 _MESES = {
@@ -151,6 +156,9 @@ class Modelo:
     observaciones: dict[str, Observacion]
     lineas: dict[str, Linea]
     pendientes: tuple[str, ...] = ()  # pendientes declarados en paradas.yaml
+    # Pares de localidades entre las que la empresa no vende billetes, en
+    # ninguno de los dos sentidos (P12b), declarados en paradas.yaml.
+    no_vendibles: frozenset[frozenset[str]] = frozenset()
     calendario: Calendario | None = None  # None solo si validar() no llegó a
     # construirlo (errores); formato.validar() siempre lo rellena si no hay
     # errores. test_diff.py construye Modelo(...) a mano sin pasar por
@@ -416,8 +424,57 @@ def _validar_pendientes_paradas(
     return tuple(validos)
 
 
+def _validar_no_vendibles(
+    datos_paradas: dict[str, Any],
+    path: Path,
+    localidades: dict[str, Localidad],
+    errores: list[str],
+) -> frozenset[frozenset[str]]:
+    """Lee el campo opcional `no_vendibles:` de paradas.yaml (P12b): lista de
+    pares `[localidad, localidad]` entre los que no se venden billetes, en
+    ningún sentido. Localidad sin definir, la misma localidad dos veces y par
+    repetido (también invertido) son errores."""
+    raw = datos_paradas.get("no_vendibles", []) or []
+    if not isinstance(raw, list):
+        errores.append(f"{path}: 'no_vendibles' debe ser una lista de pares")
+        return frozenset()
+    pares: set[frozenset[str]] = set()
+    for par in raw:
+        if not isinstance(par, list) or len(par) != 2:
+            errores.append(
+                f"{path}: 'no_vendibles' con elemento inválido {par!r} (se "
+                "esperaba un par [localidad, localidad])"
+            )
+            continue
+        a, b = str(par[0]), str(par[1])
+        desconocidas = [x for x in (a, b) if x not in localidades]
+        if desconocidas:
+            errores.append(
+                f"{path}: 'no_vendibles' [{a}, {b}] referencia localidad(es) "
+                f"sin definir: {desconocidas}"
+            )
+            continue
+        if a == b:
+            errores.append(
+                f"{path}: 'no_vendibles' [{a}, {b}]: la misma localidad dos veces"
+            )
+            continue
+        clave = frozenset((a, b))
+        if clave in pares:
+            errores.append(
+                f"{path}: 'no_vendibles' [{a}, {b}] repetido (el orden no "
+                "importa: [a, b] y [b, a] son el mismo par)"
+            )
+            continue
+        pares.add(clave)
+    return frozenset(pares)
+
+
 def _validar_calendario(
-    directorio: Path, errores: list[str], avisos: list[str]
+    directorio: Path,
+    errores: list[str],
+    avisos: list[str],
+    localidades: dict[str, Localidad],
 ) -> Calendario | None:
     """Valida `calendario.yaml` (design.md 2.3 y 3): festivos y periodo
     escolar, con fechas de año real. Nunca adivina: fecha inválida, rango
@@ -568,6 +625,83 @@ def _validar_calendario(
         _en_vigencia(fecha, "'curso.no_lectivos'")
         no_lectivos.append(fecha)
 
+    festivos_locales_raw = datos.get("festivos_locales", {}) or {}
+    festivos_locales: dict[str, dict[date, str]] = {}
+    if not isinstance(festivos_locales_raw, dict):
+        errores.append(
+            f"{path}: 'festivos_locales' debe ser un mapa localidad -> fechas"
+        )
+        festivos_locales_raw = {}
+    for loc_id, mapa in festivos_locales_raw.items():
+        loc_id = str(loc_id)
+        if loc_id not in localidades:
+            errores.append(
+                f"{path}: 'festivos_locales' referencia una localidad sin "
+                f"definir ('{loc_id}')"
+            )
+            continue
+        if not isinstance(mapa, dict) or not mapa:
+            errores.append(
+                f"{path}: 'festivos_locales.{loc_id}' debe ser un mapa "
+                "'DD/MM/AAAA: nombre' no vacío"
+            )
+            continue
+        de_la_localidad: dict[date, str] = {}
+        for fecha_txt, nombre in mapa.items():
+            fecha = _parse_fecha_calendario(str(fecha_txt))
+            if fecha is None:
+                errores.append(
+                    f"{path}: 'festivos_locales.{loc_id}' con fecha inválida "
+                    f"'{fecha_txt}' (se esperaba 'DD/MM/AAAA')"
+                )
+                continue
+            if fecha in de_la_localidad:
+                errores.append(
+                    f"{path}: 'festivos_locales.{loc_id}' con fecha repetida "
+                    f"'{fecha_txt}'"
+                )
+                continue
+            _en_vigencia(fecha, f"festivo local '{nombre}' de '{loc_id}'")
+            if fecha in festivos:
+                errores.append(
+                    f"{path}: 'festivos_locales.{loc_id}': la fecha "
+                    f"'{fecha_txt}' ya está en 'festivos' ('{festivos[fecha]}')"
+                )
+                continue
+            de_la_localidad[fecha] = str(nombre)
+        festivos_locales[loc_id] = de_la_localidad
+
+    sin_servicio_raw = datos.get("sin_servicio_todas_las_lineas", []) or []
+    sin_servicio_general: set[tuple[int, int]] = set()
+    if not isinstance(sin_servicio_raw, list):
+        errores.append(
+            f"{path}: 'sin_servicio_todas_las_lineas' debe ser una lista de "
+            "fechas 'DD/MM'"
+        )
+        sin_servicio_raw = []
+    for dia_txt in sin_servicio_raw:
+        m = DIA_MES_RE.match(str(dia_txt).strip())
+        if m is None:
+            errores.append(
+                f"{path}: 'sin_servicio_todas_las_lineas' con fecha inválida "
+                f"'{dia_txt}' (se esperaba 'DD/MM')"
+            )
+            continue
+        dia_n, mes_n = int(m.group(1)), int(m.group(2))
+        if (mes_n, dia_n) not in _INDICE_DIA:
+            errores.append(
+                f"{path}: 'sin_servicio_todas_las_lineas' con fecha que no "
+                f"existe '{dia_txt}'"
+            )
+            continue
+        if (mes_n, dia_n) in sin_servicio_general:
+            errores.append(
+                f"{path}: 'sin_servicio_todas_las_lineas' con fecha repetida "
+                f"'{dia_txt}'"
+            )
+            continue
+        sin_servicio_general.add((mes_n, dia_n))
+
     pendientes_raw = datos.get("pendientes", []) or []
     pendientes: list[str] = []
     if not isinstance(pendientes_raw, list):
@@ -595,6 +729,8 @@ def _validar_calendario(
         vacaciones=tuple(vacaciones),
         no_lectivos=tuple(no_lectivos),
         pendientes=tuple(pendientes),
+        sin_servicio_todas_las_lineas=frozenset(sin_servicio_general),
+        festivos_locales=festivos_locales,
     )
 
 
@@ -1120,13 +1256,16 @@ def validar(directorio: Path | str) -> Resultado:
     pendientes_paradas = _validar_pendientes_paradas(
         datos_paradas or {}, paradas_path, errores, avisos
     )
+    no_vendibles = _validar_no_vendibles(
+        datos_paradas or {}, paradas_path, localidades, errores
+    )
 
     datos_observaciones = _cargar_yaml(observaciones_path, errores)
     observaciones = _validar_observaciones(
         datos_observaciones or {}, observaciones_path, errores
     )
 
-    calendario = _validar_calendario(directorio, errores, avisos)
+    calendario = _validar_calendario(directorio, errores, avisos, localidades)
 
     lineas: dict[str, Linea] = {}
     paradas_usadas: set[str] = set()
@@ -1163,6 +1302,35 @@ def validar(directorio: Path | str) -> Resultado:
             f"Localidades definidas que ninguna línea usa: {localidades_sin_usar}"
         )
 
+    # Un par no vendible que ninguna línea conecta no sirve de nada: aviso.
+    pares_conectados: set[frozenset[str]] = set()
+    for linea in lineas.values():
+        for viaje in linea.viajes:
+            locs = [
+                paradas[paso.parada].localidad
+                for paso in viaje.pasos
+                if paso.parada in paradas
+            ]
+            for i, loc_i in enumerate(locs):
+                for loc_j in locs[i + 1 :]:
+                    if loc_i != loc_j:
+                        pares_conectados.add(frozenset((loc_i, loc_j)))
+    for par in sorted(no_vendibles, key=lambda p: sorted(p)):
+        if par not in pares_conectados:
+            avisos.append(
+                f"{paradas_path}: 'no_vendibles' {sorted(par)}: ninguna línea "
+                "conecta ese par"
+            )
+
+    if calendario is not None:
+        for loc_id in sorted(calendario.festivos_locales):
+            if loc_id in localidades and loc_id not in localidades_usadas:
+                avisos.append(
+                    f"{directorio / 'calendario.yaml'}: 'festivos_locales' de "
+                    f"'{loc_id}': ninguna línea usa esa localidad, no se "
+                    "aplican a ninguna"
+                )
+
     if errores:
         return Resultado(modelo=None, errores=errores, avisos=avisos)
 
@@ -1173,6 +1341,7 @@ def validar(directorio: Path | str) -> Resultado:
         observaciones=observaciones,
         lineas=lineas,
         pendientes=pendientes_paradas,
+        no_vendibles=no_vendibles,
         calendario=calendario,
     )
     return Resultado(modelo=modelo, errores=errores, avisos=avisos)

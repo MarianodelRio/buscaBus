@@ -452,9 +452,70 @@ pendientes: []
         tmp_path, "paradas_con_pendientes.yaml", {"linea-prueba": linea_yaml}
     )
     assert "Pueblos, paradas y zonas" in html_doc
-    assert "Córdoba" in html_doc
-    # el pendiente P12 (Córdoba) debe verse resaltado en esa sección.
+    assert "Cabeza del Buey" in html_doc
+    # el pendiente P18 (Cabeza del Buey) debe verse resaltado en esa sección.
     idx_seccion = html_doc.index("Pueblos, paradas y zonas")
-    idx_cordoba = html_doc.index("Córdoba", idx_seccion)
-    fragmento = html_doc[idx_cordoba : idx_cordoba + 200]
-    assert "P12" in fragmento
+    idx_localidad = html_doc.index("Cabeza del Buey", idx_seccion)
+    fragmento = html_doc[idx_localidad : idx_localidad + 200]
+    assert "P18" in fragmento
+
+
+# ── Sección "Calendario" y pendientes del calendario (P03e, P03g, P12b) ─────
+
+
+def _html_real() -> str:
+    resultado = validar_horarios(Path(__file__).parent.parent / "horarios")
+    assert resultado.errores == []
+    return revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
+
+
+def test_html_real_tiene_seccion_calendario():
+    html_doc = _html_real()
+    assert "<h2>Calendario</h2>" in html_doc
+    seccion = html_doc[html_doc.index("<h2>Calendario</h2>") :]
+    seccion = seccion[: seccion.index("<h2>Anexo")]
+    # días sin servicio en ninguna línea
+    assert "<li>25/12</li>" in seccion and "<li>01/01</li>" in seccion
+    # festivos generales
+    assert "12/10/2026 — Fiesta Nacional" in seccion
+    # festivos locales con las líneas que los aplican
+    assert "Córdoba" in seccion
+    assert "08/09/2026 — Virgen de la Fuensanta" in seccion
+    assert "24/10/2026 — San Rafael" in seccion
+    for nombre in ("Pozoblanco", "Adamuz", "Badajoz"):
+        assert nombre in seccion
+    # no vendibles, con el texto propuesto del bot
+    assert "Trayectos que no se venden" in seccion
+    assert (
+        "Entre Alcolea y Córdoba no vendemos billetes, en ninguno de los dos "
+        "sentidos. Puedes elegir otro destino."
+    ) in seccion
+    assert "Campus de Rabanales" in seccion
+
+
+def test_html_real_anexo_muestra_p28_y_no_p03_ni_p12():
+    html_doc = _html_real()
+    anexo = html_doc[html_doc.index("<h2>Anexo") :]
+    assert "P28" in anexo
+    assert "P03:" not in anexo and "P12:" not in anexo
+    portada = html_doc[: html_doc.index("<h2>Cambios")]
+    assert "P28" in portada
+
+
+def test_pendientes_del_calendario_se_recogen(tmp_path):
+    resultado = validar_horarios(Path(__file__).parent.parent / "horarios")
+    assert "P28" in revision._pendientes_del_modelo(resultado.modelo)
+    assert "P03" not in revision._pendientes_del_modelo(resultado.modelo)
+    assert "P12" not in revision._pendientes_del_modelo(resultado.modelo)
+    assert "P12" not in {
+        p for ps in revision.PENDIENTES_POR_LOCALIDAD.values() for p in ps
+    }
+
+
+def test_seccion_calendario_sin_festivos_locales_ni_no_vendibles(tmp_path):
+    html_doc = _construir_html(
+        tmp_path, "paradas_base.yaml", {"linea-prueba": ADAMUZ_LINEA_YAML}
+    )
+    seccion = html_doc[html_doc.index("<h2>Calendario</h2>") :]
+    assert "Días sin servicio en ninguna línea" in seccion
+    assert seccion.count("<p>Ninguno.</p>") == 3  # sin servicio, locales, no vendibles

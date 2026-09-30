@@ -261,3 +261,186 @@ def test_calendario_pendiente_valido_avisa(tmp_path):
     resultado = formato.validar(horarios_dir)
     assert resultado.errores == []
     assert any("pendiente P03" in a for a in resultado.avisos)
+
+
+# ── sin_servicio_todas_las_lineas (P03g) ────────────────────────────────────
+
+
+def test_calendario_real_declara_sin_servicio_25_12_y_01_01():
+    assert CAL_REAL.sin_servicio_todas_las_lineas == frozenset({(12, 25), (1, 1)})
+    # ambas fechas siguen en festivos (nombre del festivo para la cabecera)
+    assert date(2026, 12, 25) in CAL_REAL.festivos
+    assert date(2027, 1, 1) in CAL_REAL.festivos
+
+
+def test_info_dia_fuera_de_vigencia_permitido_da_nombre_none():
+    info = calendario.info_dia(
+        CAL_REAL, date(2027, 12, 25), permitir_fuera_de_vigencia=True
+    )
+    assert info.nombre_festivo is None
+    assert info.es_festivo is False
+    assert info.dia_semana == "sabado"
+
+
+def test_sin_servicio_todas_las_lineas_valido_incluye_29_02(tmp_path):
+    calendario_yaml = (
+        CALENDARIO_VALIDO + "sin_servicio_todas_las_lineas: [25/12, 29/02]\n"
+    )
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert resultado.errores == []
+    assert resultado.modelo.calendario.sin_servicio_todas_las_lineas == frozenset(
+        {(12, 25), (2, 29)}
+    )
+
+
+def test_sin_servicio_todas_las_lineas_31_02_es_error(tmp_path):
+    calendario_yaml = CALENDARIO_VALIDO + "sin_servicio_todas_las_lineas: [31/02]\n"
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert any(
+        "calendario.yaml" in e
+        and "sin_servicio_todas_las_lineas" in e
+        and "31/02" in e
+        for e in resultado.errores
+    )
+
+
+def test_sin_servicio_todas_las_lineas_formato_invalido_es_error(tmp_path):
+    calendario_yaml = (
+        CALENDARIO_VALIDO + "sin_servicio_todas_las_lineas: [25/12/2026]\n"
+    )
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert any("fecha inválida '25/12/2026'" in e for e in resultado.errores)
+
+
+def test_sin_servicio_todas_las_lineas_repetida_es_error(tmp_path):
+    calendario_yaml = (
+        CALENDARIO_VALIDO + "sin_servicio_todas_las_lineas: [25/12, 25/12]\n"
+    )
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert any("fecha repetida '25/12'" in e for e in resultado.errores)
+
+
+def test_sin_servicio_todas_las_lineas_no_es_lista_es_error(tmp_path):
+    calendario_yaml = CALENDARIO_VALIDO + "sin_servicio_todas_las_lineas: 25/12\n"
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert any("debe ser una lista" in e for e in resultado.errores)
+
+
+def test_calendario_campo_desconocido_cercano_es_error(tmp_path):
+    calendario_yaml = CALENDARIO_VALIDO + "sin_servicio_todas_lineas: [25/12]\n"
+    resultado = formato.validar(_build(tmp_path, calendario_yaml))
+    assert any(
+        "campo(s) desconocido(s)" in e and "sin_servicio_todas_lineas" in e
+        for e in resultado.errores
+    )
+
+
+# ── Festivos locales por línea (P03e) ───────────────────────────────────────
+
+
+def test_calendario_real_declara_festivos_locales_de_cordoba():
+    assert CAL_REAL.festivos_locales == {
+        "cordoba": {
+            date(2026, 9, 8): "Virgen de la Fuensanta",
+            date(2026, 10, 24): "San Rafael",
+        }
+    }
+
+
+def test_clase_dia_linea_sin_festivo_local_es_la_del_dia():
+    info = calendario.info_dia(CAL_REAL, date(2026, 9, 30))  # miércoles
+    assert calendario.clase_dia_linea(info, {}) == ("miercoles", None)
+    otro = {date(2026, 10, 24): ("San Rafael", "cordoba")}
+    assert calendario.clase_dia_linea(info, otro) == ("miercoles", None)
+
+
+def test_clase_dia_linea_con_festivo_local_usa_festivos_aunque_sea_sabado():
+    # 24/10/2026 es sábado y festivo local de Córdoba.
+    info = calendario.info_dia(CAL_REAL, date(2026, 10, 24))
+    assert info.clase_dia == "sabado"
+    assert info.es_festivo is False
+    locales = {date(2026, 10, 24): ("San Rafael", "cordoba")}
+    assert calendario.clase_dia_linea(info, locales) == (
+        "festivos",
+        ("San Rafael", "cordoba"),
+    )
+    # InfoDia no cambia por un festivo local (P04)
+    assert info.es_lectivo is False
+
+
+def test_clase_dia_linea_local_no_cambia_es_lectivo():
+    # 08/09/2026 es martes, antes de inicio de clases: no lectivo; el festivo
+    # local no altera InfoDia.
+    info = calendario.info_dia(CAL_REAL, date(2026, 9, 8))
+    assert info.es_lectivo is False and info.clase_dia == "martes"
+
+
+def test_clase_dia_linea_con_festivo_general_y_local_devuelve_ambos():
+    info = calendario.info_dia(CAL_REAL, date(2026, 12, 25))
+    locales = {date(2026, 12, 25): ("Fiesta local", "cordoba")}
+    clase, local = calendario.clase_dia_linea(info, locales)
+    assert clase == "festivos"
+    assert local == ("Fiesta local", "cordoba")
+    # y solo con el general: sin festivo local
+    assert calendario.clase_dia_linea(info, {}) == ("festivos", None)
+
+
+FESTIVOS_LOCALES_BASE = (
+    CALENDARIO_VALIDO + "festivos_locales:\n  pueblo-a:\n    10/10/2026: Fiesta de A\n"
+)
+
+
+def test_festivos_locales_validos(tmp_path):
+    resultado = formato.validar(_build(tmp_path, FESTIVOS_LOCALES_BASE))
+    assert resultado.errores == []
+    assert resultado.modelo.calendario.festivos_locales == {
+        "pueblo-a": {date(2026, 10, 10): "Fiesta de A"}
+    }
+
+
+def test_festivos_locales_localidad_desconocida_es_error(tmp_path):
+    yaml_ = FESTIVOS_LOCALES_BASE.replace("pueblo-a:", "pueblo-zzz:")
+    resultado = formato.validar(_build(tmp_path, yaml_))
+    assert any(
+        "festivos_locales" in e and "localidad sin definir ('pueblo-zzz')" in e
+        for e in resultado.errores
+    )
+
+
+def test_festivos_locales_fecha_fuera_de_vigencia_es_error(tmp_path):
+    yaml_ = FESTIVOS_LOCALES_BASE.replace("10/10/2026", "10/10/2028")
+    resultado = formato.validar(_build(tmp_path, yaml_))
+    assert any(
+        "festivo local" in e and "fuera de la vigencia del calendario" in e
+        for e in resultado.errores
+    )
+
+
+def test_festivos_locales_fecha_repetida_en_la_localidad_es_error(tmp_path):
+    yaml_ = FESTIVOS_LOCALES_BASE + '    " 10/10/2026": Repetido\n'
+    resultado = formato.validar(_build(tmp_path, yaml_))
+    assert any("con fecha repetida" in e and "pueblo-a" in e for e in resultado.errores)
+
+
+def test_festivos_locales_fecha_ya_en_festivos_generales_es_error(tmp_path):
+    yaml_ = FESTIVOS_LOCALES_BASE.replace("10/10/2026", "01/01/2026")
+    resultado = formato.validar(_build(tmp_path, yaml_))
+    assert any(
+        "ya está en 'festivos'" in e and "01/01/2026" in e for e in resultado.errores
+    )
+
+
+def test_festivos_locales_fecha_invalida_es_error(tmp_path):
+    yaml_ = FESTIVOS_LOCALES_BASE.replace("10/10/2026", "31/02/2026")
+    resultado = formato.validar(_build(tmp_path, yaml_))
+    assert any("fecha inválida '31/02/2026'" in e for e in resultado.errores)
+
+
+def test_festivos_locales_localidad_sin_lineas_avisa(tmp_path):
+    # _build no crea líneas: pueblo-a existe pero ninguna línea la usa.
+    resultado = formato.validar(_build(tmp_path, FESTIVOS_LOCALES_BASE))
+    assert resultado.errores == []
+    assert any(
+        "festivos_locales" in a and "pueblo-a" in a and "ninguna línea" in a
+        for a in resultado.avisos
+    )

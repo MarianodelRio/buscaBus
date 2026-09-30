@@ -563,3 +563,106 @@ horarios:
     assert any("tabla 2 de 2" in a for a in etiquetas_pendiente)
     # las dos etiquetas deben ser distintas entre sí
     assert len(etiquetas_pendiente) == 2
+
+
+# ── no_vendibles en paradas.yaml (P12b) ─────────────────────────────────────
+
+_LINEA_A_B = """\
+nombre: Línea de prueba
+temporadas:
+  anual: todo el año
+dias:
+  anual:
+    lunes-viernes: horario
+    sabado: sin_servicio
+    domingos-festivos: sin_servicio
+horarios:
+  - temporada: anual
+    dias: lunes-viernes
+    tabla: |
+      AAA    BBB
+      08:00  08:10
+"""
+
+
+def _validar_con_no_vendibles(tmp_path: Path, bloque: str):
+    horarios_dir = _build(tmp_path, _LINEA_A_B)
+    paradas = horarios_dir / "paradas.yaml"
+    paradas.write_text(
+        paradas.read_text(encoding="utf-8") + "\n" + bloque, encoding="utf-8"
+    )
+    return formato.validar(horarios_dir)
+
+
+def test_no_vendibles_valido(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-b]\n"
+    )
+    assert resultado.errores == []
+    assert resultado.modelo.no_vendibles == frozenset(
+        {frozenset({"pueblo-a", "pueblo-b"})}
+    )
+    assert not any("no_vendibles" in a for a in resultado.avisos)
+
+
+def test_no_vendibles_localidad_sin_definir_es_error(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-zzz]\n"
+    )
+    assert any(
+        "paradas.yaml" in e and "no_vendibles" in e and "pueblo-zzz" in e
+        for e in resultado.errores
+    )
+
+
+def test_no_vendibles_misma_localidad_dos_veces_es_error(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-a]\n"
+    )
+    assert any("la misma localidad dos veces" in e for e in resultado.errores)
+
+
+def test_no_vendibles_par_repetido_es_error(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-b]\n  - [pueblo-a, pueblo-b]\n"
+    )
+    assert any("repetido" in e for e in resultado.errores)
+
+
+def test_no_vendibles_par_repetido_invertido_es_error(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-b]\n  - [pueblo-b, pueblo-a]\n"
+    )
+    assert any("repetido" in e for e in resultado.errores)
+
+
+def test_no_vendibles_elemento_que_no_es_par_es_error(tmp_path):
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-b, pueblo-c]\n"
+    )
+    assert any("elemento inválido" in e for e in resultado.errores)
+
+
+def test_no_vendibles_par_que_ninguna_linea_conecta_avisa(tmp_path):
+    # la línea de prueba solo conecta A-B; A-C no lo conecta nadie.
+    resultado = _validar_con_no_vendibles(
+        tmp_path, "no_vendibles:\n  - [pueblo-a, pueblo-c]\n"
+    )
+    assert resultado.errores == []
+    assert any(
+        "no_vendibles" in a and "pueblo-a" in a and "pueblo-c" in a
+        and "ninguna línea conecta" in a
+        for a in resultado.avisos
+    )
+
+
+def test_horarios_real_declara_los_tres_no_vendibles_de_p12b():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.modelo.no_vendibles == frozenset(
+        {
+            frozenset({"cordoba", "campus-de-rabanales"}),
+            frozenset({"cordoba", "alcolea"}),
+            frozenset({"campus-de-rabanales", "alcolea"}),
+        }
+    )
+    assert not any("no_vendibles" in a for a in resultado.avisos)

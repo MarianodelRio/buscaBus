@@ -49,11 +49,16 @@ def _en_algun_rango(fecha: date, rangos: tuple[tuple[date, date], ...]) -> bool:
     return any(inicio <= fecha <= fin for inicio, fin in rangos)
 
 
-def info_dia(calendario: Calendario, fecha: date) -> InfoDia:
+def info_dia(
+    calendario: Calendario, fecha: date, permitir_fuera_de_vigencia: bool = False
+) -> InfoDia:
     """Resuelve el tipo de día de `fecha` según `calendario` (design.md,
     sección 3). Lanza `FueraDeCalendario` si `fecha` cae fuera de la vigencia
-    del calendario."""
-    if fecha < calendario.vigencia_inicio or fecha > calendario.vigencia_fin:
+    del calendario, salvo con `permitir_fuera_de_vigencia=True` (solo para
+    los días sin servicio en ninguna línea, que se conocen sin calendario
+    vigente; el nombre del festivo será None si no está cargado)."""
+    fuera = fecha < calendario.vigencia_inicio or fecha > calendario.vigencia_fin
+    if fuera and not permitir_fuera_de_vigencia:
         raise FueraDeCalendario(
             f"{fecha.strftime('%d/%m/%Y')} está fuera de la vigencia del "
             f"calendario ({calendario.vigencia_inicio.strftime('%d/%m/%Y')} - "
@@ -86,6 +91,21 @@ def info_dia(calendario: Calendario, fecha: date) -> InfoDia:
         es_lectivo=es_lectivo,
         mes=fecha.month,
     )
+
+
+def clase_dia_linea(
+    info: InfoDia, festivos_locales_de_la_linea: dict[date, tuple[str, str]]
+) -> tuple[str, tuple[str, str] | None]:
+    """Clase de día que aplica una línea concreta en `info.fecha` (P03e):
+    "festivos" si el día es festivo general o festivo local de alguna
+    localidad que la línea toca; si no, la clase del día de la semana.
+    Devuelve también el festivo local `(nombre, id de localidad)` que tenga la
+    línea ese día (aunque además sea festivo general), o None. `InfoDia` y
+    `es_lectivo` no cambian por un festivo local (P04)."""
+    festivo_local = festivos_locales_de_la_linea.get(info.fecha)
+    if info.es_festivo or festivo_local is not None:
+        return "festivos", festivo_local
+    return info.clase_dia, None
 
 
 def temporada_de(linea: Linea, fecha: date) -> Temporada | None:

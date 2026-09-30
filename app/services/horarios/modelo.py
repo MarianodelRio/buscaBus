@@ -92,6 +92,10 @@ class Calendario:
     vacaciones: tuple[tuple[date, date], ...] = ()
     no_lectivos: tuple[date, ...] = ()
     pendientes: tuple[str, ...] = ()
+    # Días (mes, día) de todos los años sin servicio en ninguna línea (P03g).
+    sin_servicio_todas_las_lineas: frozenset[tuple[int, int]] = frozenset()
+    # localidad (id) -> {fecha: nombre} de festivos locales (P03e).
+    festivos_locales: dict[str, dict[date, str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

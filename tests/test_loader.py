@@ -4,11 +4,12 @@ lista completa de errores (design.md, 2.4)."""
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from app.services.horarios import loader
+from app.services.horarios import formato, loader
 
 REPO_ROOT = Path(__file__).parent.parent
 HORARIOS_REAL = REPO_ROOT / "horarios"
@@ -47,3 +48,30 @@ def test_cargar_motor_fixture():
     horarios = loader.cargar(FIXTURES / "horarios_motor")
     assert "linea-viernes" in horarios.modelo.lineas
     assert set(horarios.localidad_paradas["pueblo-a"]) == {"AAA"}
+
+
+def test_festivos_por_linea_real_las_5_lineas_aplican_los_de_cordoba():
+    horarios = loader.cargar(HORARIOS_REAL)
+    esperado = {
+        date(2026, 9, 8): ("Virgen de la Fuensanta", "cordoba"),
+        date(2026, 10, 24): ("San Rafael", "cordoba"),
+    }
+    assert set(horarios.festivos_por_linea) == set(horarios.modelo.lineas)
+    assert len(horarios.festivos_por_linea) == 5
+    for lid, festivos in horarios.festivos_por_linea.items():
+        assert festivos == esperado, lid
+
+
+def test_festivos_por_linea_solo_las_lineas_que_tocan_la_localidad():
+    horarios = loader.cargar(FIXTURES / "horarios_festivo_local")
+    assert set(horarios.festivos_por_linea) == {"linea-con-a", "linea-viernes-a"}
+    assert horarios.festivos_por_linea["linea-con-a"][date(2026, 10, 14)] == (
+        "Fiesta local de A",
+        "pueblo-a",
+    )
+
+
+def test_festivos_locales_localidad_sin_lineas_avisa_sin_fallar():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.errores == []
+    assert not any("festivos_locales" in a for a in resultado.avisos)

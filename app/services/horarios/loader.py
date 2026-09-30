@@ -8,7 +8,8 @@ Nunca devuelve datos parciales o ambiguos: si `horarios/` no valida, lanza
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 from app.services.horarios import formato
@@ -37,6 +38,41 @@ class Horarios:
     localidad_paradas: dict[str, tuple[str, ...]]
     # localidad -> viajes que paran en alguna parada de esa localidad
     localidad_viajes: dict[str, tuple[Viaje, ...]]
+    # línea -> fecha -> (nombre del festivo, id de localidad): los festivos
+    # locales que aplica cada línea (P03e). Una línea aplica los de una
+    # localidad si alguno de sus viajes tiene una parada en ella.
+    festivos_por_linea: dict[str, dict[date, tuple[str, str]]] = field(
+        default_factory=dict
+    )
+
+
+def calcular_festivos_por_linea(
+    modelo: Modelo,
+) -> dict[str, dict[date, tuple[str, str]]]:
+    """línea -> fecha -> (nombre, id de localidad) de los festivos locales que
+    aplica cada línea (P03e): una línea aplica los de una localidad si alguno
+    de sus viajes tiene una parada en ella. Único sitio que lo decide; lo usan
+    `cargar()` y la vista de revisión."""
+    resultado: dict[str, dict[date, tuple[str, str]]] = {}
+    calendario = modelo.calendario
+    if calendario is None or not calendario.festivos_locales:
+        return resultado
+    for lid, linea in modelo.lineas.items():
+        localidades_linea = {
+            modelo.paradas[paso.parada].localidad
+            for viaje in linea.viajes
+            for paso in viaje.pasos
+            if paso.parada in modelo.paradas
+        }
+        de_la_linea: dict[date, tuple[str, str]] = {}
+        for localidad_id in sorted(calendario.festivos_locales):
+            if localidad_id not in localidades_linea:
+                continue
+            for fecha, nombre in calendario.festivos_locales[localidad_id].items():
+                de_la_linea.setdefault(fecha, (nombre, localidad_id))
+        if de_la_linea:
+            resultado[lid] = de_la_linea
+    return resultado
 
 
 def cargar(directorio: Path | str) -> Horarios:
@@ -73,4 +109,5 @@ def cargar(directorio: Path | str) -> Horarios:
         localidad_viajes={
             lid: tuple(viajes) for lid, viajes in localidad_viajes.items()
         },
+        festivos_por_linea=calcular_festivos_por_linea(modelo),
     )

@@ -21,7 +21,9 @@ from app.services.horarios.modelo import Linea, Temporada, Viaje
 # servicio cuando la fecha pedida no tiene salidas (design.md, sección 3).
 SIGUIENTE_CON_SERVICIO_DIAS = 7
 
-EstadoConsulta = Literal["con_salidas", "sin_servicio", "sin_datos", "sin_trayecto"]
+EstadoConsulta = Literal[
+    "con_salidas", "sin_servicio", "sin_datos", "sin_trayecto", "no_vendible"
+]
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,23 @@ class Consulta:
     lineas_sin_datos: tuple[str, ...]
     fuera_de_calendario: bool
     siguiente_con_servicio: date | None
+    # True si el día es de sin servicio en ninguna línea (P03g).
+    sin_servicio_general: bool = False
+    # (nombre, id de localidad) si alguna línea que cubre el par usó un
+    # festivo local ese día (P03e).
+    festivo_local: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class _Resolucion:
+    estado: EstadoConsulta
+    salidas: list
+    info: InfoDia | None
+    temporadas: tuple[tuple[str, Temporada], ...]
+    lineas_sin_datos: tuple[str, ...]
+    fuera_de_calendario: bool
+    sin_servicio_general: bool = False
+    festivo_local: tuple[str, str] | None = None
 
 
 def _parse_hora(hhmm: str) -> time:
@@ -163,6 +182,7 @@ def _evaluar_pareja(
     i_origen: int,
     i_destino: int,
     info: InfoDia,
+    clase: str,
 ) -> tuple[bool, tuple[str, ...]]:
     """Comprueba las condiciones de negocio (design.md, 2.4 y 3) que aplican
     a esta pareja concreta de paradas de un viaje, y devuelve si es válida y
@@ -176,7 +196,11 @@ def _evaluar_pareja(
         if obs is None:
             continue
         if obs.id == "solo_viernes_lectivo":
-            if not (info.dia_semana == "viernes" and info.es_lectivo):
+            # `clase` es la de ESTA línea: un festivo local la vuelve
+            # "festivos" aunque el día sea viernes lectivo.
+            if not (
+                info.dia_semana == "viernes" and info.es_lectivo and clase == "viernes"
+            ):
                 return False, ()
         texto = formato.texto_observacion(obs, linea)
         if texto not in notas:
@@ -186,36 +210,54 @@ def _evaluar_pareja(
 
 def _resolver_fecha(
     horarios: Horarios, origen: str, destino: str, fecha: date
-) -> tuple[
-    EstadoConsulta,
-    list[Salida],
-    InfoDia | None,
-    tuple[tuple[str, Temporada], ...],
-    tuple[str, ...],
-    bool,
-]:
+) -> _Resolucion:
+    """Precedencia (design.md, sección 3): sin_trayecto, sin_servicio en
+    ninguna línea (P03g), fuera de vigencia (sin_datos), líneas."""
     modelo = horarios.modelo
     calendario = modelo.calendario
     assert calendario is not None
 
-    if fecha < calendario.vigencia_inicio or fecha > calendario.vigencia_fin:
-        return "sin_datos", [], None, (), (), True
+    fuera_de_vigencia = (
+        fecha < calendario.vigencia_inicio or fecha > calendario.vigencia_fin
+    )
+
+    candidatos_por_linea = _candidatos_por_linea(horarios, origen, destino)
+    lineas_conectan: set[str] = {
+        lid
+        for lid, candidatos in candidatos_por_linea.items()
+        if _conecta_alguna_vez(horarios, candidatos, origen, destino)
+    }
+
+    if not lineas_conectan:
+        info = (
+            None
+            if fuera_de_vigencia
+            else calendario_servicio.info_dia(calendario, fecha)
+        )
+        return _Resolucion("sin_trayecto", [], info, (), (), fuera_de_vigencia)
+
+    if (fecha.month, fecha.day) in calendario.sin_servicio_todas_las_lineas:
+        info = calendario_servicio.info_dia(
+            calendario, fecha, permitir_fuera_de_vigencia=True
+        )
+        return _Resolucion(
+            "sin_servicio", [], info, (), (), False, sin_servicio_general=True
+        )
+
+    if fuera_de_vigencia:
+        return _Resolucion("sin_datos", [], None, (), (), True)
 
     info = calendario_servicio.info_dia(calendario, fecha)
 
-    lineas_conectan: set[str] = set()
     lineas_sin_datos: set[str] = set()
     temporadas_usadas: dict[str, Temporada] = {}
+    festivo_local_usado: tuple[str, str] | None = None
     # (hora_salida, hora_llegada, parada_origen, parada_destino) -> Salida provisional
     agrupadas: dict[tuple[time, time, str, str], dict] = {}
 
-    candidatos_por_linea = _candidatos_por_linea(horarios, origen, destino)
-
     for lid, candidatos in candidatos_por_linea.items():
         linea = modelo.lineas[lid]
-        conecta_esta_linea = _conecta_alguna_vez(horarios, candidatos, origen, destino)
-        if conecta_esta_linea:
-            lineas_conectan.add(lid)
+        conecta_esta_linea = lid in lineas_conectan
 
         temporada = calendario_servicio.temporada_de(linea, fecha)
         if temporada is None:
@@ -226,7 +268,14 @@ def _resolver_fecha(
         if _mes_en_no_circula(linea, fecha.month):
             continue
 
-        estado = linea.dias.get(temporada.nombre, {}).get(info.clase_dia)
+        clase, festivo_local = calendario_servicio.clase_dia_linea(
+            info, horarios.festivos_por_linea.get(lid, {})
+        )
+        if festivo_local is not None and conecta_esta_linea:
+            if festivo_local_usado is None:
+                festivo_local_usado = festivo_local
+
+        estado = linea.dias.get(temporada.nombre, {}).get(clase)
         if estado is None or estado == "sin_servicio":
             continue
         if estado == "sin_datos":
@@ -238,14 +287,14 @@ def _resolver_fecha(
         for viaje in candidatos:
             if viaje.temporada != temporada.nombre:
                 continue
-            if info.clase_dia not in formato.GRUPOS_DIA.get(viaje.dias, frozenset()):
+            if clase not in formato.GRUPOS_DIA.get(viaje.dias, frozenset()):
                 continue
             par = _emparejar(horarios, viaje, origen, destino)
             if par is None:
                 continue
             i_origen, i_destino = par
             valido, notas = _evaluar_pareja(
-                horarios, linea, viaje, i_origen, i_destino, info
+                horarios, linea, viaje, i_origen, i_destino, info, clase
             )
             if not valido:
                 continue
@@ -298,14 +347,21 @@ def _resolver_fecha(
     temporadas = tuple(
         sorted(temporadas_usadas.items(), key=lambda item: item[0])
     )
-    return (
+    return _Resolucion(
         estado_final,
         salidas,
         info,
         temporadas,
         tuple(sorted(lineas_sin_datos)),
         False,
+        festivo_local=festivo_local_usado,
     )
+
+
+def es_no_vendible(horarios: Horarios, a: str, b: str) -> bool:
+    """True si la empresa no vende billetes entre `a` y `b`, en ninguno de
+    los dos sentidos (P12b). Único sitio que consulta `modelo.no_vendibles`."""
+    return frozenset((a, b)) in horarios.modelo.no_vendibles
 
 
 def consultar(
@@ -323,14 +379,24 @@ def consultar(
     if destino not in modelo.localidades:
         raise ValueError(f"localidad de destino sin definir: '{destino}'")
 
-    (
-        estado,
-        salidas,
-        info,
-        temporadas,
-        lineas_sin_datos,
-        fuera_de_calendario,
-    ) = _resolver_fecha(horarios, origen, destino, fecha)
+    if es_no_vendible(horarios, origen, destino):
+        return Consulta(
+            estado="no_vendible",
+            salidas=(),
+            info_dia=None,
+            temporadas=(),
+            lineas_sin_datos=(),
+            fuera_de_calendario=False,
+            siguiente_con_servicio=None,
+        )
+
+    resolucion = _resolver_fecha(horarios, origen, destino, fecha)
+    estado = resolucion.estado
+    salidas = resolucion.salidas
+    info = resolucion.info
+    temporadas = resolucion.temporadas
+    lineas_sin_datos = resolucion.lineas_sin_datos
+    fuera_de_calendario = resolucion.fuera_de_calendario
 
     if ahora is not None and ahora.date() == fecha:
         hora_actual = ahora.time()
@@ -356,10 +422,7 @@ def consultar(
             candidata = fecha + timedelta(days=delta)
             if candidata > calendario.vigencia_fin:
                 break
-            _, salidas_candidata, *_ = _resolver_fecha(
-                horarios, origen, destino, candidata
-            )
-            if salidas_candidata:
+            if _resolver_fecha(horarios, origen, destino, candidata).salidas:
                 siguiente_con_servicio = candidata
                 break
 
@@ -371,12 +434,15 @@ def consultar(
         lineas_sin_datos=lineas_sin_datos,
         fuera_de_calendario=fuera_de_calendario,
         siguiente_con_servicio=siguiente_con_servicio,
+        sin_servicio_general=resolucion.sin_servicio_general,
+        festivo_local=resolucion.festivo_local,
     )
 
 
 def destinos_desde(horarios: Horarios, origen: str) -> frozenset[str]:
     """Localidades a las que se llega en servicio directo desde `origen`, en
-    cualquier temporada/día (no filtrado por fecha). Nunca incluye `origen`."""
+    cualquier temporada/día (no filtrado por fecha). Nunca incluye `origen` ni
+    los destinos no vendibles desde él (P12b)."""
     resultado: set[str] = set()
     for viaje in horarios.localidad_viajes.get(origen, ()):
         localidades_viaje = _localidades_del_viaje(horarios, viaje)
@@ -386,4 +452,6 @@ def destinos_desde(horarios: Horarios, origen: str) -> frozenset[str]:
         for loc in localidades_viaje[idx_primero + 1 :]:
             if loc is not None and loc != origen:
                 resultado.add(loc)
-    return frozenset(resultado)
+    return frozenset(
+        loc for loc in resultado if not es_no_vendible(horarios, origen, loc)
+    )

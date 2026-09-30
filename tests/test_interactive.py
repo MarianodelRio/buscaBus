@@ -189,3 +189,53 @@ def test_msg_resultado_truncates_at_4096_chars():
                            __import__("datetime").date(2026, 9, 23))
     assert len(texto) <= 4096
     assert "más, llama al" in texto
+
+
+def test_msg_resultado_sin_servicio_general_sin_siguiente_da_hecho_y_telefono():
+    from datetime import date
+
+    from app.services.horarios import calendario as cal
+    from app.services.horarios.query import Consulta
+    from app.utils.messages import msg_resultado
+
+    datos = horarios_datos.actual()
+    fecha = date(2027, 12, 25)
+    consulta = Consulta(
+        estado="sin_servicio",
+        salidas=(),
+        info_dia=cal.info_dia(
+            datos.horarios.modelo.calendario, fecha, permitir_fuera_de_vigencia=True
+        ),
+        temporadas=(),
+        lineas_sin_datos=(),
+        fuera_de_calendario=False,
+        siguiente_con_servicio=None,
+        sin_servicio_general=True,
+    )
+    texto = msg_resultado(consulta, datos.horarios, "Pozoblanco", "Córdoba", fecha)
+    assert "El 25/12 no hay servicio en ninguna línea" in texto
+    assert "957 42 90 30" in texto
+    assert "próximos días" not in texto
+    assert "festivo" not in texto  # sin nombre cargado, la cabecera es solo el día
+
+
+def test_lista_de_destinos_con_no_vendibles_filtrados_respeta_limites():
+    datos = horarios_datos.actual()
+    horarios = datos.horarios
+    for origen_id in ("cordoba", "campus-de-rabanales", "alcolea"):
+        alcanzables = list(query.destinos_desde(horarios, origen_id))
+        assert alcanzables
+        for otro in ("cordoba", "campus-de-rabanales", "alcolea"):
+            if otro != origen_id:
+                assert otro not in alcanzables
+        nombres = {
+            lid: horarios.modelo.localidades[lid].nombre for lid in alcanzables
+        }
+        ordenados = flujo.ordenar_destinos(
+            alcanzables, list(datos.menu_origen), nombres
+        )
+        payload = build_destinos(
+            horarios.modelo.localidades[origen_id].nombre, ordenados
+        )
+        _assert_list_limits(payload)
+        assert len(_rows(payload)) <= MAX_ROWS

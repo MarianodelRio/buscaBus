@@ -1,0 +1,456 @@
+PREGUNTAS SOBRE EL EXCEL DE HORARIOS PARA EL BOT DE WHATSAPP
+=============================================================
+
+Fichero revisado: HORARIOS NUEVOS.xlsx (18 hojas)
+Fecha: 24/09/2026
+
+Para qué es este documento
+--------------------------
+Estamos pasando los horarios del Excel a un bot de WhatsApp que contestará
+a los clientes "¿a qué hora sale el autobús de X a Y tal día?". Un horario
+mal pasado hace que alguien pierda el autobús, así que no queremos suponer
+nada que no esté claro.
+
+Hemos revisado el Excel celda por celda. Casi todo se entiende bien, pero
+hay cosas que solo podéis responder vosotros. Cada pregunta indica la hoja
+y la fila o celda donde está el problema, para que podáis localizarla en
+vuestro Excel.
+
+Cuando hay una forma razonable de actuar mientras tanto, la indicamos como
+"Mientras tanto haremos". Si os parece bien, basta con decir "OK".
+
+Las preguntas están numeradas (P01, P02...). Al responder, basta con poner
+el número y la respuesta.
+
+Al final hay una lista de DECISIONES QUE YA HEMOS TOMADO. No hace falta
+responder a ellas, pero revisadlas por si alguna no es correcta.
+
+
+=============================================================
+1. TEMPORADAS Y CALENDARIO
+=============================================================
+
+P01. Peñarroya y Los Blázquez no tienen horario de verano
+------------------------------------------------------------
+Hojas: "PYA INV" y "BLAZQUEZ".
+El resto de líneas tienen una hoja de invierno y otra de verano (o dicen que
+su horario es anual). Estas dos solo tienen la de invierno.
+Esto afecta a Córdoba, El Vacar, Cruce de Villaharta, Espiel, Villanueva del
+Rey, Belmez, Peñarroya, Fuente Obejuna, El Porvenir, La Granjuela,
+Valsequillo y Los Blázquez.
+
+  ¿Qué horario tienen estas líneas en verano?
+    a) El mismo que en invierno (vale todo el año). ok
+    b) Otro distinto (en ese caso, necesitaríamos la hoja).
+    c) No hay servicio en verano.
+
+Mientras tanto haremos: en verano no daremos horarios de estas dos líneas.
+Solo mostraremos el autobús de Badajoz, que pasa por parte de esos pueblos
+todo el año.
+
+
+P02. ¿Qué día termina el verano? ¿Depende de la línea?
+---------------------------------------------------------
+Los títulos de las hojas de verano dicen "HASTA FIN VERANO" o "HASTA FIN
+VACACIONES", sin fecha. Solo hay dos pistas:
+  - "ADAMUZ VER" dice "hasta 31/08" y "ADAMUZ INV" empieza el 01/09.
+  - El resto de hojas de invierno empiezan el 15/09 (Peñarroya, el 01/09).
+
+Parece que el verano acaba el día antes de que empiece el invierno de cada
+línea: el 31/08 en Adamuz y el 14/09 en las demás.
+
+  ¿Es así? ¿Cada línea tiene su propia fecha de cambio a invierno, o es la
+  misma para todas? ¿Se mantienen estas fechas cada año?
+ADAMUZ ACABA EL HORARIO DE VERANO EL 31/08 Y LAS DEMÁS ACABAN EL 14/09
+Mientras tanto haremos: el verano de cada línea acaba el día anterior al
+inicio de su invierno.
+
+
+P03. Días festivos
+--------------------
+El bot tiene que saber qué horario aplicar un día festivo. El Excel lo dice
+de formas distintas según la hoja:
+
+  - Tienen horario de "DOMINGOS Y FESTIVOS": Adamuz, Hornachuelos-Posadas,
+    Pozoblanco, Belalcázar-Córdoba y Badajoz.
+  - Peñarroya ("PYA INV") pone "HORARIO DOMINGO", sin mencionar festivos. TAMBIEN PARA FESTIVO
+  - Fuente Carreteros y Ochavillos dicen que los festivos no hay servicio.
+  - Torrecampo, Belalcázar-Pozoblanco y Los Blázquez dicen "sábado y domingos
+    no hay servicio", pero no mencionan los festivos. LOS FESTIVOS TAMPOCO HAY SERVICIO
+  - Villaviciosa no tiene horario de domingo ni dice que no haya servicio. NO TIENE SERVICIO
+
+  a) Un festivo entre semana (por ejemplo, un miércoles), ¿qué horario se
+     aplica? ¿El de domingos y festivos, o el normal de ese día? EL DE DOMINGOS Y FESTIVOS
+  b) En las líneas que solo funcionan de lunes a viernes, ¿hay servicio un
+     festivo entre semana? NO
+  c) En Peñarroya, ¿el horario de domingo vale también para los festivos? SI
+  d) ¿Villaviciosa tiene servicio los domingos? NO
+  e) ¿Qué festivos cuentan: los nacionales, los de Andalucía, los locales de
+     Córdoba capital, los locales de cada pueblo...? CUENTAN FESTIVOS NACIONALES, EN LAS LÍNEAS QUE TIENEN ORIGEN EN CÓRDOBA O DESTINO EN CÓRDOBA CUENTAN LOS FESTIVOS DE CÓRDOBA, FESTIVOS DE ANDALUCÍA
+  f) Si un festivo cae en sábado, ¿horario de sábado o de festivo? FESTIVO
+  g) ¿Hay días con horario especial (Nochebuena, Nochevieja, Semana Santa,
+     feria)? SI, PERO AÚN NO ESTÁN ESTABLECIDOS, EL DÍA 25/12 Y EL 01/01 NO HAY SERVICIOS
+
+
+P04. Calendario escolar ("solo viernes de periodo escolar")
+-------------------------------------------------------------
+Hay tres servicios que solo funcionan los viernes de periodo escolar:
+  - Belalcázar-Córdoba, fila 18: la llegada a Cabeza del Buey a las 17:20.
+  - Peñarroya, fila 14: la llegada a Fuente Obejuna a las 21:50.
+  - Villaviciosa invierno, fila 32: el autobús Córdoba 16:00 - Villaviciosa.
+SIGNIFICA QUE EL BUS QUE:
+SOLO EL VIERNES SALE EL BUS DESDE CÓRDOBA HASTA VILLAVICIOSA, PASANDO POR EL VACAR Y PANTANO SEGÚN LOS HORARIOS DEL EXCEL. 
+SOLO EL VIERNES EL BUS QUE SALE DE LUNES A VIERNES A LAS 15:30H DESDE CÓRDOBA, LLEGARÍA HASTA CABEZA DEL BUEY, ES DECIR: DE CÓRDOBA A CABEZA DEL BUEY DE LUNES A JUEVES SALE A LAS 12H DESDE CÓRDOBA, PERO SOLO LOS VIERNES EN PERIODO ESCOLAR SALE UNO A LAS 15:30H DESDE CÓRDOBA.
+EL SERVICIO DE LINEA PEÑARROYA - CÓRDOBA ES IGUAL. 
+DIGAMOS QUE EL ASTERISCO CON LA COLETILLA DE SOLO VIERNES PERIODO ESCOLAR LE AFECTA SOLO A LA POBLACION QUE LO TIENE. 
+Para que el bot lo aplique bien necesita saber qué viernes son lectivos.
+
+  ¿Qué calendario escolar seguís? ¿El de la Delegación de Educación de
+  Córdoba? ¿Hay algún caso especial (por ejemplo, el último viernes antes de
+  vacaciones)?
+DELEGACION DE EDUCACION DE CÓRDOBA
+
+
+=============================================================
+2. LÍNEAS Y SERVICIOS
+=============================================================
+
+P05. Nombres de las líneas de la hoja "TORR"
+-----------------------------------------------
+Las hojas "TORR INV" y "TORR VER" no llevan nombre de línea y contienen
+varias líneas distintas:
+  1. Torrecampo - Pedroche - Pozoblanco (Hospital)
+  2. Santa Eufemia / Villaralto - El Viso - Dos Torres - Añora - Pozoblanco
+  3. Cardeña - Villanueva de Córdoba - Pozoblanco
+  4. Pozoblanco - Villanueva de Córdoba - Estación de Villanueva
+
+  ¿Cómo se llama cada una de cara al público? El bot indica en cada
+  respuesta de qué línea es el autobús.
+LINEA TORRECAMPO
+SANTA EUFEMIA-VILLARALTO
+CARDEÑA
+ESTACION AVE VVA DE CÓRDOBA
+
+Mientras tanto haremos: las nombraremos por sus pueblos de principio y fin.
+
+
+P06. Belalcázar-Pozoblanco: filas ocultas y "régimen interno"
+----------------------------------------------------------------
+En la hoja "BELAL - POZ INV" hay:
+  - 4 filas ocultas (10, 12, 16 y 18), coloreadas de otro color.
+  - Un bloque marcado "SOLO PARA RÉGIMEN INTERNO" (filas 23 a 34).
+En "BELAL - POZ VER" también hay 4 filas ocultas (11, 13, 17 y 19).
+
+Si quitamos todo eso, al público solo le queda un viaje en cada sentido:
+Belalcázar 09:20 -> Pozoblanco 10:15, y Pozoblanco 13:00 -> Belalcázar 14:00.
+
+  ¿Es correcto? ¿Qué son las filas ocultas (¿transporte escolar?)? ¿Alguno
+  de esos viajes admite viajeros normales?
+TANTO LAS FILAS OCULTAS COMO EL RÉGIMEN INTERNO NO TIENES QUE TENERLO EN CUENTA. 
+Mientras tanto haremos: no publicar nada oculto ni de régimen interno.
+
+
+P07. Badajoz: de lunes a jueves el autobús termina en Zafra
+--------------------------------------------------------------
+Hoja "BADAJOZ", según el Excel:
+  - Ida de lunes a jueves: Córdoba 15:00 ... Zafra 18:15, y ahí termina.
+    Los viernes y domingos sí llega a Badajoz.
+  - Vuelta de lunes a viernes: empieza en Zafra a las 10:30, no en Badajoz.
+    Los domingos sí sale de Badajoz (14:30).
+
+Es decir: de Córdoba a Badajoz solo se puede ir viernes y domingo, y de
+Badajoz a Córdoba solo el domingo.
+
+  ¿Es correcto?
+
+ES CORRECTO
+P08. "ENLAZA CON POZOBLANCO"
+--------------------------------
+Hoja "BELAL- COR": aparece en el autobús Belalcázar 09:20 -> Córdoba (fila
+11) y en el Córdoba 18:30 -> Belalcázar (fila 19).
+
+Además, en la hoja "BELAL - POZ" hay otro Belalcázar 09:20 -> Pozoblanco con
+las mismas horas hasta Villanueva del Duque (09:45). Después llega a
+Alcaracejos a las 10:05, mientras que el de Córdoba llega a las 10:10.
+
+  a) ¿Es un solo autobús y en Alcaracejos se cambia a otro para ir a
+     Pozoblanco? ¿O son dos autobuses distintos que salen a la vez?
+  b) ¿Queréis que el bot lo diga ("enlaza con Pozoblanco")?
+
+ESO NO TIENES QUE TENERLO EN CUENTA
+P09. Pozoblanco verano: "PREGUNTAR A ANTONIO" y un "**" suelto
+------------------------------------------------------------------
+Hoja "POZOB VER", domingos y festivos:
+  a) Fila 53: Córdoba 14:30 -> Pozoblanco 15:40 -> Villanueva de Córdoba
+     16:15. Tiene la nota "PREGUNTAR A ANTONIO SOBRE ESTE HORARIO".
+     ¿Este autobús funciona en verano? ¿Con estas horas? AÚN NO SABEMOS LOS HORARIOS DE VERANO, PERO EN UN PRINCIPIO LOS PUEDES DEJAR ASI
+  b) Fila 48: Pozoblanco 17:50 -> Córdoba 19:05, sin paradas intermedias,
+     con "**" en la columna RUTA. En invierno ese autobús sale de Villanueva
+     de Córdoba a las 17:15 y para en Pozoblanco, Alcaracejos y Cruce de
+     Villaharta. ¿Cuál es el recorrido correcto en verano y qué significa
+     ese "**"? ESE HORARIO NO ESTÁ EN VIGOR EN VERANO LO PUEDES BORRAR
+
+Mientras tanto haremos: publicar ambos tal como están en el Excel, marcados
+como pendientes.
+
+
+=============================================================
+3. PARADAS Y PUEBLOS
+=============================================================
+
+Cómo funciona el bot: el cliente elige un pueblo (por ejemplo, "Pozoblanco")
+y el bot le dice de qué parada sale cada autobús. Por eso necesitamos saber
+qué paradas hay en cada pueblo y cómo llamarlas.
+LAS PARADAS NO HACE FALTA TENERLAS EN CUENTA, SOLO LOS PUEBLOS, EXCEPTO: 
+POZOBLANCO Y POZOBLANCO HOSPITAL SI HAY QUE DIFERENCIARLO 
+EN LOS HORARIOS DE LA LÍNEA HORNACHUELOS - CÓRDOBA, DONDE TIENE UN ASTERISCO SIGNIFICA QUE NO TIENE PARADA EN PEDRERA (UNA PARADA DE POSADAS), LOS QUE ESTÁN COLOREADOS DE NARANJA SIGNIFICA QUE PASA POR RIVERO (ES UNA ALDEA DE POSADAS) Y LOS QUE ESTÁN COLOREADOS DE VERDE ES QUE PASA POR LOS MOCHOS ( ES UNA ALDEA DE ALMODOVAR DEL RÍO) ESO SI TIENES QUE ESPECIFICARLO EN LAS PARADAS, LO DEMÁS SOLO PONER EL NOMBRE QUE APARECEN EN LOS HORARIOS
+P10. Paradas de Pozoblanco
+-----------------------------
+En el Excel aparecen estos nombres:
+  - "POZOBLANCO" (hojas Pozoblanco, Belalcázar-Pozoblanco y Torrecampo)
+  - "POZ. HOSPITAL" / "POZOBLANCO.HOSP" (suponemos que son la misma)
+  - "POZO.EST" (hoja Torrecampo, filas 28 y 31)
+
+  a) ¿"POZOBLANCO" y "POZO.EST" son la misma parada (estación de autobuses)
+     o son dos distintas (centro del pueblo y estación)? SON LA MISMA PARADA, CORRESPONDE A LA ESTACION DE AUTOBUSES
+  b) ¿Qué nombre queréis que vea el cliente en cada una y dónde está (calle
+     o referencia)? DEJALO ASÍ TAL Y COMO VIENE EN EL EXCEL
+SOLO TIENES QUE DIFERENCIAR CUANDO VA AL HOSPITAL Y CUANDO VA A LA ESTACION, PERO DONDE PONE POZOBLANCO DEJALO IGUAL
+
+P11. "EST. VVA. ODB"
+-----------------------
+Hoja "TORR", filas 48 y 53: Pozoblanco - Villanueva de Córdoba - "EST. VVA.
+ODB".
+
+  ¿Es la estación de tren de Villanueva de Córdoba-Los Pedroches? Si está
+  fuera del pueblo, la trataremos como un sitio aparte (como el Cruce de
+  Villaharta), para que nadie crea que el autobús para en el centro de
+  Villanueva. ¿Qué nombre le ponemos? ESTACION AVE VVA DE CORDOBA
+
+
+P12. Córdoba, Rabanales y Alcolea
+------------------------------------
+  a) En Córdoba, ¿de qué parada salen los autobuses? ¿La estación de
+     autobuses? ¿Es la misma para todas las líneas? SI, SALEN TODOS DESDE LA ESTACION DE AUTOBUSES DE CÓRDOBA
+  b) Rabanales (campus) y Alcolea aparecen como paradas propias en la línea
+     de Adamuz. Si un cliente elige "Córdoba", ¿le mostramos también los
+     autobuses que salen de Rabanales o de Alcolea, o deben elegirlos aparte? DEBEN DE ELEGIRLOS APARTE. 
+A TENER EN CUENTA, NOSOTROS NO PODEMOS VENDER EL TRASLADO DESDE CÓRDOBA HASTA RABANALES, NI DE CÓRDOBA A ALCOLEA, NI DE RABANALES ALCOLEA Y VICEVERSA
+
+Mientras tanto haremos: tratarlos como sitios aparte ("Campus de Rabanales",
+"Alcolea").
+
+
+P13. Nombres que no tenemos claros
+-------------------------------------
+  - "PANTANO" (hoja Villaviciosa, entre Villaviciosa y El Vacar): ¿qué
+    pantano es y cómo lo llama la gente? ASÍ TAL CUAL SE LLAMA PANTANO
+  - "AQUASIERRA" (hoja Adamuz): ¿es la urbanización de Villafranca de
+    Córdoba? NO, ES EL PARQUE ACUATICO DE VILLAFRANCA
+  - "CORONADA" (hoja Badajoz, entre Fuente Obejuna y Granja): ¿es La Coronada,
+    aldea de Fuente Obejuna, o La Coronada de Badajoz? LA CORONADA DE FUENTE OBEJUNA
+  - "GRANJA" (hoja Badajoz): ¿es La Granja de Torrehermosa? SI	
+
+Y una pregunta general: ¿hay paradas que la gente conozca por otro nombre?
+(Por ejemplo "el Cruce" por Cruce de Villaharta.) Así el bot las entenderá
+cuando las escriban.
+NO, SOLO PON LAS PARADAS QUE ESTÁN EL EXCEL CON LAS ANOTACIONES QUE HEMOS AÑADIDO
+
+P14. Villaharta y Cruce de Villaharta
+----------------------------------------
+Suponemos que son sitios distintos: el pueblo y el cruce de la carretera.
+Villaharta solo aparece en la línea de Pozoblanco.
+
+  ¿Es así? Si alguien de Villaharta pregunta, ¿le ofrecemos también los
+  autobuses que paran en el cruce?
+VILLAHARTA SE REFIERE A LOS AUTOBUSES QUE ENTRAN EN EL PUEBLO. 
+CRUCE DE VILLAHARTA SE REFIEREN LOS QUE PASAN POR EL CRUCE SOLO, SIN LLEGAR AL PUEBLO
+ESTO LO TIENES QUE DIFERENCIAR PARA QUE LA GENTE NO CONFUNDA UNA PARADA CON OTRA
+
+P15. Rivero de Posadas y Los Mochos
+--------------------------------------
+Hoja "POSADAS": según los colores, algunos autobuses "pasan por Rivero de
+Posadas" y otros "tienen parada dentro de Los Mochos". Pero no hay columna
+ni hora para esos sitios.
+
+  a) ¿Se puede subir o bajar del autobús en Rivero y en Los Mochos? SI, SIGUIENDO LAS INDICACIONES QUE APARECE EN EL EXCEL
+  b) Si es así, ¿a qué hora pasa aproximadamente cada autobús? PON HORARIO APROXIMADO DESDE CADA LOCALIDAD DONDE ESTÁ LA INFORMACIÓN, SABIENDO QUE DE ALMODOVAR A LOS MOCHOS SE TARDA 7 MINUTOS APROX Y DE RIVERO A POSADAS 4 MINUTOS APROX.
+
+Mientras tanto haremos: no se podrán elegir como origen o destino. El
+resultado dirá "pasa por Rivero de Posadas" o "para dentro de Los Mochos".
+
+
+P16. "El Pedrera (calle Sevilla)"
+------------------------------------
+Hoja "POSADAS": el asterisco (*) significa "NO TIENE PARADA EN EL PEDRERA
+(CALLE SEVILLA)". En la hoja de verano no pone "(calle Sevilla)". El
+asterisco aparece a veces en la hora de Posadas y otras en la de Córdoba.
+
+  ¿Dónde está El Pedrera, en Posadas o en Córdoba? ¿Lo mostramos al cliente
+  tal cual ("este autobús no para en El Pedrera")?
+SI, SOLO PARA LAS PERSONAS QUE SELECCIONEN HORARIO CON ORIGEN O DESTINO POSADAS, SIGNIFICA QUE HACE UNA PARADA EN EL PUEBLO QUE SE LLEMA PEDRERA.
+LA PARADA SE ENCUENTRA EN POSADAS, TODOS LOS QUE TIENEN ASTERISCO SIGNIFICA QUE NO TIENE PARADA EN PEDRERA, TANTO INVIERNO COMO VERANO.
+
+
+P17. Villafranca de Córdoba y Villafranca de los Barros
+---------------------------------------------------------
+"VILLAFRANCA" aparece en dos hojas:
+  - Hoja Adamuz: suponemos que es Villafranca de Córdoba.
+  - Hoja Badajoz: suponemos que es Villafranca de los Barros.
+
+  ¿Correcto?
+
+ES CORRECTO
+P18. Zonas
+-------------
+Para quien no encuentre su pueblo, el bot ofrecerá "ver pueblos por zona".
+Esta es nuestra propuesta. Corregid lo que no esté bien:
+
+  Córdoba ............. Córdoba, Campus de Rabanales, Alcolea
+  Los Pedroches ....... Pozoblanco, Villanueva de Córdoba, Conquista, Cardeña,
+                        Torrecampo, Pedroche, Añora, Dos Torres, El Viso,
+                        Santa Eufemia, Villaralto, Alcaracejos, Villanueva del
+                        Duque, Fuente La Lancha, Hinojosa del Duque,
+                        Belalcázar, Estación de Villanueva DE CORDOBA
+  Valle del Guadiato .. Villaharta, Cruce de Villaharta, El Vacar, Espiel,
+                        Villanueva del Rey, Belmez, Peñarroya-Pueblonuevo,
+                        Fuente Obejuna, El Porvenir, La Granjuela, Valsequillo,
+                        Los Blázquez, Villaviciosa de Córdoba, Pantano
+  Vega del Guadalquivir Posadas, Almodóvar del Río, Hornachuelos, Fuente
+                        Palmera, Fuente Carreteros, Silillos, La Ventilla,
+                        Fuencubierta, La Herrería, Ochavillos, Guadalcázar
+  Adamuz .............. Adamuz, Algallarín, Villafranca de Córdoba, Aquasierra
+  Extremadura ......... Cabeza del Buey, Granja de Torrehermosa, Azuaga,
+                        Berlanga, Ahillones, Llerena, Villagarcía de la Torre,
+                        Zafra, Villafranca de los Barros, Almendralejo,
+                        Mérida, Badajoz (y Coronada, según P13)
+
+  ¿Os parecen bien estas zonas y nombres? ¿Cabeza del Buey va en Extremadura
+  o con Belalcázar (Los Pedroches)?
+CABEZA DEL BUEY VA CON BELALCAZAR
+PERO PREFIERO QUE LO NOMBRES POR LAS LÍNEAS EJEMPLO:
+LÍNEA DE CÓRDOBA BADAJOZ: TODOS LOS PUEBLOS QUE PASAN POR ESA RUTA
+LÍNEA CÓRDOBA - HORNACHUELOS TODOS LOS PUEBLOS QUE PASAN POR ESA RUTA
+ASÍ TODOS LOS TRAYECTOR	
+
+=============================================================
+4. AVISOS PARA EL CLIENTE
+=============================================================
+
+P19. Paradas "a demanda"
+---------------------------
+Las celdas en amarillo de Pozoblanco, Belalcázar-Córdoba y Badajoz son
+paradas a demanda ("llamando con 24 horas laborables de antelación al
+957 42 90 30").
+
+  a) ¿El teléfono es siempre el 957 42 90 30, para todas las líneas? SI
+  b) ¿Qué significa exactamente "24 horas laborables"? Por ejemplo, para un
+     autobús del lunes a las 8:00, ¿hay que llamar como tarde el viernes? CORRECTO
+  c) ¿Qué horario tiene ese teléfono? LUNES, MARTES Y MIERCOLES LABORABLES DE 08:00H A 15:00H Y DE 17:00H A 19:00H. JUEVES Y VIERNES LABORABLES DE 08:00H A 15:00H
+
+El bot lo dirá así: "Parada a demanda: llama al 957 42 90 30 con 24 horas
+laborables de antelación." ¿Os parece bien el texto? OK
+
+
+P20. "Entran en pueblo"
+--------------------------
+En Peñarroya (amarillo) y Los Blázquez (verde) hay celdas marcadas "ENTRAN EN
+PUEBLO", en Villanueva del Rey y Espiel.
+
+  ¿Qué significa para el viajero? ¿Los autobuses sin esa marca paran fuera,
+  en la carretera? Si es así, ¿dónde exactamente? Es información clave para
+  que el cliente sepa dónde esperar.
+EN ESPIEL NO ESTÁ MARCADA ESA OPCION DE ENTRA EN EL PUEBLO. 
+EN VILLANUEVA DEL REY INDICA QUE LOS QUE ENTRAN EN EL PUEBLO NO PARAN EN EL CRUCE, DIGAMOS QUE LOS QUE NO ESTÁN MARCADOS EN AMARILLO PARAN EN EL CRUCE DE VVA DEL REY FRENTE A UNA GASOLINERA, Y LOS QUE ESTÁN MARCADOS EN AMARILLO SI ENTRAN EN EL PUEBLO, PERO NO PARAN EN EL CRUCE.
+
+
+=============================================================
+5. POSIBLES ERRORES EN EL EXCEL
+=============================================================
+
+Son horas que no cuadran con el resto. Pueden estar bien, pero preferimos
+preguntar. Mientras tanto, las publicaremos tal como están en el Excel.
+
+P21. Llegada a Peñarroya: 11:55 o 12:30 (IMPORTANTE)
+------------------------------------------------------
+El autobús Córdoba 10:30 aparece en dos hojas, con las mismas horas hasta
+Belmez (11:40), pero llega a Peñarroya a horas distintas:
+  - Hoja "PYA INV", fila 10: Peñarroya 11:55.
+  - Hoja "BLAZQUEZ", fila 11: Peñarroya 12:30.
+  ¿Cuál es la correcta? ¿Son dos autobuses distintos?
+EL HORARIO CORRECTO DE LLEGADA ES A LAS 11:55H A PEÑARROYA, PERO SE PONE DE ESA MANERA YA QUE A LAS 12:30H ES CUANDO SALE DESDE PEÑARROYA HASTA LAS DEMÁS POBLACIONES (EL PORVENIR, LA GRANJUELA, VALSEQUILLO Y LOS BLAZQUEZ) ENLAZA DOS RUTAS, PERO ESTO NO NOS INTERESA QUE APAREZA COMO ENLACE, SI NO COMO QUE CONTINUA LA MISMA RUTA 
+P22. Adamuz-Villafranca en 5 minutos
+---------------------------------------
+Hoja "ADAMUZ INV", sábados, fila 33: Adamuz 15:45 -> Villafranca 15:50. En el
+resto de autobuses ese tramo dura 15 minutos. ¿Es correcto?
+NO, SIGUE TARDANDO 15 MINUTOS, LLEGARÍA A VILLAFRANCA A LAS 16:00H, A ALCOLEA 16:20H Y CÓRDOBA 16:40H	
+P23. Villaviciosa, sábados
+-----------------------------
+Hojas "VILLAVIC INV" (fila 40) y "VILLAVIC VER" (fila 25): Pantano 08:35 ->
+El Vacar 09:00 -> Córdoba 09:15. Entre semana es al revés: Pantano-El Vacar
+tarda 10 minutos y El Vacar-Córdoba, 30. ¿Es correcto?
+ES CORRECTO	
+P24. Villaralto y Villanueva del Duque a la misma hora
+---------------------------------------------------------
+Hoja "BELAL- COR", filas 18, 26 y 30: los dos pueblos tienen la misma hora
+(16:35, 08:25 y 14:05). ¿Es correcto?
+ES CORRECTO, VILLARALTO ES UN SERVICIO A DEMANDA, EN CASO DE QUE PASE POR VILLARALTO SERÍA A LA HORA QUE TIENE, EN CASO DE NO PASAR POR VILLARALTO CONTINUA LA RUTA EN EL HORARIO DE VVA DEL DUQUE
+P25. Badajoz, domingos: dos pueblos a la misma hora
+------------------------------------------------------
+Hoja "BADAJOZ", ida en domingo (columna D): Fuente Obejuna y Coronada, las dos
+a las 16:20; Llerena y Villagarcía, las dos a las 17:30. De lunes a jueves
+hay 5 minutos entre cada par. ¿Es correcto?
+CORRECTO
+P26. Córdoba 10:30 -> Villafranca (línea de Adamuz)
+------------------------------------------------------
+Hoja "ADAMUZ INV", fila 20: sale de Córdoba a las 10:30 y llega a Villafranca
+a las 11:25 sin paradas intermedias, y ahí termina. El autobús de las 12:00
+tarda 40 minutos parando en Alcolea. ¿Son correctos los 55 minutos? ¿Termina
+de verdad en Villafranca, sin llegar a Adamuz?
+CORRECTO	
+P27. Fin del invierno en Los Blázquez
+----------------------------------------
+Hoja "BLAZQUEZ": el invierno termina el 21/06. En todas las demás hojas
+termina el 22/06. ¿Es un error?
+ES UN ERROR, ACABA EL 22/06
+
+=============================================================
+6. DECISIONES QUE YA HEMOS TOMADO (revisadlas, por si acaso)
+=============================================================
+
+  D-a. Fechas de temporada: solo tenemos en cuenta el día y el mes, no el año.
+       Por ejemplo, "Posadas invierno" y "Los Blázquez" dicen 2025/26, pero
+       las aplicamos igual cada año. EXCATO SE APLICAN TODOS LOS AÑOS IGUAL HASTA NUEVO AVISO
+  D-b. Adamuz verano: el título dice "DESDE AQUASIERRA". Lo tomamos como un
+       error y ponemos desde el 23/06, como las demás líneas. NO, ESA FECHA AÚN NO PODEMOS ESPECIFICARLA YA QUE SE REFIERA A CUANDO ABREN EL PARQUE ACUATICO AQUASIERRA, CUANDO SE APROXIME JUNIO SABREMOS CUANDO EMPIEZA
+  D-c. Las líneas "anuales" (Fuente Carreteros, Ochavillos, Belalcázar-Córdoba
+       y Badajoz) tienen el mismo horario todo el año, incluido agosto. AGOSTO NO HAY SERVICIO HASTA BADAJOZ, LO DEMÁS TODO OK
+  D-d. Cardeña-Pozoblanco no funciona en agosto (del 1 al 31). El resto del
+       verano funciona con su horario de verano. SI
+  D-e. Cerro Muriano (hoja Los Blázquez) no tiene horas, así que el autobús no
+       para ahí. No aparecerá en el bot. OK
+  D-f. Villaharta, en la línea de Pozoblanco, es parada a demanda todo el
+       año, también en verano (en la hoja de verano no está en amarillo). NO, TODOS SON EN AMARILLO EXCEPTO EL DE LAS 10:35H SE ADJUNTA HORARIO NUEVO
+  D-g. Villafranca de Córdoba: en verano, los autobuses de las 10:30 (desde
+       Córdoba) y de las 11:45 (hacia Córdoba) paran solo en Virgen de los
+       Remedios. En invierno paran en la parada normal.CORRECTO
+  D-h. El autobús de las 21:45 a Villanueva de Córdoba (hoja Pozoblanco) solo
+       llega hasta allí si al salir de Córdoba lleva viajeros para Villanueva.
+       Si no, termina en Pozoblanco Hospital. CORRECTO
+  D-i. "Solo viernes de periodo escolar" en la última parada (Cabeza del Buey
+       y Fuente Obejuna): el resto del autobús funciona todos los días. Solo
+       el último tramo es exclusivo de los viernes lectivos. CORRECTO
+  D-j. Villaviciosa, "VIERNES ESCOLAR 16:00": ese autobús completo solo
+       funciona los viernes de periodo escolar. CORRECTO
+  D-k. Badajoz: "horarios de paso aproximado" se aplica a toda la línea. CORRECTO
+  D-l. Colores de Hornachuelos-Posadas: el azul significa que el autobús
+       "pasa por Rivero de Posadas" y el verde que "tiene parada dentro de Los
+       Mochos", tal como dice la leyenda de la hoja. AZUL NO HAY, EL QUE TE REFIERES POR AZUL ES NARANJA
+  D-m. Las notas internas (columnas de la derecha, por ejemplo "no
+       tendríamos que entrar en Rabanales, pero lo hacemos") no se publican.
+       Las horas del Excel son lo que el autobús hace de verdad. CORRECTO, NO LO TIENES QUE TENER EN CUENTA, SON COMENTARIOS INTERNOS
+  D-n. Las columnas RUTA y VALIDADORA no se publican. CORRECTO, NO LO TIENES QUE TENER EN CUENTA
+  D-o. Cuando el mismo autobús aparece en dos hojas (por ejemplo, el de
+       Badajoz aparece también en la hoja de Peñarroya), el bot lo muestra
+       una sola vez. CORRECTO
+  D-p. Peñarroya, filas 23 y 36: "18.10" es 18:10. CORRECTO
