@@ -6,6 +6,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 
 from app.services.horarios import formato
 
@@ -999,3 +1001,198 @@ def test_horarios_real_tiene_exactamente_3_avisos_de_posible_mismo_autobus():
     assert resultado.errores == []
     posibles = [a for a in resultado.avisos if "posible mismo autobús" in a]
     assert len(posibles) == 3
+
+
+# ── Localidades pendientes (ciclo C2, P15/P32) ────────────────────────────
+
+
+def _pendientes(tmp_path: Path, paradas=(), observaciones=()):
+    """Copia horarios_pendientes/ a tmp_path aplicando sustituciones de texto
+    (old, new) sobre paradas.yaml y observaciones.yaml; devuelve (resultado,
+    ruta de paradas.yaml)."""
+    destino = tmp_path / "horarios"
+    shutil.copytree(FIXTURES / "horarios_pendientes", destino)
+    for nombre, cambios in (
+        ("paradas.yaml", paradas),
+        ("observaciones.yaml", observaciones),
+    ):
+        ruta = destino / nombre
+        texto = ruta.read_text(encoding="utf-8")
+        for old, new in cambios:
+            assert old in texto, old
+            texto = texto.replace(old, new)
+        ruta.write_text(texto, encoding="utf-8")
+    return formato.validar(destino), destino / "paradas.yaml"
+
+
+def test_pendientes_fixture_valida_sin_errores(tmp_path):
+    resultado, ruta = _pendientes(tmp_path)
+    assert resultado.errores == []
+    aldea = resultado.modelo.localidades["aldea-a"]
+    assert (aldea.pendiente, aldea.ver, aldea.minutos, aldea.aviso) == (
+        "P32", "pueblo-a", 4, "pasa_por_aldea_a",
+    )
+    assert f"{ruta}: localidad pendiente 'aldea-a' (P32)" in resultado.avisos
+    assert f"{ruta}: localidad pendiente 'aldea-b' (P32)" in resultado.avisos
+    # una localidad pendiente sin paradas no cuenta como "sin uso"
+    assert not any("Localidades definidas que ninguna" in a for a in resultado.avisos)
+
+
+def test_pendiente_sin_ver_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("    ver: pueblo-a\n", "")])
+    assert (
+        f"{ruta}: localidad 'aldea-a': 'pendiente' sin 'ver' (localidad en cuyo "
+        "lugar se consulta)"
+    ) in r.errores
+
+
+def test_ver_sin_pendiente_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path, [("pueblo-a: { nombre: Pueblo A, zona: zona-test }",
+                    "pueblo-a: { nombre: Pueblo A, zona: zona-test, ver: pueblo-b }")]
+    )
+    assert f"{ruta}: localidad 'pueblo-a': 'ver' sin 'pendiente'" in r.errores
+
+
+def test_pendiente_malformado_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("pendiente: P32", "pendiente: X1")])
+    assert (
+        f"{ruta}: localidad 'aldea-a': pendiente inválido 'X1' (debe cumplir "
+        "P\\d{2})"
+    ) in r.errores
+
+
+def test_pendiente_sin_minutos_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("    minutos: 4\n", "")])
+    assert (
+        f"{ruta}: localidad 'aldea-a': 'pendiente' sin 'minutos' (distancia a "
+        "la localidad 'ver')"
+    ) in r.errores
+
+
+@pytest.mark.parametrize("valor", ["0", "61", "abc", "4.5", "true"])
+def test_minutos_fuera_de_rango_o_no_entero_es_error(tmp_path, valor):
+    r, ruta = _pendientes(tmp_path, [("minutos: 4", f"minutos: {valor}")])
+    assert any(
+        e.startswith(f"{ruta}: localidad 'aldea-a': 'minutos' debe ser un entero "
+                     "entre 1 y 60")
+        for e in r.errores
+    ), r.errores
+
+
+def test_minutos_sin_pendiente_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path, [("pueblo-c: { nombre: Pueblo C, zona: zona-test }",
+                    "pueblo-c: { nombre: Pueblo C, zona: zona-test, minutos: 3 }")]
+    )
+    assert f"{ruta}: localidad 'pueblo-c': 'minutos' sin 'pendiente'" in r.errores
+
+
+def test_aviso_sin_pendiente_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path, [("pueblo-c: { nombre: Pueblo C, zona: zona-test }",
+                    "pueblo-c: { nombre: Pueblo C, zona: zona-test, "
+                    "aviso: para_en_aldea_b }")]
+    )
+    assert f"{ruta}: localidad 'pueblo-c': 'aviso' sin 'pendiente'" in r.errores
+
+
+def test_pendiente_fuera_de_la_lista_de_paradas_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("pendientes: [P32]", "pendientes: [P18]")])
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': P32 no está en 'pendientes' de "
+        "paradas.yaml"
+    ) in r.errores
+
+
+def test_ver_sin_definir_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("ver: pueblo-a", "ver: nada")])
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': 'ver' referencia una localidad "
+        "sin definir ('nada')"
+    ) in r.errores
+
+
+def test_ver_a_si_misma_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("ver: pueblo-a", "ver: aldea-a")])
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': 'ver' apunta a sí misma"
+    ) in r.errores
+
+
+def test_ver_a_otra_pendiente_es_error(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("ver: pueblo-a", "ver: aldea-b")])
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': 'ver' apunta a otra localidad "
+        "pendiente ('aldea-b')"
+    ) in r.errores
+
+
+def test_pendiente_con_paradas_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path,
+        [("paradas:\n", "paradas:\n  ALD: { nombre: Aldea A, localidad: aldea-a }\n")],
+    )
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': una localidad pendiente no "
+        "puede tener paradas (['ALD'])"
+    ) in r.errores
+
+
+def test_aviso_de_localidad_sin_definir_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path, [("aviso: pasa_por_aldea_a", "aviso: no_existe")]
+    )
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': 'aviso' referencia una "
+        "observación sin definir ('no_existe')"
+    ) in r.errores
+
+
+def test_aviso_que_no_es_tipo_aviso_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path,
+        paradas=[("aviso: pasa_por_aldea_a", "aviso: a_demanda")],
+        observaciones=[
+            ("pasa_por_aldea_a:",
+             "a_demanda:\n  letra: D\n  tipo: condicion\n  ambitos: [viaje]\n"
+             '  texto: "Solo a demanda."\n\npasa_por_aldea_a:')
+        ],
+    )
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': 'aviso' 'a_demanda' no es una "
+        "observación de tipo aviso"
+    ) in r.errores
+
+
+def test_aviso_sin_ambito_viaje_es_error(tmp_path):
+    r, ruta = _pendientes(
+        tmp_path,
+        observaciones=[
+            ("pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [viaje]",
+             "pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [linea]"),
+        ],
+    )
+    assert any(
+        e.startswith(f"{ruta}: localidad pendiente 'aldea-a': 'aviso' "
+                     "'pasa_por_aldea_a' no tiene ámbito 'viaje'")
+        for e in r.errores
+    ), r.errores
+
+
+def test_aviso_cuyo_texto_no_contiene_los_minutos_avisa(tmp_path):
+    r, ruta = _pendientes(tmp_path, [("minutos: 4", "minutos: 5")])
+    assert r.errores == []
+    assert (
+        f"{ruta}: localidad pendiente 'aldea-a': el texto de la observación "
+        "'pasa_por_aldea_a' no contiene los minutos declarados (5)"
+    ) in r.avisos
+
+
+def test_horarios_real_no_tiene_localidades_pendientes():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.errores == []
+    assert all(
+        loc.pendiente is None for loc in resultado.modelo.localidades.values()
+    )
+    assert len(resultado.avisos) == 13

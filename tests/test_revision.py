@@ -581,3 +581,48 @@ def test_sin_bus_no_hay_frase_de_mismo_autobus(tmp_path):
     )
     assert "mismo-bus'>" not in html_doc
     assert "mismo autobús que" not in html_doc
+
+
+# ── Sección "Localidades sin hora de paso" (ciclo C2, P15/P32) ─────────────
+
+
+def test_html_pendientes_muestra_localidades_y_viajes():
+    resultado = validar_horarios(FIXTURES / "horarios_pendientes")
+    assert resultado.errores == []
+    html_doc = revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
+    assert "<h2>Localidades sin hora de paso</h2>" in html_doc
+    seccion = html_doc[html_doc.index("<h2>Localidades sin hora de paso</h2>") :]
+    seccion = seccion[: seccion.index("<h2>Anexo")]
+    assert "Aldea A" in seccion and "Aldea Bonita" in seccion
+    assert "P32" in seccion
+    assert "Consultar en su lugar: Pueblo A" in seccion
+    assert "Consultar en su lugar: Pueblo B" in seccion
+    assert "a unos 4 minutos" in seccion and "a unos 7 minutos" in seccion
+    # viajes relacionados: la primera hora de cada viaje con el aviso
+    assert "Pueblo A – Pueblo C" in seccion
+    assert "<td>08:00</td>" in seccion and "<td>10:00</td>" in seccion
+    assert "<td>15:00</td>" not in seccion
+    # antes del calendario y del anexo
+    assert html_doc.index("Localidades sin hora de paso") < html_doc.index("<h2>Anexo")
+
+
+def test_html_pendientes_sin_viajes_declarados(tmp_path):
+    import shutil
+
+    destino = tmp_path / "h"
+    shutil.copytree(FIXTURES / "horarios_pendientes", destino)
+    linea = destino / "lineas" / "linea.yaml"
+    linea.write_text(
+        linea.read_text(encoding="utf-8")
+        .replace("  | pasa_por_aldea_a", "")
+        .replace("  | para_en_aldea_b", ""),
+        encoding="utf-8",
+    )
+    resultado = validar_horarios(destino)
+    assert resultado.errores == []
+    html_doc = revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
+    assert html_doc.count("ningún viaje declarado") == 2
+
+
+def test_html_real_no_tiene_seccion_de_pendientes():
+    assert "Localidades sin hora de paso" not in _html_real()

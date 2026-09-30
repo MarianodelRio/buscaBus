@@ -331,3 +331,30 @@ def test_propiedad_toda_localidad_por_su_nombre_exacto():
         r = m.buscar(loc.nombre)
         assert r.tipo == "unico", f"{lid}: se esperaba 'unico', fue {r.tipo}"
         assert r.localidades == (lid,)
+
+
+# ── Localidades pendientes (ciclo C2, P15/P32) ───────────────────────────────
+
+
+def test_localidades_pendientes_se_encuentran_por_texto():
+    h = loader.cargar(FIXTURES / "horarios_pendientes")
+    m = matcher.Matcher(h)
+
+    r = m.buscar("Aldea A")  # exacto
+    assert (r.tipo, r.localidades) == ("unico", ("aldea-a",))
+
+    r = m.buscar("aldea bon")  # prefijo
+    assert (r.tipo, r.localidades) == ("unico", ("aldea-b",))
+
+    r = m.buscar("aldeaa")  # errata
+    assert (r.tipo, r.localidades) == ("confirmar", ("aldea-a",))
+
+    r = m.buscar("aldea")  # varias, en orden alfabético
+    assert (r.tipo, r.localidades) == ("elegir", ("aldea-a", "aldea-b"))
+
+
+def test_pueblo_a_nunca_devuelve_aldea_a():
+    h = loader.cargar(FIXTURES / "horarios_pendientes")
+    m = matcher.Matcher(h)
+    r = m.buscar("pueblo a")
+    assert (r.tipo, r.localidades) == ("unico", ("pueblo-a",))

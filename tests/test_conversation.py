@@ -801,3 +801,149 @@ def test_cambio_de_origen_a_par_no_vendible_da_mensaje_propio(
     text = _last_text(mock_wa)
     assert "no vendemos billetes" in text
     assert "No hay trayecto directo" not in text
+
+
+# ── Localidades pendientes (ciclo C2, P15/P32) ───────────────────────────────
+
+
+def _all_texts(mock_wa):
+    """Texto de cuerpo de todo lo enviado (interactivos y texto plano)."""
+    textos = [c[0][1] for c in mock_wa["text"].call_args_list]
+    for c in mock_wa["interactive"].call_args_list:
+        textos.append(c[0][1]["interactive"]["body"]["text"])
+    return textos
+
+
+def _no_hay_sin_trayecto(mock_wa):
+    assert not any("directo" in t and "Aldea" in t for t in _all_texts(mock_wa))
+    assert not any("No hay autobuses" in t for t in _all_texts(mock_wa))
+
+
+def _pend_menu(phone, mock_wa):
+    conv.handle_message(phone, phone, None, "menu_horarios")
+
+
+def test_pendiente_en_origen_ofrece_usar_ver(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000101"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, "Aldea A", None)
+    payload = _last_interactive(mock_wa)
+    assert payload["interactive"]["body"]["text"] == (
+        "Algunos autobuses paran en Aldea A, a unos 4 minutos de Pueblo A, pero "
+        "aún no tenemos su hora de paso."
+    )
+    assert _button_ids(payload) == ["usar:pueblo-a", "escribir"]
+    assert conv._states[phone].origen is None
+
+    conv.handle_message(phone, phone, None, "usar:pueblo-a")
+    payload = _last_interactive(mock_wa)
+    assert "Desde Pueblo A" in payload["interactive"]["header"]["text"]
+    assert set(_row_ids(payload)) >= {"loc:pueblo-b", "loc:pueblo-c"}
+    assert "loc:aldea-a" not in _row_ids(payload)
+    _no_hay_sin_trayecto(mock_wa)
+
+
+def test_pendiente_en_destino_ofrece_usar_ver(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000102"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, None, "loc:pueblo-a")
+    conv.handle_message(phone, phone, "Aldea Bonita", None)
+    payload = _last_interactive(mock_wa)
+    assert "a unos 7 minutos de Pueblo B" in payload["interactive"]["body"]["text"]
+    assert _button_ids(payload) == ["usar:pueblo-b", "escribir"]
+    assert conv._states[phone].origen == "pueblo-a"
+
+    conv.handle_message(phone, phone, None, "usar:pueblo-b")
+    payload = _last_interactive(mock_wa)
+    assert "Pueblo A → Pueblo B" in payload["interactive"]["header"]["text"]
+    assert any(r.startswith("dia:") for r in _row_ids(payload))
+    _no_hay_sin_trayecto(mock_wa)
+
+
+def test_pendiente_otro_pueblo_repregunta(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000103"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, "Aldea A", None)
+    conv.handle_message(phone, phone, None, "escribir")
+    payload = _last_interactive(mock_wa)
+    assert "pueblo" in payload["interactive"]["body"]["text"].lower()
+    assert conv._states[phone].step == "ESCRIBIR_ORIGEN"
+    conv.handle_message(phone, phone, "Pueblo B", None)
+    payload = _last_interactive(mock_wa)
+    assert "Desde Pueblo B" in payload["interactive"]["header"]["text"]
+
+
+def test_pendiente_desde_lista_de_candidatas(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000104"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, "aldea", None)
+    payload = _last_interactive(mock_wa)
+    assert _button_ids(payload) == ["loc:aldea-a", "loc:aldea-b"]
+    conv.handle_message(phone, phone, None, "loc:aldea-b")
+    payload = _last_interactive(mock_wa)
+    assert _button_ids(payload) == ["usar:pueblo-b", "escribir"]
+    _no_hay_sin_trayecto(mock_wa)
+
+
+def test_pendiente_desde_errata_confirmada(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000105"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, "aldeaa", None)
+    assert _button_ids(_last_interactive(mock_wa)) == ["si", "no"]
+    conv.handle_message(phone, phone, None, "si")
+    payload = _last_interactive(mock_wa)
+    assert _button_ids(payload) == ["usar:pueblo-a", "escribir"]
+    assert conv._states[phone].step == "SEL_ORIGEN"
+    _no_hay_sin_trayecto(mock_wa)
+
+
+def test_pendiente_cuyo_ver_es_el_origen(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000106"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, None, "loc:pueblo-a")
+    conv.handle_message(phone, phone, "Aldea A", None)
+    assert _button_ids(_last_interactive(mock_wa)) == ["usar:pueblo-a", "escribir"]
+    conv.handle_message(phone, phone, None, "usar:pueblo-a")
+    payload = _last_interactive(mock_wa)
+    assert "Elige un destino distinto" in payload["interactive"]["body"]["text"]
+    assert conv._states[phone].step == "SEL_DESTINO"
+
+
+@pytest.mark.parametrize("valor", ["usar:no-existe", "usar:aldea-a"])
+def test_usar_manipulado_repite_el_paso(
+    mock_wa, freeze_calendario, datos_pendientes, valor
+):
+    freeze_calendario(HOY)
+    phone = "34600000107"
+    _pend_menu(phone, mock_wa)
+    conv.handle_message(phone, phone, None, valor)
+    payload = _last_interactive(mock_wa)
+    assert "loc:pueblo-a" in _row_ids(payload)
+    assert conv._states[phone].step == "SEL_ORIGEN"
+    assert conv._states[phone].origen is None
+
+    conv.handle_message(phone, phone, None, "loc:pueblo-a")
+    conv.handle_message(phone, phone, None, valor)
+    payload = _last_interactive(mock_wa)
+    assert "Desde Pueblo A" in payload["interactive"]["header"]["text"]
+    assert conv._states[phone].step == "SEL_DESTINO"
+    assert conv._states[phone].origen == "pueblo-a"
+    _no_hay_sin_trayecto(mock_wa)

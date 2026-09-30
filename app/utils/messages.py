@@ -154,6 +154,13 @@ def msg_sin_destinos_desde_origen(origen_nombre: str) -> str:
     )
 
 
+def msg_localidad_pendiente(aldea: str, ver_nombre: str, minutos: int) -> str:
+    return (
+        f"Algunos autobuses paran en {aldea}, a unos {minutos} minutos de "
+        f"{ver_nombre}, pero aún no tenemos su hora de paso."
+    )
+
+
 def msg_sin_trayecto(origen_nombre: str, destino_nombre: str) -> str:
     return (
         f"No hay trayecto directo de {origen_nombre} a {destino_nombre}.\n"

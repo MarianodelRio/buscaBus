@@ -107,6 +107,24 @@ def datos_motor():
 
 
 @pytest.fixture
+def datos_pendientes():
+    """Instala los datos sintéticos de `tests/fixtures/horarios_pendientes/`
+    (ciclo C2: localidades pendientes, P15/P32). Restaura los datos
+    anteriores al terminar."""
+    from pathlib import Path
+
+    fixtures_dir = Path(__file__).parent / "fixtures" / "horarios_pendientes"
+    d = horarios_datos.cargar(fixtures_dir, ["Pueblo A", "Pueblo B"])
+    anterior = horarios_datos._actual
+    horarios_datos.instalar(d)
+    yield d
+    if anterior is not None:
+        horarios_datos.instalar(anterior)
+    else:
+        horarios_datos._actual = None
+
+
+@pytest.fixture
 def mock_wa():
     """Patch all WhatsApp send functions to no-ops returning True."""
     with patch("app.services.whatsapp.send_text_message", return_value=True) as txt, \

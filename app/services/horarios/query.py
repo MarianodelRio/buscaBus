@@ -378,6 +378,10 @@ def consultar(
         raise ValueError(f"localidad de origen sin definir: '{origen}'")
     if destino not in modelo.localidades:
         raise ValueError(f"localidad de destino sin definir: '{destino}'")
+    if modelo.localidades[origen].pendiente is not None:
+        raise ValueError(f"localidad de origen pendiente, sin horas: '{origen}'")
+    if modelo.localidades[destino].pendiente is not None:
+        raise ValueError(f"localidad de destino pendiente, sin horas: '{destino}'")
 
     if es_no_vendible(horarios, origen, destino):
         return Consulta(

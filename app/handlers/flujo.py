@@ -25,6 +25,7 @@ from app.utils.interactive import (
     build_dias,
     build_escribir,
     build_info,
+    build_localidad_pendiente,
     build_menu,
     build_origen,
     build_resultado,
@@ -174,6 +175,24 @@ def _buscar(identifier: str, state, campo: str, texto: str) -> None:
 
 def _elegir(identifier: str, state, campo: str, localidad_id: str) -> None:
     datos = horarios_datos.actual()
+    loc = datos.horarios.modelo.localidades.get(localidad_id)
+    if loc is not None and loc.pendiente is not None:
+        # Aldea sin hora de paso (P15/P32): se ofrece consultar `ver` en su
+        # lugar; no se toca state.origen ni se emite "sin trayecto".
+        state.step = SEL_ORIGEN if campo == "origen" else SEL_DESTINO
+        state.campo = campo
+        state.pendiente = None
+        ver_nombre = _nombre_localidad(datos, loc.ver)
+        wa.send_interactive(
+            identifier,
+            build_localidad_pendiente(
+                msg.msg_localidad_pendiente(loc.nombre, ver_nombre, loc.minutos),
+                loc.ver,
+                ver_nombre,
+                campo,
+            ),
+        )
+        return
     if campo == "origen":
         destinos = query.destinos_desde(datos.horarios, localidad_id)
         if not destinos:
@@ -207,6 +226,17 @@ def _elegir(identifier: str, state, campo: str, localidad_id: str) -> None:
     state.destino = localidad_id
     state.campo = None
     _mostrar_dias(identifier, state)
+
+
+def _usar(identifier: str, state, campo: str, value: str) -> None:
+    """Botón `usar:<id>` del mensaje de localidad pendiente. El id puede venir
+    manipulado: si no existe o es pendiente, se repite el paso sin cambios."""
+    lid = value.removeprefix("usar:")
+    loc = horarios_datos.actual().horarios.modelo.localidades.get(lid)
+    if loc is None or loc.pendiente is not None:
+        _mostrar_paso(identifier, state, campo)
+        return
+    _elegir(identifier, state, campo, lid)
 
 
 # ── Zonas ──────────────────────────────────────────────────────────────
@@ -417,6 +447,8 @@ def _handle_menu(identifier: str, state, value: str) -> None:
 def _handle_sel_origen(identifier: str, state, value: str) -> None:
     if value.startswith("loc:"):
         _elegir(identifier, state, "origen", value.removeprefix("loc:"))
+    elif value.startswith("usar:"):
+        _usar(identifier, state, "origen", value)
     elif value == "escribir":
         state.step = ESCRIBIR_ORIGEN
         state.campo = "origen"
@@ -436,6 +468,8 @@ def _handle_sel_origen(identifier: str, state, value: str) -> None:
 def _handle_sel_destino(identifier: str, state, value: str) -> None:
     if value.startswith("loc:"):
         _elegir(identifier, state, "destino", value.removeprefix("loc:"))
+    elif value.startswith("usar:"):
+        _usar(identifier, state, "destino", value)
     elif value == "escribir":
         state.step = ESCRIBIR_DESTINO
         state.campo = "destino"

@@ -158,6 +158,13 @@ localidades:                       # lo que elige el usuario
   pozoblanco: { nombre: Pozoblanco, zona: los-pedroches, alias: [pozo] }
   villafranca-de-cordoba: { nombre: Villafranca de Córdoba, zona: adamuz, alias: [villafranca] }
   villafranca-de-los-barros: { nombre: Villafranca de los Barros, zona: extremadura, alias: [villafranca] }
+  aldea-ejemplo:                   # localidad pendiente (P15/P32): sin hora propia
+    nombre: Aldea Ejemplo
+    zona: los-pedroches
+    pendiente: P32
+    ver: pozoblanco
+    minutos: 4
+    aviso: pasa_por_aldea_ejemplo
 paradas:                           # lo que muestra el resultado
   POZ: { nombre: Pozoblanco, localidad: pozoblanco }
   PZH: { nombre: Pozoblanco (Hospital), localidad: pozoblanco }
@@ -172,6 +179,21 @@ no_vendibles:                      # P12b: pares de localidades sin venta de
   línea concreta. Un pendiente mal formado detiene la validación, igual que
   en `lineas/*.yaml`.
 
+- **Localidad pendiente** (P15/P32, ciclo C2): una aldea en la que algunos
+  autobuses paran pero de la que no se conoce la hora de paso. Campos:
+  `pendiente: Pnn` (debe estar también en `pendientes:` de este fichero),
+  `ver: <localidad>` (la localidad en cuyo lugar se consulta; obligatorio con
+  `pendiente`), `minutos: <entero 1-60>` (obligatorio; distancia a `ver`, con
+  ella se construye el mensaje "a unos N minutos de X"; nada en config ni en
+  código) y `aviso: <observación>` (opcional; observación de tipo aviso con
+  ámbito `viaje` que los viajes que paran ahí llevan tras el `|`; solo sirve a
+  la vista de revisión). `ver`, `minutos` y `aviso` sin `pendiente` son
+  errores. Una localidad pendiente no puede tener paradas en `paradas:`
+  (no tiene horas), `ver` no puede ser ella misma ni otra pendiente, y no
+  cuenta como "sin uso". El motor de consulta nunca la recibe (`consultar`
+  lanza `ValueError`); la conversación la intercepta (4.7, 4.8).
+  `no_vendibles` o `festivos_locales` que nombren una localidad pendiente no
+  se validan: es un caso límite sin efecto.
 - **`no_vendibles:`** (opcional, lista de pares `[localidad, localidad]`):
   trayectos que la empresa no puede vender, en ambos sentidos (P12b:
   Córdoba-Campus de Rabanales, Córdoba-Alcolea, Campus de Rabanales-Alcolea).
@@ -321,6 +343,8 @@ Reglas del formato:
 | Pendiente mal formado en `pendientes:` de `paradas.yaml` | Ambigüedades declaradas: un alias que comparten varias localidades o que coincide con el nombre de otra (`villafranca`) |
 | Alias que no es texto, que queda vacío al normalizar o repetido en la misma localidad | |
 | Dos localidades cuyo nombre normalizado coincide (ambigüedad no declarada) | |
+| Localidad pendiente: `pendiente` sin `ver` (o al revés), `pendiente` mal formado o no listado en `pendientes:` de `paradas.yaml`, `minutos` ausente, no entero o fuera de 1-60, `aviso`/`ver`/`minutos` sin `pendiente` | Localidad pendiente (con su Pnn) |
+| Localidad pendiente: `ver` sin definir, ella misma u otra pendiente; con paradas en `paradas:`; `aviso` sin definir, que no es tipo aviso o sin ámbito `viaje` | Localidad pendiente cuyo `aviso` no contiene sus `minutos` en el texto |
 | `no_vendibles`: localidad sin definir, misma localidad dos veces o par repetido (también invertido) | `no_vendibles`: par que ninguna línea conecta |
 | `calendario.yaml`, `sin_servicio_todas_las_lineas`: fecha `DD/MM` inválida (`31/02`), repetida o lista mal formada | `festivos_locales`: localidad que ninguna línea usa |
 | `calendario.yaml`, `festivos_locales`: localidad sin definir, fecha fuera de `vigencia`, repetida en la localidad o ya presente en `festivos` | |
@@ -465,7 +489,7 @@ El loader convierte `horarios/` en objetos inmutables:
 | Entidad | Contenido |
 |---|---|
 | `Zona` | Id y nombre |
-| `Localidad` | Lo que elige el usuario: id, nombre, zona, alias |
+| `Localidad` | Lo que elige el usuario: id, nombre, zona, alias y, solo en las pendientes (P15/P32), `pendiente`, `ver`, `minutos` y `aviso` (opcionales, `None` por defecto) |
 | `Parada` | Parada física: código, nombre público, localidad |
 | `Observacion` | Id, letra, tipo (condición/aviso), ámbitos, texto |
 | `Linea` | Id, nombre, teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
@@ -809,6 +833,11 @@ Reglas precisas (decididas el 2026-09-27, fase 3):
 - **Prefijo del nombre entero**, no de cualquier palabra: `cordoba` no
   coincide con "Villanueva de Córdoba". `pueblonuevo` u `obejuna` solo se
   reconocerán cuando haya alias (P13); hoy no se añaden.
+- **Localidades pendientes** (P15/P32) se buscan igual que las demás
+  (exacto, prefijo, errata, candidatas). Al elegirse una, la conversación no
+  continúa con ella: muestra "Algunos autobuses paran en X, a unos N minutos
+  de Y, pero aún no tenemos su hora de paso." con los botones `Usar Y` y
+  `Otro pueblo` (4.8). El matcher no cambia.
 - **Mínimo 3 letras** (tras normalizar) para prefijo y errata. Por debajo,
   solo cuenta un exacto; si no, `sin coincidencia` (`z` no es Zafra).
 - **Errata** (distancia de Damerau-Levenshtein contra el nombre o alias
@@ -861,6 +890,11 @@ alfabético y solo las que alguna línea usa. Zonas pendientes de negocio (P18).
 | Día sin datos (`sin_datos`) | Dice que no tiene ese horario y da el teléfono con horario de oficina. **Nunca lo presenta como "no hay servicio"** |
 | Sin trayecto directo | Lo dice, enseña los destinos que sí existen desde ese origen y da el teléfono con horario de oficina. **No inventa trasbordos** |
 | Origen = destino | "Elige un destino distinto" |
+| Localidad pendiente como origen (P15/P32) | "Algunos autobuses paran en X, a unos N minutos de Y, pero aún no tenemos su hora de paso." con `Usar Y` y `Otro pueblo`. No se guarda como origen; `Usar Y` continúa con Y como origen |
+| Localidad pendiente como destino | Igual; `Usar Y` continúa con Y como destino (origen ya elegido). Nunca "sin trayecto" |
+| Localidad pendiente cuyo `ver` es el origen (o el destino ya elegido) | `Usar Y` cae en las reglas normales: "Elige un destino distinto" |
+| `usar:<id>` manipulado (id desconocido o pendiente) | Repite el paso actual sin cambiar el estado y sin error |
+| `no_vendibles` o `festivos_locales` que nombran una localidad pendiente | No se valida (sin efecto: la pendiente nunca llega al motor) |
 | Fecha ya pasada (hace ≤30 días sin año, o con año) | "Esa fecha ya ha pasado" + repregunta (4.5) |
 | Hoy sin salidas restantes | "Hoy ya no quedan salidas" + botón a mañana |
 | Servicio a demanda | `⚠️ A demanda: llama 24 h laborables antes al 957 42 90 30` |

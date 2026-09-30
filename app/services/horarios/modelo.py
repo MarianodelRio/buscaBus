@@ -23,6 +23,13 @@ class Localidad:
     nombre: str
     zona: str
     alias: tuple[str, ...] = ()
+    # Localidad pendiente (P15/P32): aldea sin hora de paso propia. `ver` es la
+    # localidad en cuyo lugar se consulta; `minutos` la distancia hasta ella;
+    # `aviso` la observación (viaje) opcional que relaciona viajes con la aldea.
+    pendiente: str | None = None
+    ver: str | None = None
+    minutos: int | None = None
+    aviso: str | None = None
 
 
 @dataclass(frozen=True)

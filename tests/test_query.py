@@ -566,3 +566,27 @@ def test_cicloc_nota_a_solo_cuando_la_parada_es_origen_o_destino():
     assert any(NOTA_APROXIMADA in s.notas for s in c.salidas)
     c = query.consultar(CICLO_C, "el-porvenir", "los-blazquez", MIERCOLES)
     assert NOTA_APROXIMADA in c.salidas[0].notas
+
+
+# ── Localidades pendientes (ciclo C2, P15/P32) ───────────────────────────────
+
+PENDIENTES = loader.cargar(FIXTURES / "horarios_pendientes")
+
+
+def test_consultar_origen_pendiente_lanza_value_error():
+    with pytest.raises(ValueError, match="origen pendiente"):
+        query.consultar(PENDIENTES, "aldea-a", "pueblo-b", date(2026, 9, 30))
+
+
+def test_consultar_destino_pendiente_lanza_value_error():
+    with pytest.raises(ValueError, match="destino pendiente"):
+        query.consultar(PENDIENTES, "pueblo-a", "aldea-a", date(2026, 9, 30))
+
+
+def test_destinos_desde_nunca_incluye_pendientes():
+    for lid in PENDIENTES.modelo.localidades:
+        destinos = query.destinos_desde(PENDIENTES, lid)
+        assert not any(
+            PENDIENTES.modelo.localidades[d].pendiente for d in destinos
+        )
+    assert set(query.destinos_desde(PENDIENTES, "pueblo-a")) == {"pueblo-b", "pueblo-c"}

@@ -326,8 +326,65 @@ def _validar_zonas_localidades_paradas(
                 )
 
         alias = tuple(str(a) for a in alias_raw)
+
+        pendiente = campos.get("pendiente")
+        ver = campos.get("ver")
+        minutos = campos.get("minutos")
+        aviso = campos.get("aviso")
+        if pendiente is not None:
+            pendiente = str(pendiente)
+            if not PENDIENTE_RE.match(pendiente):
+                errores.append(
+                    f"{path}: localidad '{lid}': pendiente inválido "
+                    f"'{pendiente}' (debe cumplir P\\d{{2}})"
+                )
+            if ver is None:
+                errores.append(
+                    f"{path}: localidad '{lid}': 'pendiente' sin 'ver' "
+                    "(localidad en cuyo lugar se consulta)"
+                )
+            if minutos is None:
+                errores.append(
+                    f"{path}: localidad '{lid}': 'pendiente' sin 'minutos' "
+                    "(distancia a la localidad 'ver')"
+                )
+            elif (
+                isinstance(minutos, bool)
+                or not isinstance(minutos, int)
+                or not 1 <= minutos <= 60
+            ):
+                errores.append(
+                    f"{path}: localidad '{lid}': 'minutos' debe ser un entero "
+                    f"entre 1 y 60 ({minutos!r})"
+                )
+                minutos = None
+        else:
+            if ver is not None:
+                errores.append(
+                    f"{path}: localidad '{lid}': 'ver' sin 'pendiente'"
+                )
+            if minutos is not None:
+                errores.append(
+                    f"{path}: localidad '{lid}': 'minutos' sin 'pendiente'"
+                )
+            if aviso is not None:
+                errores.append(
+                    f"{path}: localidad '{lid}': 'aviso' sin 'pendiente'"
+                )
+            ver = minutos = aviso = None
+        if ver is not None:
+            ver = str(ver)
+        if aviso is not None:
+            aviso = str(aviso)
         localidades[lid] = Localidad(
-            id=lid, nombre=str(campos["nombre"]), zona=zona_id, alias=alias
+            id=lid,
+            nombre=str(campos["nombre"]),
+            zona=zona_id,
+            alias=alias,
+            pendiente=pendiente,
+            ver=ver,
+            minutos=minutos,
+            aviso=aviso,
         )
 
     # Dos localidades cuyo nombre normalizado coincide es una ambigüedad no
@@ -426,6 +483,69 @@ def _validar_pendientes_paradas(
         validos.append(p)
         avisos.append(f"{path}: pendiente {p}")
     return tuple(validos)
+
+
+def _validar_localidades_pendientes(
+    path: Path,
+    localidades: dict[str, Localidad],
+    paradas: dict[str, Parada],
+    observaciones: dict[str, Observacion],
+    pendientes_paradas: tuple[str, ...],
+    errores: list[str],
+    avisos: list[str],
+) -> None:
+    """Localidades pendientes (P15/P32): aldeas sin hora de paso propia.
+    Cruza `pendiente`, `ver` y `aviso` con paradas, observaciones y la lista
+    `pendientes:` de paradas.yaml (design.md 2.3)."""
+    for lid, loc in sorted(localidades.items()):
+        if loc.pendiente is None:
+            continue
+        pre = f"{path}: localidad pendiente '{lid}'"
+        if PENDIENTE_RE.match(loc.pendiente):
+            if loc.pendiente not in pendientes_paradas:
+                errores.append(
+                    f"{pre}: {loc.pendiente} no está en 'pendientes' de "
+                    "paradas.yaml"
+                )
+            avisos.append(f"{path}: localidad pendiente '{lid}' ({loc.pendiente})")
+        if loc.ver is not None:
+            if loc.ver not in localidades:
+                errores.append(
+                    f"{pre}: 'ver' referencia una localidad sin definir "
+                    f"('{loc.ver}')"
+                )
+            elif loc.ver == lid:
+                errores.append(f"{pre}: 'ver' apunta a sí misma")
+            elif localidades[loc.ver].pendiente is not None:
+                errores.append(
+                    f"{pre}: 'ver' apunta a otra localidad pendiente ('{loc.ver}')"
+                )
+        con_paradas = sorted(c for c, p in paradas.items() if p.localidad == lid)
+        if con_paradas:
+            errores.append(
+                f"{pre}: una localidad pendiente no puede tener paradas "
+                f"({con_paradas})"
+            )
+        if loc.aviso is not None:
+            obs = observaciones.get(loc.aviso)
+            if obs is None:
+                errores.append(
+                    f"{pre}: 'aviso' referencia una observación sin definir "
+                    f"('{loc.aviso}')"
+                )
+            elif obs.tipo != "aviso":
+                errores.append(
+                    f"{pre}: 'aviso' '{loc.aviso}' no es una observación de tipo aviso"
+                )
+            elif "viaje" not in obs.ambitos:
+                errores.append(
+                    f"{pre}: 'aviso' '{loc.aviso}' no tiene ámbito 'viaje'"
+                )
+            elif loc.minutos is not None and str(loc.minutos) not in obs.texto:
+                avisos.append(
+                    f"{pre}: el texto de la observación '{loc.aviso}' no "
+                    f"contiene los minutos declarados ({loc.minutos})"
+                )
 
 
 def _validar_no_vendibles(
@@ -1568,6 +1688,15 @@ def validar(directorio: Path | str) -> Resultado:
     else:
         errores.append(f"{lineas_dir}: no existe el directorio de líneas")
 
+    _validar_localidades_pendientes(
+        paradas_path,
+        localidades,
+        paradas,
+        observaciones,
+        pendientes_paradas,
+        errores,
+        avisos,
+    )
     _validar_buses(infos_viaje, paradas, localidades, errores)
     _avisos_mismo_bus(infos_viaje, paradas, lineas, avisos)
 
@@ -1581,7 +1710,11 @@ def validar(directorio: Path | str) -> Resultado:
     localidades_usadas = {
         paradas[codigo].localidad for codigo in paradas_usadas if codigo in paradas
     }
-    localidades_sin_usar = sorted(set(localidades.keys()) - localidades_usadas)
+    localidades_sin_usar = sorted(
+        lid
+        for lid, loc in localidades.items()
+        if lid not in localidades_usadas and loc.pendiente is None
+    )
     if localidades_sin_usar:
         avisos.append(
             f"Localidades definidas que ninguna línea usa: {localidades_sin_usar}"

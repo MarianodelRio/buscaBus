@@ -294,3 +294,30 @@ def test_nombre_largo_estacion_ave_respeta_limites_en_todos_los_constructores():
             "Pozoblanco", NOMBRE_LARGO, [("dia:2026-10-01", "Jueves 1", "2 salidas")]
         )
     )
+
+
+# ── Localidad pendiente (ciclo C2, P15/P32) ──────────────────────────────
+
+
+def test_build_localidad_pendiente_within_limits():
+    from app.utils.interactive import build_localidad_pendiente
+
+    for nombre in ("Pozoblanco", "Almodóvar del Río", "Villanueva de Córdoba",
+                   "Villafranca de los Barros", "Santa Eufemia del Norte"):
+        payload = build_localidad_pendiente("Texto", "ver-id", nombre, "origen")
+        _assert_button_limits(payload)
+        ids = [b["reply"]["id"] for b in _buttons(payload)]
+        assert ids == ["usar:ver-id", "escribir"]
+
+
+def test_build_localidad_pendiente_acorta_nombre_largo():
+    from app.utils.interactive import build_localidad_pendiente
+
+    def titulo(nombre):
+        p = build_localidad_pendiente("t", "x", nombre, "destino")
+        return _buttons(p)[0]["reply"]["title"]
+
+    assert titulo("Pozoblanco") == "Usar Pozoblanco"
+    assert titulo("Almodóvar del Río") == "Usar Almodóvar"
+    assert titulo("Villanueva de Córdoba") == "Usar Villanueva"
+    assert titulo("Superextraordinariamente") == "Usar Superextraordin"

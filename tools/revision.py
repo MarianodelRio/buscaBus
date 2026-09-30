@@ -473,6 +473,51 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
     return "".join(partes)
 
 
+def _render_seccion_pendientes(modelo: Modelo, titulos: dict[str, str]) -> str:
+    """"Localidades sin hora de paso" (P15/P32): aldeas en las que algunos
+    autobuses paran pero sin hora propia; el bot remite a otra localidad.
+    Devuelve "" si no hay ninguna."""
+    pendientes = sorted(
+        (loc for loc in modelo.localidades.values() if loc.pendiente is not None),
+        key=lambda loc: loc.nombre,
+    )
+    if not pendientes:
+        return ""
+    partes = ["<h2>Localidades sin hora de paso</h2>"]
+    for loc in pendientes:
+        titulo = titulos.get(loc.pendiente or "")
+        badge = html.escape(loc.pendiente or "")
+        if titulo:
+            badge += f": {html.escape(titulo)}"
+        ver = modelo.localidades.get(loc.ver or "")
+        ver_nombre = ver.nombre if ver is not None else (loc.ver or "")
+        partes.append(
+            f'<h3>{html.escape(loc.nombre)} <span class="pendiente">{badge}</span></h3>'
+            f"<p>Consultar en su lugar: {html.escape(ver_nombre)}</p>"
+            f"<p>Distancia: a unos {loc.minutos} minutos</p>"
+        )
+        if loc.aviso is None:
+            continue
+        filas = []
+        for _, linea in sorted(modelo.lineas.items()):
+            for viaje in linea.viajes:
+                if loc.aviso in viaje.observaciones and viaje.pasos:
+                    filas.append(
+                        f"<tr><td>{html.escape(linea.nombre)}</td>"
+                        f"<td>{html.escape(viaje.temporada)}</td>"
+                        f"<td>{html.escape(viaje.dias)}</td>"
+                        f"<td>{html.escape(viaje.pasos[0].salida)}</td></tr>"
+                    )
+        if filas:
+            partes.append(
+                "<table><tr><th>Línea</th><th>Temporada</th><th>Días</th>"
+                f"<th>Primera hora</th></tr>{''.join(filas)}</table>"
+            )
+        else:
+            partes.append("<p>ningún viaje declarado</p>")
+    return "".join(partes)
+
+
 def _fecha_es(fecha: date) -> str:
     return fecha.strftime("%d/%m/%Y")
 
@@ -631,6 +676,8 @@ def generar_html(
         "<h2>Pueblos, paradas y zonas</h2>" + _render_seccion_pueblos(actual_modelo)
     )
 
+    pendientes_html = _render_seccion_pendientes(actual_modelo, titulos)
+
     calendario_html = _render_seccion_calendario(actual_modelo)
 
     anexo = "<h2>Anexo: preguntas pendientes</h2>" + _render_anexo(pendientes, titulos)
@@ -638,7 +685,7 @@ def generar_html(
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         f"<style>{_ESTILO}</style></head><body>"
-        f"{portada}{cambios_html}{secciones}{pueblos_html}{calendario_html}{anexo}"
+        f"{portada}{cambios_html}{secciones}{pueblos_html}{pendientes_html}{calendario_html}{anexo}"
         "</body></html>"
     )
 

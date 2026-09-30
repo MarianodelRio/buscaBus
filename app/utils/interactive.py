@@ -9,6 +9,8 @@ calculados los datos que van a pintar (plan fase 4, paso 10).
 
 from __future__ import annotations
 
+import re
+
 from app.config import (
     INTERACTIVE_FOOTER,
     MAX_DESCRIPCION_FILA,
@@ -200,6 +202,38 @@ def build_escribir(campo: str, texto: str) -> dict:
         buttons=[
             _button("zonas", "🗺️ Ver por zona"),
             _button(boton_volver, titulo_volver),
+        ],
+    )
+
+
+# ── Localidad pendiente (P15/P32) ─────────────────────────────────────────
+
+
+def _titulo_usar(nombre: str) -> str:
+    """"Usar {nombre}" en 20 caracteres como mucho: nombre completo; si no
+    cabe, sin el complemento " de/del ..."; si no, la primera palabra; último
+    recurso, truncar."""
+    prefijo = "Usar "
+    candidatos = [nombre]
+    corte = re.split(r"\s+(?:de|del)\s+", nombre, maxsplit=1)[0]
+    candidatos.append(corte)
+    candidatos.append(nombre.split()[0] if nombre.split() else nombre)
+    for c in candidatos:
+        if len(prefijo + c) <= MAX_TITULO_BOTON:
+            return prefijo + c
+    return _trunc(prefijo + candidatos[-1], MAX_TITULO_BOTON)
+
+
+def build_localidad_pendiente(
+    texto: str, ver_id: str, ver_nombre: str, campo: str
+) -> dict:
+    """Aldea sin hora de paso: ofrece consultar en su lugar la localidad `ver`
+    o escribir otro pueblo. 2 botones."""
+    return _interactive_buttons(
+        body=texto,
+        buttons=[
+            _button(f"usar:{ver_id}", _titulo_usar(ver_nombre)),
+            _button("escribir", "✍️ Otro pueblo"),
         ],
     )
 
