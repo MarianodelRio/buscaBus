@@ -89,6 +89,12 @@ CAMPOS_LINEA_PERMITIDOS = CAMPOS_LINEA_OBLIGATORIOS | {
     "pendientes",
     "nombre_corto",
 }
+# Campos permitidos de paradas.yaml y observaciones.yaml: todo lo demás es un
+# error (suele ser un nombre con coma sin comillas dentro de `{ ... }`).
+CAMPOS_PARADAS_TOPE = {"localidades", "paradas", "pendientes", "no_vendibles"}
+CAMPOS_LOCALIDAD = {"nombre", "alias", "pendiente", "ver", "minutos", "aviso"}
+CAMPOS_PARADA = {"nombre", "localidad"}
+CAMPOS_OBSERVACION = {"letra", "tipo", "ambitos", "texto"}
 # Título de fila de una lista interactiva de WhatsApp (design.md 2.3, 4.4).
 MAX_TITULO_LINEA = 24
 LINEA_ID_RE = re.compile(r"^[a-z0-9-]+$")
@@ -98,9 +104,7 @@ LINEA_ID_RE = re.compile(r"^[a-z0-9-]+$")
 # llevan): parser distinto y sin relación con `_parse_temporada_rango` /
 # `_DIAS_DEL_ANIO` (que son año-independientes y se reutilizan cada año).
 FECHA_RE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})$")
-RANGO_FECHA_RE = re.compile(
-    r"^(\d{2})/(\d{2})/(\d{4})\s*-\s*(\d{2})/(\d{2})/(\d{4})$"
-)
+RANGO_FECHA_RE = re.compile(r"^(\d{2})/(\d{2})/(\d{4})\s*-\s*(\d{2})/(\d{2})/(\d{4})$")
 
 CAMPOS_CALENDARIO_OBLIGATORIOS = {"vigencia", "festivos", "curso"}
 CAMPOS_CALENDARIO_PERMITIDOS = CAMPOS_CALENDARIO_OBLIGATORIOS | {
@@ -261,16 +265,41 @@ def _parse_rango_fechas_calendario(txt: str) -> tuple[date, date] | None:
     return f1, f2
 
 
+def _claves_desconocidas(
+    campos: dict[str, Any],
+    permitidos: set[str],
+    etiqueta: str,
+    path: Path,
+    errores: list[str],
+    *,
+    ignorar: tuple[str, ...] | set[str] = (),
+) -> None:
+    """Un error por cada clave de `campos` que no está en `permitidos`."""
+    desconocidas = [k for k in campos if k not in permitidos and k not in ignorar]
+    for k in sorted(desconocidas, key=str):
+        msg = f"{path}: {etiqueta}: campo desconocido '{k}'"
+        if campos[k] is None and "nombre" in campos:
+            msg += " (¿un nombre con coma sin comillas?)"
+        errores.append(msg)
+
+
 def _validar_localidades_paradas(
     datos_paradas: dict[str, Any], path: Path, errores: list[str], avisos: list[str]
 ) -> tuple[dict[str, Localidad], dict[str, Parada]]:
     localidades: dict[str, Localidad] = {}
     paradas: dict[str, Parada] = {}
 
+    _claves_desconocidas(
+        datos_paradas,
+        CAMPOS_PARADAS_TOPE,
+        "paradas.yaml",
+        path,
+        errores,
+        ignorar={"zonas"},
+    )
     if "zonas" in datos_paradas:
         errores.append(
-            f"{path}: campo obsoleto 'zonas' (P18: los pueblos se agrupan por "
-            "línea)"
+            f"{path}: campo obsoleto 'zonas' (P18: los pueblos se agrupan por línea)"
         )
 
     localidades_raw = datos_paradas.get("localidades")
@@ -278,6 +307,15 @@ def _validar_localidades_paradas(
         errores.append(f"{path}: falta el campo obligatorio 'localidades' (mapa)")
         localidades_raw = {}
     for lid, campos in localidades_raw.items():
+        if isinstance(campos, dict):
+            _claves_desconocidas(
+                campos,
+                CAMPOS_LOCALIDAD,
+                f"localidad '{lid}'",
+                path,
+                errores,
+                ignorar={"zona"},
+            )
         if not isinstance(campos, dict) or "nombre" not in campos:
             errores.append(f"{path}: localidad '{lid}' sin 'nombre'")
             continue
@@ -355,17 +393,11 @@ def _validar_localidades_paradas(
                 minutos = None
         else:
             if ver is not None:
-                errores.append(
-                    f"{path}: localidad '{lid}': 'ver' sin 'pendiente'"
-                )
+                errores.append(f"{path}: localidad '{lid}': 'ver' sin 'pendiente'")
             if minutos is not None:
-                errores.append(
-                    f"{path}: localidad '{lid}': 'minutos' sin 'pendiente'"
-                )
+                errores.append(f"{path}: localidad '{lid}': 'minutos' sin 'pendiente'")
             if aviso is not None:
-                errores.append(
-                    f"{path}: localidad '{lid}': 'aviso' sin 'pendiente'"
-                )
+                errores.append(f"{path}: localidad '{lid}': 'aviso' sin 'pendiente'")
             ver = minutos = aviso = None
         if ver is not None:
             ver = str(ver)
@@ -405,6 +437,10 @@ def _validar_localidades_paradas(
                 "(deben ser 3 letras mayúsculas)"
             )
             continue
+        if isinstance(campos, dict):
+            _claves_desconocidas(
+                campos, CAMPOS_PARADA, f"parada '{codigo}'", path, errores
+            )
         if (
             not isinstance(campos, dict)
             or "nombre" not in campos
@@ -498,15 +534,13 @@ def _validar_localidades_pendientes(
         if PENDIENTE_RE.match(loc.pendiente):
             if loc.pendiente not in pendientes_paradas:
                 errores.append(
-                    f"{pre}: {loc.pendiente} no está en 'pendientes' de "
-                    "paradas.yaml"
+                    f"{pre}: {loc.pendiente} no está en 'pendientes' de paradas.yaml"
                 )
             avisos.append(f"{path}: localidad pendiente '{lid}' ({loc.pendiente})")
         if loc.ver is not None:
             if loc.ver not in localidades:
                 errores.append(
-                    f"{pre}: 'ver' referencia una localidad sin definir "
-                    f"('{loc.ver}')"
+                    f"{pre}: 'ver' referencia una localidad sin definir ('{loc.ver}')"
                 )
             elif loc.ver == lid:
                 errores.append(f"{pre}: 'ver' apunta a sí misma")
@@ -517,8 +551,7 @@ def _validar_localidades_pendientes(
         con_paradas = sorted(c for c, p in paradas.items() if p.localidad == lid)
         if con_paradas:
             errores.append(
-                f"{pre}: una localidad pendiente no puede tener paradas "
-                f"({con_paradas})"
+                f"{pre}: una localidad pendiente no puede tener paradas ({con_paradas})"
             )
         if loc.aviso is not None:
             obs = observaciones.get(loc.aviso)
@@ -532,9 +565,7 @@ def _validar_localidades_pendientes(
                     f"{pre}: 'aviso' '{loc.aviso}' no es una observación de tipo aviso"
                 )
             elif "viaje" not in obs.ambitos:
-                errores.append(
-                    f"{pre}: 'aviso' '{loc.aviso}' no tiene ámbito 'viaje'"
-                )
+                errores.append(f"{pre}: 'aviso' '{loc.aviso}' no tiene ámbito 'viaje'")
             elif loc.minutos is not None and str(loc.minutos) not in obs.texto:
                 avisos.append(
                     f"{pre}: el texto de la observación '{loc.aviso}' no "
@@ -857,6 +888,10 @@ def _validar_observaciones(
 ) -> dict[str, Observacion]:
     observaciones: dict[str, Observacion] = {}
     for oid, campos in datos.items():
+        if isinstance(campos, dict):
+            _claves_desconocidas(
+                campos, CAMPOS_OBSERVACION, f"observación '{oid}'", path, errores
+            )
         if (
             not isinstance(campos, dict)
             or "tipo" not in campos
@@ -1012,8 +1047,7 @@ def _validar_linea(
     if nombre_corto is not None:
         if not isinstance(nombre_corto, str) or nombre_corto.strip() == "":
             errores.append(
-                f"{path}: 'nombre_corto' debe ser un texto no vacío "
-                f"({nombre_corto!r})"
+                f"{path}: 'nombre_corto' debe ser un texto no vacío ({nombre_corto!r})"
             )
             nombre_corto = None
         elif len(nombre_corto) > MAX_TITULO_LINEA:
@@ -1234,9 +1268,7 @@ def _validar_linea(
             # (llegada, salida) en minutos de cada celda con hora válida
             horas_validas: list[tuple[int, int]] = []
             fila_valida = True
-            indices_con_valor = [
-                i for i, v in enumerate(fila.valores) if v != "-"
-            ]
+            indices_con_valor = [i for i, v in enumerate(fila.valores) if v != "-"]
             primero = indices_con_valor[0] if indices_con_valor else -1
             ultimo = indices_con_valor[-1] if indices_con_valor else -1
             for indice, (codigo, valor) in enumerate(zip(cabecera, fila.valores)):
@@ -1543,9 +1575,7 @@ def _validar_buses(
                 locs_b = {loc_de(p.parada) for p in b.viaje.pasos} - {None}
                 comunes = locs_a & locs_b
                 if len(comunes) < 2:
-                    registrar(
-                        f"bus:{bus_id}: comparten menos de 2 localidades ({par})"
-                    )
+                    registrar(f"bus:{bus_id}: comparten menos de 2 localidades ({par})")
                     continue
                 for loc in sorted(comunes):  # type: ignore[type-var]
                     seq_a = [p.parada for p in a.viaje.pasos if loc_de(p.parada) == loc]

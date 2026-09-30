@@ -261,7 +261,10 @@ def test_main_falla_si_horarios_no_valida(tmp_path, monkeypatch):
 
 
 def _construir_html(
-    tmp_path: Path, paradas_fixture: str, lineas: dict[str, str]
+    tmp_path: Path,
+    paradas_fixture: str,
+    lineas: dict[str, str],
+    observaciones_extra: str = "",
 ) -> str:
     horarios_dir = tmp_path / "horarios"
     (horarios_dir / "lineas").mkdir(parents=True)
@@ -269,7 +272,8 @@ def _construir_html(
         (FIXTURES / paradas_fixture).read_text(encoding="utf-8"), encoding="utf-8"
     )
     (horarios_dir / "observaciones.yaml").write_text(
-        (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8"),
+        (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8")
+        + observaciones_extra,
         encoding="utf-8",
     )
     (horarios_dir / "calendario.yaml").write_text(
@@ -315,14 +319,25 @@ def test_dos_tablas_misma_temporada_y_dias_se_pintan_por_separado(tmp_path):
     html_doc = _construir_html(
         tmp_path, "paradas_base.yaml", {"linea-adamuz": ADAMUZ_LINEA_YAML}
     )
-    assert html_doc.count("<table class='horario'>") == 2
+    assert html_doc.count("<table class='horario corta'>") == 2
     assert "<th>Pueblo A</th><th>Pueblo B</th><th>Pueblo C</th>" in html_doc
     assert "<th>Pueblo C</th><th>Pueblo B</th><th>Pueblo A</th>" in html_doc
 
 
 CODIGOS_ANCHA = [
-    "AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG",
-    "HHH", "III", "JJJ", "KKK", "LLL", "MMM",
+    "AAA",
+    "BBB",
+    "CCC",
+    "DDD",
+    "EEE",
+    "FFF",
+    "GGG",
+    "HHH",
+    "III",
+    "JJJ",
+    "KKK",
+    "LLL",
+    "MMM",
 ]
 
 
@@ -369,7 +384,7 @@ def test_tabla_ancha_se_traspone_y_reparte_en_bloques(tmp_path):
     for codigo in CODIGOS_ANCHA:
         assert f"Parada {codigo}" in html_doc
     # 9 viajes repartidos en bloques de 8 -> dos tablas trasponidas.
-    assert html_doc.count("class='horario transpuesta'") == 2
+    assert html_doc.count("class='horario transpuesta corta'") == 2
 
 
 def test_telefono_se_sustituye_en_la_leyenda(tmp_path):
@@ -459,9 +474,7 @@ pendientes: []
     seccion = html_doc[idx:]
     # título que ve el cliente + descripción exacta de la fila de la lista
     assert "<h3>Línea corta</h3>" in seccion
-    assert (
-        "En el bot: Línea de prueba con nombre largo · 3 pueblos" in seccion
-    )
+    assert "En el bot: Línea de prueba con nombre largo · 3 pueblos" in seccion
     for pueblo in ("Pueblo A", "Pueblo B", "Pueblo C"):
         assert pueblo in seccion
     # Cabeza del Buey no la usa ninguna línea: lista aparte
@@ -592,9 +605,7 @@ def test_mismo_autobus_que_nombra_la_otra_linea_dias_y_sentido():
 
 def test_mismo_autobus_de_la_misma_linea_cita_la_otra_tabla_no_la_propia():
     html_doc = _html_cicloc()
-    frases = [
-        f.split("</p>")[0] for f in html_doc.split("<p class='mismo-bus'>")[1:]
-    ]
+    frases = [f.split("</p>")[0] for f in html_doc.split("<p class='mismo-bus'>")[1:]]
     assert len(frases) == 5  # larga, corta (2 tablas) y paso (2 tablas)
     con_corta = [
         f
@@ -687,3 +698,60 @@ def test_html_real_anexo_incluye_p28_a_p36_sin_p27_ni_p33():
     for codigo in ("P28", "P29", "P30", "P31", "P32", "P34", "P35", "P36"):
         assert f"{codigo}:" in anexo, codigo
     assert "P27" not in anexo and "P33" not in anexo
+
+
+_OBS_EXTRA = """
+otra_nota:
+  tipo: aviso
+  ambitos: [viaje]
+  texto: "Otra nota."
+"""
+
+_LINEA_NOTAS = """\
+nombre: Línea notas
+avisos: []
+no_circula: []
+temporadas:
+  anual: todo el año
+dias:
+  anual:
+    lunes-viernes: horario
+    sabado: sin_servicio
+    domingos-festivos: sin_servicio
+horarios:
+  - temporada: anual
+    dias: lunes-viernes
+    tabla: |
+      AAA    BBB    CCC
+      08:00  08:10  08:20
+      09:00  09:10  09:20  | pasa_por_rivero
+      10:00  10:10  10:20  | pasa_por_rivero otra_nota
+pendientes: []
+"""
+
+
+def test_notas_de_viaje_sin_letra_se_numeran(tmp_path):
+    html_ = _construir_html(
+        tmp_path, "paradas_base.yaml", {"l": _LINEA_NOTAS}, _OBS_EXTRA
+    )
+    assert "<th>Notas</th>" in html_
+    assert "<td></td></tr>" in html_  # fila sin notas
+    assert "<td>[1]</td></tr>" in html_
+    assert "<td>[1] [2]</td></tr>" in html_
+    assert "[1] Pasa por Rivero de Posadas." in html_
+    assert "[2] Otra nota." in html_
+
+
+def test_tabla_sin_notas_no_tiene_columna_notas(tmp_path):
+    html_ = _construir_html(tmp_path, "paradas_base.yaml", {"l": ADAMUZ_LINEA_YAML})
+    assert "<th>Notas</th>" not in html_
+
+
+def test_pendientes_muestran_dias_en_palabras():
+    html_ = _html_real()
+    inicio = html_.index("Localidades sin hora de paso")
+    seccion = html_[inicio:]
+    assert "sábado" in seccion
+    assert "lunes a viernes" in seccion
+    assert "<td>sabado</td>" not in seccion
+    assert "<td>lunes-viernes</td>" not in seccion

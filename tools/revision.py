@@ -163,9 +163,7 @@ def _clases_tabla() -> list[str]:
     return list(DIAS_INDIVIDUALES)
 
 
-def _observaciones_usadas_en_tabla(
-    modelo: Modelo, viajes: list, letra: bool
-) -> list:
+def _observaciones_usadas_en_tabla(modelo: Modelo, viajes: list, letra: bool) -> list:
     ids: set[str] = set()
     for viaje in viajes:
         if not letra:
@@ -183,9 +181,31 @@ _MAX_COLUMNAS_TABLA_NORMAL = 12
 # Trasponiendo, cada bloque de viajes (ahora columnas) no puede tener más de
 # esto, o se sigue saliendo de la página: se reparte en varios bloques.
 _MAX_VIAJES_POR_BLOQUE = 8
+# Tablas con tantas filas o menos no se parten entre páginas (clase `corta`).
+_MAX_FILAS_TABLA_CORTA = 15
 
 
-def _leyenda_tabla(modelo: Modelo, linea, viajes: list) -> str:
+def _notas_numeradas(modelo: Modelo, viajes: list) -> dict[str, int]:
+    """oid -> n de las observaciones de viaje sin letra, en orden de aparición.
+    Los números existen solo en la vista (no hay letras nuevas en el YAML)."""
+    notas: dict[str, int] = {}
+    for viaje in viajes:
+        for oid in viaje.observaciones:
+            obs = modelo.observaciones.get(oid)
+            if obs is not None and not obs.letra and oid not in notas:
+                notas[oid] = len(notas) + 1
+    return notas
+
+
+def _celda_notas(viaje, notas: dict[str, int]) -> str:
+    marcas = " ".join(f"[{notas[oid]}]" for oid in viaje.observaciones if oid in notas)
+    return f"<td>{marcas}</td>"
+
+
+def _leyenda_tabla(
+    modelo: Modelo, linea, viajes: list, notas: dict[str, int] | None = None
+) -> str:
+    notas = notas or {}
     leyenda_items = []
     obs_viaje = _observaciones_usadas_en_tabla(modelo, viajes, letra=False)
     obs_paso = _observaciones_usadas_en_tabla(modelo, viajes, letra=True)
@@ -193,7 +213,10 @@ def _leyenda_tabla(modelo: Modelo, linea, viajes: list) -> str:
         obs = modelo.observaciones.get(oid)
         if obs is None:
             continue
-        etiqueta = f"({obs.letra}) " if obs.letra else ""
+        if oid in notas:
+            etiqueta = f"[{notas[oid]}] "
+        else:
+            etiqueta = f"({obs.letra}) " if obs.letra else ""
         texto = f"{html.escape(etiqueta)}{html.escape(texto_observacion(obs, linea))}"
         leyenda_items.append(f"<li>{texto}</li>")
     if not leyenda_items:
@@ -216,7 +239,13 @@ def _celda_paso(modelo: Modelo, paso) -> str:
     return f"<td>{html.escape(hora)}{html.escape(letras)}</td>"
 
 
-def _render_tabla_normal(modelo: Modelo, codigos: list[str], viajes: list) -> str:
+def _render_tabla_normal(
+    modelo: Modelo,
+    codigos: list[str],
+    viajes: list,
+    notas: dict[str, int] | None = None,
+) -> str:
+    notas = notas or {}
     filas_html = []
     cabecera = "".join(
         f"<th>{html.escape(_nombre_parada(modelo, c))}</th>" for c in codigos
@@ -227,19 +256,29 @@ def _render_tabla_normal(modelo: Modelo, codigos: list[str], viajes: list) -> st
             _celda_paso(modelo, horas_por_parada.get(codigo)) for codigo in codigos
         ]
         pendiente_badge = "".join(
-            f'<span class="pendiente">{html.escape(p)}</span>'
-            for p in viaje.pendientes
+            f'<span class="pendiente">{html.escape(p)}</span>' for p in viaje.pendientes
         )
-        filas_html.append(f"<tr>{''.join(celdas)}<td>{pendiente_badge}</td></tr>")
+        celda_notas = _celda_notas(viaje, notas) if notas else ""
+        filas_html.append(
+            f"<tr>{''.join(celdas)}<td>{pendiente_badge}</td>{celda_notas}</tr>"
+        )
 
+    th_notas = "<th>Notas</th>" if notas else ""
+    corta = " corta" if len(viajes) <= _MAX_FILAS_TABLA_CORTA else ""
     return (
-        "<table class='horario'><thead><tr>"
-        f"{cabecera}<th>Pendiente</th></tr></thead><tbody>"
+        f"<table class='horario{corta}'><thead><tr>"
+        f"{cabecera}<th>Pendiente</th>{th_notas}</tr></thead><tbody>"
         f"{''.join(filas_html)}</tbody></table>"
     )
 
 
-def _render_tabla_transpuesta(modelo: Modelo, codigos: list[str], viajes: list) -> str:
+def _render_tabla_transpuesta(
+    modelo: Modelo,
+    codigos: list[str],
+    viajes: list,
+    notas: dict[str, int] | None = None,
+) -> str:
+    notas = notas or {}
     bloques = [
         viajes[i : i + _MAX_VIAJES_POR_BLOQUE]
         for i in range(0, len(viajes), _MAX_VIAJES_POR_BLOQUE)
@@ -262,15 +301,19 @@ def _render_tabla_transpuesta(modelo: Modelo, codigos: list[str], viajes: list) 
         pendientes_fila = "<td>Pendiente</td>" + "".join(
             "<td>"
             + "".join(
-                f'<span class="pendiente">{html.escape(p)}</span>'
-                for p in v.pendientes
+                f'<span class="pendiente">{html.escape(p)}</span>' for p in v.pendientes
             )
             + "</td>"
             for v in bloque
         )
         filas_html.append(f"<tr>{pendientes_fila}</tr>")
+        if notas:
+            notas_fila = "<td>Notas</td>" + "".join(
+                _celda_notas(v, notas) for v in bloque
+            )
+            filas_html.append(f"<tr>{notas_fila}</tr>")
         partes.append(
-            "<table class='horario transpuesta'><thead><tr>"
+            "<table class='horario transpuesta corta'><thead><tr>"
             f"{cabecera}</tr></thead><tbody>{''.join(filas_html)}</tbody></table>"
         )
     return "".join(partes)
@@ -280,11 +323,12 @@ def _render_tabla_horario(modelo: Modelo, linea, tabla, viajes: list) -> str:
     if not viajes:
         return ""
     codigos = list(tabla.paradas)
+    notas = _notas_numeradas(modelo, viajes)
     if len(codigos) > _MAX_COLUMNAS_TABLA_NORMAL:
-        cuerpo = _render_tabla_transpuesta(modelo, codigos, viajes)
+        cuerpo = _render_tabla_transpuesta(modelo, codigos, viajes, notas)
     else:
-        cuerpo = _render_tabla_normal(modelo, codigos, viajes)
-    return f"{cuerpo}{_leyenda_tabla(modelo, linea, viajes)}"
+        cuerpo = _render_tabla_normal(modelo, codigos, viajes, notas)
+    return f"{cuerpo}{_leyenda_tabla(modelo, linea, viajes, notas)}"
 
 
 def _nombre_parada(modelo: Modelo, codigo: str) -> str:
@@ -350,9 +394,7 @@ def _render_estado_dias(linea) -> str:
             }.get(estado, "sin-datos")
             texto_estado = html.escape(diff.estado_en_palabras(estado))
             celdas.append(f"<td class='{clase_css}'>{texto_estado}</td>")
-        filas.append(
-            f"<tr><td>{html.escape(nombre_temp)}</td>{''.join(celdas)}</tr>"
-        )
+        filas.append(f"<tr><td>{html.escape(nombre_temp)}</td>{''.join(celdas)}</tr>")
     return (
         "<table class='estado-dias'><thead><tr><th>Temporada</th>"
         f"{cabecera}</tr></thead><tbody>{''.join(filas)}</tbody></table>"
@@ -425,7 +467,7 @@ def _render_seccion_linea(
 
 
 def _render_seccion_pueblos(modelo: Modelo) -> str:
-    """"Así aparecen las líneas en el bot" (P18): por cada línea, en el orden
+    """ "Así aparecen las líneas en el bot" (P18): por cada línea, en el orden
     de la lista del bot, su título, la descripción que ve el cliente (misma
     función que `build_lineas`) y sus pueblos con paradas/alias. Después, las
     localidades que ninguna línea usa (solo si hay alguna)."""
@@ -486,7 +528,7 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
 
 
 def _render_seccion_pendientes(modelo: Modelo, titulos: dict[str, str]) -> str:
-    """"Localidades sin hora de paso" (P15/P32): aldeas en las que algunos
+    """ "Localidades sin hora de paso" (P15/P32): aldeas en las que algunos
     autobuses paran pero sin hora propia; el bot remite a otra localidad.
     Devuelve "" si no hay ninguna."""
     pendientes = sorted(
@@ -517,7 +559,7 @@ def _render_seccion_pendientes(modelo: Modelo, titulos: dict[str, str]) -> str:
                     filas.append(
                         f"<tr><td>{html.escape(linea.nombre)}</td>"
                         f"<td>{html.escape(viaje.temporada)}</td>"
-                        f"<td>{html.escape(viaje.dias)}</td>"
+                        f"<td>{html.escape(diff.clase_en_palabras(viaje.dias))}</td>"
                         f"<td>{html.escape(viaje.pasos[0].salida)}</td></tr>"
                     )
         if filas:
@@ -535,7 +577,7 @@ def _fecha_es(fecha: date) -> str:
 
 
 def _render_seccion_calendario(modelo: Modelo) -> str:
-    """"Calendario": lo que el bot hace con los días especiales, para que
+    """ "Calendario": lo que el bot hace con los días especiales, para que
     negocio lo confirme (P03e, P03g, P12b)."""
     calendario = modelo.calendario
     if calendario is None:
@@ -570,14 +612,10 @@ def _render_seccion_calendario(modelo: Modelo) -> str:
                 for lid, festivos in por_linea.items()
                 if any(loc == loc_id for _, loc in festivos.values())
             )
-            lineas_txt = (
-                html.escape(", ".join(lineas)) if lineas else "ninguna línea"
-            )
+            lineas_txt = html.escape(", ".join(lineas)) if lineas else "ninguna línea"
             items = "".join(
                 f"<li>{_fecha_es(fecha)} — {html.escape(nombre)}</li>"
-                for fecha, nombre in sorted(
-                    calendario.festivos_locales[loc_id].items()
-                )
+                for fecha, nombre in sorted(calendario.festivos_locales[loc_id].items())
             )
             partes.append(
                 f"<p><b>{html.escape(nombre_loc)}</b> — líneas que los aplican: "
@@ -636,7 +674,9 @@ th, td {
   border: 1px solid #999; padding: 3px 6px; text-align: center;
   word-break: break-word;
 }
+h3, h4 { break-after: avoid; }
 table.horario { font-size: 8pt; }
+table.horario.corta { break-inside: avoid; }
 table.horario.transpuesta { font-size: 8pt; }
 table.leyenda, ul.leyenda { list-style: none; padding-left: 0; font-size: 9pt; }
 p.mismo-bus { font-size: 9pt; font-style: italic; }
@@ -674,8 +714,8 @@ def generar_html(
         f"<p>Pendientes abiertos: {html.escape(portada_pendientes)}</p>"
     )
 
-    cambios_html = (
-        "<h2>Cambios desde la versión publicada</h2>" + _render_cambios(cambios)
+    cambios_html = "<h2>Cambios desde la versión publicada</h2>" + _render_cambios(
+        cambios
     )
 
     buses = _indice_buses(actual_modelo)

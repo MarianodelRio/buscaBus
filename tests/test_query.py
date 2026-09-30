@@ -663,7 +663,7 @@ def test_penarroya_los_blazquez_sale_a_las_1230():
 
 def test_posadas_cordoba_no_para_en_el_pedrera():
     c = query.consultar(HORARIOS, "posadas", "cordoba", JUEVES_INVIERNO)
-    pedrera = "No para en El Pedrera."
+    pedrera = "No para en la parada de Pedrera (Posadas)."
     assert pedrera in _salida_a_las(c, "11:30").notas
     assert pedrera in _salida_a_las(c, "18:15").notas
     assert pedrera not in _salida_a_las(c, "08:30").notas

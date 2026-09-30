@@ -116,7 +116,7 @@ paradas:                                 # lo que muestra el resultado
   AQU: { nombre: Aquasierra, localidad: aquasierra }
   ESP: { nombre: Espiel, localidad: espiel }
   VRE: { nombre: Villanueva del Rey (pueblo), localidad: villanueva-del-rey }
-  VRC: { nombre: Villanueva del Rey (cruce, gasolinera), localidad: villanueva-del-rey }   # P20
+  VRC: { nombre: "Villanueva del Rey (cruce, gasolinera)", localidad: villanueva-del-rey }   # P20
   BEL: { nombre: Belmez, localidad: belmez }
   PNR: { nombre: Peñarroya-Pueblonuevo, localidad: penarroya-pueblonuevo }
   FOB: { nombre: Fuente Obejuna, localidad: fuente-obejuna }

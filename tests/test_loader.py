@@ -160,3 +160,11 @@ def test_lineas_pueblos_real_los_blazquez_y_sin_pendientes():
     for pueblos in horarios.lineas_pueblos.values():
         assert "rivero-de-posadas" not in pueblos
         assert "los-mochos" not in pueblos
+
+
+def test_horarios_real_vrc_con_nombre_con_coma():
+    horarios = loader.cargar(HORARIOS_REAL)
+    assert (
+        horarios.modelo.paradas["VRC"].nombre
+        == "Villanueva del Rey (cruce, gasolinera)"
+    )

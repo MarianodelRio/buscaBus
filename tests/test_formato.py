@@ -292,9 +292,7 @@ paradas:
 """
     (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
-    assert any(
-        "'alias' debe ser una lista de cadenas" in e for e in resultado.errores
-    )
+    assert any("'alias' debe ser una lista de cadenas" in e for e in resultado.errores)
 
 
 def test_alias_vacio_al_normalizar_es_error(tmp_path):
@@ -311,9 +309,7 @@ paradas:
 """
     (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
-    assert any(
-        "normaliza a una cadena vacía" in e for e in resultado.errores
-    )
+    assert any("normaliza a una cadena vacía" in e for e in resultado.errores)
 
 
 def test_alias_duplicado_en_la_misma_localidad_es_error(tmp_path):
@@ -366,9 +362,7 @@ paradas:
 """
     (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
-    assert any(
-        "tienen el mismo nombre normalizado" in e for e in resultado.errores
-    )
+    assert any("tienen el mismo nombre normalizado" in e for e in resultado.errores)
 
 
 def test_parada_coincide_con_nombre_de_otra_localidad_es_error(tmp_path):
@@ -385,9 +379,7 @@ paradas:
 """
     (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
-    assert any(
-        "coincide con el nombre de la localidad" in e for e in resultado.errores
-    )
+    assert any("coincide con el nombre de la localidad" in e for e in resultado.errores)
 
 
 def test_horarios_real_avisa_ambiguedad_villafranca():
@@ -477,13 +469,10 @@ horarios:
 
 def test_paradas_yaml_pendientes_validos(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
-    paradas_con_pendientes = (
-        (FIXTURES / "paradas_base.yaml").read_text(encoding="utf-8")
-        + "\npendientes: [P12]\n"
-    )
-    (horarios_dir / "paradas.yaml").write_text(
-        paradas_con_pendientes, encoding="utf-8"
-    )
+    paradas_con_pendientes = (FIXTURES / "paradas_base.yaml").read_text(
+        encoding="utf-8"
+    ) + "\npendientes: [P12]\n"
+    (horarios_dir / "paradas.yaml").write_text(paradas_con_pendientes, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
     assert resultado.errores == []
     assert resultado.modelo is not None
@@ -493,13 +482,10 @@ def test_paradas_yaml_pendientes_validos(tmp_path):
 
 def test_paradas_yaml_pendiente_malformado_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
-    paradas_con_pendientes = (
-        (FIXTURES / "paradas_base.yaml").read_text(encoding="utf-8")
-        + "\npendientes: [no-valido]\n"
-    )
-    (horarios_dir / "paradas.yaml").write_text(
-        paradas_con_pendientes, encoding="utf-8"
-    )
+    paradas_con_pendientes = (FIXTURES / "paradas_base.yaml").read_text(
+        encoding="utf-8"
+    ) + "\npendientes: [no-valido]\n"
+    (horarios_dir / "paradas.yaml").write_text(paradas_con_pendientes, encoding="utf-8")
     resultado = formato.validar(horarios_dir)
     assert any("pendiente inválido 'no-valido'" in e for e in resultado.errores)
 
@@ -641,7 +627,9 @@ def test_no_vendibles_par_que_ninguna_linea_conecta_avisa(tmp_path):
     )
     assert resultado.errores == []
     assert any(
-        "no_vendibles" in a and "pueblo-a" in a and "pueblo-c" in a
+        "no_vendibles" in a
+        and "pueblo-a" in a
+        and "pueblo-c" in a
         and "ninguna línea conecta" in a
         for a in resultado.avisos
     )
@@ -684,8 +672,7 @@ def test_celda_llegada_salida_admite_letra_de_parada_al_final(tmp_path):
 def test_llegada_salida_en_la_primera_celda_es_error(tmp_path):
     resultado = _validar_fila(tmp_path, "08:00>08:05  08:10  09:00")
     assert any(
-        "fila 1: llegada y salida solo en una parada intermedia del viaje ('AAA')"
-        in e
+        "fila 1: llegada y salida solo en una parada intermedia del viaje ('AAA')" in e
         for e in resultado.errores
     )
 
@@ -765,8 +752,9 @@ def _lv(nombre: str, cabecera: str, fila: str) -> str:
     return _linea(nombre, _tabla("lunes-viernes", cabecera, fila))
 
 
-def _ciclo_c(tmp_path: Path, extra: dict[str, str] | None = None,
-             quitar: tuple[str, ...] = ()) -> Path:
+def _ciclo_c(
+    tmp_path: Path, extra: dict[str, str] | None = None, quitar: tuple[str, ...] = ()
+) -> Path:
     destino = tmp_path / "horarios"
     shutil.copytree(CICLO_C, destino)
     for nombre in quitar:
@@ -1028,7 +1016,10 @@ def test_pendientes_fixture_valida_sin_errores(tmp_path):
     assert resultado.errores == []
     aldea = resultado.modelo.localidades["aldea-a"]
     assert (aldea.pendiente, aldea.ver, aldea.minutos, aldea.aviso) == (
-        "P32", "pueblo-a", 4, "pasa_por_aldea_a",
+        "P32",
+        "pueblo-a",
+        4,
+        "pasa_por_aldea_a",
     )
     assert f"{ruta}: localidad pendiente 'aldea-a' (P32)" in resultado.avisos
     assert f"{ruta}: localidad pendiente 'aldea-b' (P32)" in resultado.avisos
@@ -1046,8 +1037,13 @@ def test_pendiente_sin_ver_es_error(tmp_path):
 
 def test_ver_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-a: { nombre: Pueblo A }",
-                    "pueblo-a: { nombre: Pueblo A, ver: pueblo-b }")]
+        tmp_path,
+        [
+            (
+                "pueblo-a: { nombre: Pueblo A }",
+                "pueblo-a: { nombre: Pueblo A, ver: pueblo-b }",
+            )
+        ],
     )
     assert f"{ruta}: localidad 'pueblo-a': 'ver' sin 'pendiente'" in r.errores
 
@@ -1055,8 +1051,7 @@ def test_ver_sin_pendiente_es_error(tmp_path):
 def test_pendiente_malformado_es_error(tmp_path):
     r, ruta = _pendientes(tmp_path, [("pendiente: P32", "pendiente: X1")])
     assert (
-        f"{ruta}: localidad 'aldea-a': pendiente inválido 'X1' (debe cumplir "
-        "P\\d{2})"
+        f"{ruta}: localidad 'aldea-a': pendiente inválido 'X1' (debe cumplir P\\d{{2}})"
     ) in r.errores
 
 
@@ -1072,25 +1067,35 @@ def test_pendiente_sin_minutos_es_error(tmp_path):
 def test_minutos_fuera_de_rango_o_no_entero_es_error(tmp_path, valor):
     r, ruta = _pendientes(tmp_path, [("minutos: 4", f"minutos: {valor}")])
     assert any(
-        e.startswith(f"{ruta}: localidad 'aldea-a': 'minutos' debe ser un entero "
-                     "entre 1 y 60")
+        e.startswith(
+            f"{ruta}: localidad 'aldea-a': 'minutos' debe ser un entero entre 1 y 60"
+        )
         for e in r.errores
     ), r.errores
 
 
 def test_minutos_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-c: { nombre: Pueblo C }",
-                    "pueblo-c: { nombre: Pueblo C, minutos: 3 }")]
+        tmp_path,
+        [
+            (
+                "pueblo-c: { nombre: Pueblo C }",
+                "pueblo-c: { nombre: Pueblo C, minutos: 3 }",
+            )
+        ],
     )
     assert f"{ruta}: localidad 'pueblo-c': 'minutos' sin 'pendiente'" in r.errores
 
 
 def test_aviso_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-c: { nombre: Pueblo C }",
-                    "pueblo-c: { nombre: Pueblo C, "
-                    "aviso: para_en_aldea_b }")]
+        tmp_path,
+        [
+            (
+                "pueblo-c: { nombre: Pueblo C }",
+                "pueblo-c: { nombre: Pueblo C, aviso: para_en_aldea_b }",
+            )
+        ],
     )
     assert f"{ruta}: localidad 'pueblo-c': 'aviso' sin 'pendiente'" in r.errores
 
@@ -1138,9 +1143,7 @@ def test_pendiente_con_paradas_es_error(tmp_path):
 
 
 def test_aviso_de_localidad_sin_definir_es_error(tmp_path):
-    r, ruta = _pendientes(
-        tmp_path, [("aviso: pasa_por_aldea_a", "aviso: no_existe")]
-    )
+    r, ruta = _pendientes(tmp_path, [("aviso: pasa_por_aldea_a", "aviso: no_existe")])
     assert (
         f"{ruta}: localidad pendiente 'aldea-a': 'aviso' referencia una "
         "observación sin definir ('no_existe')"
@@ -1152,9 +1155,11 @@ def test_aviso_que_no_es_tipo_aviso_es_error(tmp_path):
         tmp_path,
         paradas=[("aviso: pasa_por_aldea_a", "aviso: a_demanda")],
         observaciones=[
-            ("pasa_por_aldea_a:",
-             "a_demanda:\n  letra: D\n  tipo: condicion\n  ambitos: [viaje]\n"
-             '  texto: "Solo a demanda."\n\npasa_por_aldea_a:')
+            (
+                "pasa_por_aldea_a:",
+                "a_demanda:\n  letra: D\n  tipo: condicion\n  ambitos: [viaje]\n"
+                '  texto: "Solo a demanda."\n\npasa_por_aldea_a:',
+            )
         ],
     )
     assert (
@@ -1167,13 +1172,17 @@ def test_aviso_sin_ambito_viaje_es_error(tmp_path):
     r, ruta = _pendientes(
         tmp_path,
         observaciones=[
-            ("pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [viaje]",
-             "pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [linea]"),
+            (
+                "pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [viaje]",
+                "pasa_por_aldea_a:\n  tipo: aviso\n  ambitos: [linea]",
+            ),
         ],
     )
     assert any(
-        e.startswith(f"{ruta}: localidad pendiente 'aldea-a': 'aviso' "
-                     "'pasa_por_aldea_a' no tiene ámbito 'viaje'")
+        e.startswith(
+            f"{ruta}: localidad pendiente 'aldea-a': 'aviso' "
+            "'pasa_por_aldea_a' no tiene ámbito 'viaje'"
+        )
         for e in r.errores
     ), r.errores
 
@@ -1221,9 +1230,7 @@ paradas:
 
 
 def test_zonas_en_paradas_es_campo_obsoleto(tmp_path):
-    horarios_dir = _con_paradas(
-        tmp_path, "zonas:\n  z: Zona\n" + _PARADAS_MIN % ""
-    )
+    horarios_dir = _con_paradas(tmp_path, "zonas:\n  z: Zona\n" + _PARADAS_MIN % "")
     resultado = formato.validar(horarios_dir)
     ruta = horarios_dir / "paradas.yaml"
     assert (
@@ -1305,8 +1312,7 @@ def test_nombre_corto_vacio_es_error(tmp_path):
     resultado = formato.validar(horarios_dir)
     ruta = horarios_dir / "lineas" / "linea-prueba.yaml"
     assert (
-        f"{ruta}: 'nombre_corto' debe ser un texto no vacío ('')"
-        in resultado.errores
+        f"{ruta}: 'nombre_corto' debe ser un texto no vacío ('')" in resultado.errores
     )
 
 
@@ -1343,7 +1349,8 @@ def test_dos_lineas_con_el_mismo_titulo_es_error(tmp_path):
 
 def test_id_de_linea_invalido_es_error(tmp_path):
     horarios_dir = _build(
-        tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"),
+        tmp_path,
+        BASE_VALIDA.format(fila="08:00  08:10  08:20"),
         linea_nombre="Linea_Rara",
     )
     resultado = formato.validar(horarios_dir)
@@ -1369,6 +1376,75 @@ def test_horarios_real_tiene_32_avisos_y_4_nombres_cortos():
         "pozoblanco-estacion-ave": "Estación AVE Villanueva",
         "santa-eufemia-villaralto-pozoblanco": "Santa Eufemia-Villaralto",
     }
-    assert all(
-        len(linea.titulo) <= 24 for linea in resultado.modelo.lineas.values()
+    assert all(len(linea.titulo) <= 24 for linea in resultado.modelo.lineas.values())
+
+
+PARADAS_OK = """\
+localidades:
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+
+
+def _errores_con_paradas(tmp_path, paradas: str, observaciones: str | None = None):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    (horarios_dir / "paradas.yaml").write_text(paradas, encoding="utf-8")
+    if observaciones is not None:
+        (horarios_dir / "observaciones.yaml").write_text(
+            observaciones, encoding="utf-8"
+        )
+    return formato.validar(horarios_dir).errores
+
+
+def test_parada_con_coma_sin_comillas_es_error_con_pista(tmp_path):
+    paradas = PARADAS_OK.replace(
+        "{ nombre: Pueblo B, localidad: pueblo-b }",
+        "{ nombre: B (b, c), localidad: pueblo-b }",
     )
+    errores = _errores_con_paradas(tmp_path, paradas)
+    assert any(
+        "parada 'BBB'" in e
+        and "campo desconocido 'c)'" in e
+        and "nombre con coma sin comillas" in e
+        for e in errores
+    ), errores
+
+
+def test_localidad_con_clave_desconocida_es_error(tmp_path):
+    paradas = PARADAS_OK.replace(
+        "pueblo-a: { nombre: Pueblo A }", "pueblo-a: { nombre: Pueblo A, rara: 1 }"
+    )
+    errores = _errores_con_paradas(tmp_path, paradas)
+    assert any(
+        "localidad 'pueblo-a'" in e and "campo desconocido 'rara'" in e for e in errores
+    ), errores
+
+
+def test_paradas_yaml_clave_desconocida_en_nivel_superior_es_error(tmp_path):
+    errores = _errores_con_paradas(tmp_path, PARADAS_OK + "rarezas: {}\n")
+    assert any("campo desconocido 'rarezas'" in e for e in errores), errores
+
+
+def test_observacion_con_clave_desconocida_es_error(tmp_path):
+    obs = (FIXTURES / "observaciones_base.yaml").read_text(encoding="utf-8")
+    obs += "\nextra:\n  tipo: aviso\n  ambitos: [viaje]\n  texto: x\n  rara: 1\n"
+    errores = _errores_con_paradas(tmp_path, PARADAS_OK, obs)
+    assert any(
+        "observación 'extra'" in e and "campo desconocido 'rara'" in e for e in errores
+    ), errores
+
+
+def test_zonas_y_zona_obsoletas_dan_solo_su_mensaje(tmp_path):
+    paradas = PARADAS_OK.replace(
+        "pueblo-a: { nombre: Pueblo A }", "pueblo-a: { nombre: Pueblo A, zona: z }"
+    )
+    paradas += "zonas: {}\n"
+    errores = _errores_con_paradas(tmp_path, paradas)
+    assert any("campo obsoleto 'zonas'" in e for e in errores)
+    assert any("campo obsoleto 'zona'" in e for e in errores)
+    assert not any("campo desconocido" in e for e in errores), errores
