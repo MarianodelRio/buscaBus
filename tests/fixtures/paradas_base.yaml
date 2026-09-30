@@ -1,10 +1,7 @@
-zonas:
-  zona-test: Zona de prueba
-
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }

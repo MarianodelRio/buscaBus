@@ -24,7 +24,10 @@ from zoneinfo import ZoneInfo
 from datetime import date, datetime
 
 from app.services.horarios import diff
-from app.services.horarios.loader import calcular_festivos_por_linea
+from app.services.horarios.loader import (
+    calcular_festivos_por_linea,
+    calcular_lineas_pueblos,
+)
 from app.services.horarios.formato import (
     DIAS_INDIVIDUALES,
     Modelo,
@@ -32,18 +35,15 @@ from app.services.horarios.formato import (
     texto_observacion,
     validar,
 )
+from app.utils.interactive import descripcion_linea
 from app.utils.messages import msg_no_vendible
 
 # Pendientes (docs/preguntas_negocio.txt) que afectan a una localidad concreta
-# de paradas.yaml, más allá de la propuesta general de zonas/localidades
-# (P18, que afecta a todas). Mapeo fijado a mano al introducir el campo
-# `pendientes:` en paradas.yaml (design.md, 8, "Correcciones de la fase 1",
-# punto 6): antes vivía solo en comentarios `# Pxx` junto a cada entrada.
-PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {
-    "cabeza-del-buey": ("P18",),
-}
-# P18 (negocio prefiere zonas por línea) afecta a todas las zonas por igual.
-PENDIENTE_ZONAS_GLOBAL = "P18"
+# de paradas.yaml. Mapeo fijado a mano (design.md, 8, "Correcciones de la
+# fase 1", punto 6). Hoy vacío: ninguna localidad tiene un pendiente propio
+# fuera de las aldeas con `pendiente:` (sección "Localidades sin hora de
+# paso").
+PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {}
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HORARIOS_DIR = REPO_ROOT / "horarios"
@@ -425,51 +425,63 @@ def _render_seccion_linea(
 
 
 def _render_seccion_pueblos(modelo: Modelo) -> str:
-    """"Pueblos, paradas y zonas": un bloque por zona -> localidades ->
-    paradas/alias, con los pendientes que afecten a cada una (design.md 8,
-    "Correcciones de la fase 1", punto 6)."""
+    """"Así aparecen las líneas en el bot" (P18): por cada línea, en el orden
+    de la lista del bot, su título, la descripción que ve el cliente (misma
+    función que `build_lineas`) y sus pueblos con paradas/alias. Después, las
+    localidades que ninguna línea usa (solo si hay alguna)."""
     pendientes_modelo = set(modelo.pendientes)
-    localidades_por_zona: dict[str, list] = {}
-    for localidad in modelo.localidades.values():
-        localidades_por_zona.setdefault(localidad.zona, []).append(localidad)
     paradas_por_localidad: dict[str, list] = {}
     for parada in modelo.paradas.values():
         paradas_por_localidad.setdefault(parada.localidad, []).append(parada)
 
     def _badges(pendientes: tuple[str, ...]) -> str:
         aplicables = [p for p in pendientes if p in pendientes_modelo]
-        if not aplicables:
-            return ""
         return "".join(
             f'<span class="pendiente">{html.escape(p)}</span>' for p in aplicables
         )
 
+    def _item(localidad) -> str:
+        badges = _badges(PENDIENTES_POR_LOCALIDAD.get(localidad.id, ()))
+        alias_txt = (
+            f" (alias: {html.escape(', '.join(localidad.alias))})"
+            if localidad.alias
+            else ""
+        )
+        paradas_txt = ", ".join(
+            sorted(
+                html.escape(p.nombre)
+                for p in paradas_por_localidad.get(localidad.id, [])
+            )
+        )
+        return (
+            f"<li>{html.escape(localidad.nombre)}{alias_txt} — {paradas_txt} "
+            f"{badges}</li>"
+        )
+
+    lineas_pueblos = calcular_lineas_pueblos(modelo)
     partes = []
-    for zid, zona in sorted(modelo.zonas.items(), key=lambda item: item[1].nombre):
-        badges_zona = _badges((PENDIENTE_ZONAS_GLOBAL,))
-        partes.append(f"<h3>{html.escape(zona.nombre)} {badges_zona}</h3>")
-        items = []
-        for localidad in sorted(
-            localidades_por_zona.get(zid, []), key=lambda loc: loc.nombre
-        ):
-            pendientes_localidad = PENDIENTES_POR_LOCALIDAD.get(localidad.id, ())
-            badges_localidad = _badges(pendientes_localidad)
-            alias_txt = (
-                f" (alias: {html.escape(', '.join(localidad.alias))})"
-                if localidad.alias
-                else ""
-            )
-            paradas_txt = ", ".join(
-                sorted(
-                    html.escape(p.nombre)
-                    for p in paradas_por_localidad.get(localidad.id, [])
-                )
-            )
-            items.append(
-                f"<li>{html.escape(localidad.nombre)}{alias_txt} — {paradas_txt} "
-                f"{badges_localidad}</li>"
-            )
-        partes.append(f"<ul>{''.join(items)}</ul>")
+    usadas: set[str] = set()
+    for lid, ids in lineas_pueblos.items():
+        linea = modelo.lineas[lid]
+        usadas.update(ids)
+        partes.append(f"<h3>{html.escape(linea.titulo)}</h3>")
+        partes.append(
+            f"<p>En el bot: {html.escape(descripcion_linea(linea, len(ids)))}</p>"
+        )
+        items = "".join(_item(modelo.localidades[i]) for i in ids)
+        partes.append(f"<ul>{items}</ul>")
+
+    sin_linea = sorted(
+        (
+            loc
+            for loc in modelo.localidades.values()
+            if loc.id not in usadas and loc.pendiente is None
+        ),
+        key=lambda loc: loc.nombre,
+    )
+    if sin_linea:
+        partes.append("<h3>Localidades que ninguna línea usa</h3>")
+        partes.append(f"<ul>{''.join(_item(loc) for loc in sin_linea)}</ul>")
     return "".join(partes)
 
 
@@ -673,7 +685,8 @@ def generar_html(
     )
 
     pueblos_html = (
-        "<h2>Pueblos, paradas y zonas</h2>" + _render_seccion_pueblos(actual_modelo)
+        "<h2>Así aparecen las líneas en el bot</h2>"
+        + _render_seccion_pueblos(actual_modelo)
     )
 
     pendientes_html = _render_seccion_pendientes(actual_modelo, titulos)

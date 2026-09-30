@@ -13,8 +13,9 @@ from app.utils.interactive import (
     build_menu,
     build_origen,
     build_resultado,
-    build_zona,
-    build_zonas,
+    build_linea,
+    build_lineas,
+    descripcion_linea,
 )
 
 MAX_ROWS = 10
@@ -66,7 +67,7 @@ def test_build_origen_within_limits():
         for lid in datos.menu_origen
     ]
     _assert_list_limits(build_origen(localidades))
-    _assert_list_limits(build_origen(localidades, con_zonas=True))
+    _assert_list_limits(build_origen(localidades, con_lineas=True))
 
 
 def test_build_destinos_every_real_origin_within_limits():
@@ -110,24 +111,169 @@ def test_build_escribir_within_limits():
     _assert_button_limits(build_escribir("origen", "texto"))
 
 
-def test_build_zonas_within_limits():
+def _lineas_reales():
+    from app.utils.matcher import lineas
+
     datos = horarios_datos.actual()
-    zonas = [(z.id, z.nombre) for z, _ in __import__(
-        "app.utils.matcher", fromlist=["zonas"]
-    ).zonas(datos.horarios)]
-    _assert_list_limits(build_zonas(zonas, "origen"))
+    return lineas(datos.horarios)
 
 
-def test_build_zona_within_limits():
+def _titulo_utf16(texto: str) -> int:
+    return len(texto.encode("utf-16-le")) // 2
+
+
+def _assert_titulos_whatsapp(payload: dict) -> None:
+    """El título de fila se cuenta en code points y en unidades UTF-16."""
+    for row in _rows(payload):
+        assert len(row["title"]) <= MAX_ROW_TITLE
+        assert _titulo_utf16(row["title"]) <= MAX_ROW_TITLE, row["title"]
+
+
+def _linea_falsa(n: int, nombre_corto: str | None = None, nombre: str | None = None):
+    from app.services.horarios.modelo import Linea
+
+    return Linea(
+        id=f"linea-{n:02d}",
+        nombre=nombre or f"Linea {n:02d}",
+        telefono_demanda=None,
+        avisos=(),
+        no_circula=(),
+        temporadas=(),
+        nombre_corto=nombre_corto,
+    )
+
+
+def test_build_lineas_real_within_limits():
+    from app.utils.matcher import paginar
+
+    todas = [(linea, len(locs)) for linea, locs in _lineas_reales()]
+    assert len(todas) == 12
+    paginas = paginar(todas)
+    assert [len(p) for p in paginas] == [8, 4]
+    lineas = list(paginas[1])
+    for campo in ("origen", "destino"):
+        payload = build_lineas(lineas, 0, False, campo)
+        _assert_list_limits(payload)
+        _assert_titulos_whatsapp(payload)
+    ids = [r["id"] for r in _rows(build_lineas(lineas, 0, False, "origen"))]
+    assert ids[-1] == "menu"
+    ids = [r["id"] for r in _rows(build_lineas(lineas, 0, False, "destino"))]
+    assert ids[-1] == "cambiar_origen"
+
+
+def test_build_lineas_pagina_0_con_mas_lineas_son_10_filas():
+    lineas = [(_linea_falsa(n), 3) for n in range(1, 9)]
+    rows = _rows(build_lineas(lineas, 0, True, "origen"))
+    assert len(rows) == 10
+    assert rows[8] == {"id": "lineas:1", "title": "➡️ Más líneas"}
+    assert rows[9]["id"] == "menu"
+    assert rows[0]["id"] == "linea:linea-01:0"
+
+
+def test_build_lineas_15_lineas_dos_paginas(datos_muchas_lineas):
+    from app.utils.matcher import lineas, paginar
+
+    todas = [(linea, len(locs)) for linea, locs in lineas(datos_muchas_lineas.horarios)]
+    paginas = paginar(todas)
+    assert len(todas) == 12
+    assert [len(p) for p in paginas] == [8, 4]
+    p0 = build_lineas(list(paginas[0]), 0, True, "origen")
+    p1 = build_lineas(list(paginas[1]), 1, False, "origen")
+    assert len(_rows(p0)) == 10
+    assert len(_rows(p1)) == 4 + 1  # 4 líneas + volver
+    _assert_list_limits(p0)
+    _assert_list_limits(p1)
+    _assert_titulos_whatsapp(p0)
+    _assert_titulos_whatsapp(p1)
+    assert _rows(p0)[8]["id"] == "lineas:1"
+    assert _rows(p1)[-1]["id"] == "menu"
+    assert all(r["id"] != "lineas:2" for r in _rows(p1))
+
+
+def test_build_lineas_nombre_corto_en_titulo_y_descripcion():
+    linea = _linea_falsa(
+        1, nombre_corto="Ruta del norte",
+        nombre="Ruta muy larga del norte al sur de la sierra",
+    )
+    fila = _rows(build_lineas([(linea, 2)], 0, False, "origen"))[0]
+    assert fila["title"] == "Ruta del norte"
+    assert fila["description"] == (
+        "Ruta muy larga del norte al sur de la sierra · 2 pueblos"
+    )
+
+
+def test_descripcion_linea_singular_y_sin_nombre_corto():
+    assert descripcion_linea(_linea_falsa(1), 1) == "1 pueblo"
+    assert descripcion_linea(_linea_falsa(1), 5) == "5 pueblos"
+    fila = _rows(build_lineas([(_linea_falsa(1), 1)], 0, False, "origen"))[0]
+    assert fila["description"] == "1 pueblo"
+
+
+def test_descripcion_linea_nombre_largo_no_come_el_recuento():
+    linea = _linea_falsa(1, nombre_corto="Corta", nombre="X" * 200)
+    desc = descripcion_linea(linea, 12)
+    assert len(desc) <= MAX_ROW_DESC
+    assert desc.endswith(" · 12 pueblos")
+    fila = _rows(build_lineas([(linea, 12)], 0, False, "destino"))[0]
+    assert fila["description"] == desc
+
+
+def test_build_linea_20_pueblos_3_paginas(datos_muchas_lineas):
+    from app.utils.matcher import lineas, paginar
+
+    larga, locs = next(
+        (li, lo) for li, lo in lineas(datos_muchas_lineas.horarios)
+        if li.id == "linea-larga"
+    )
+    assert len(locs) == 19  # origen + 18
+    paginas = paginar(locs)
+    assert [len(p) for p in paginas] == [8, 8, 3]
+    for n, pagina in enumerate(paginas):
+        hay_mas = n + 1 < len(paginas)
+        filas = [(loc.id, loc.nombre) for loc in pagina]
+        payload = build_linea(larga, filas, n, hay_mas)
+        _assert_list_limits(payload)
+        _assert_titulos_whatsapp(payload)
+        rows = _rows(payload)
+        assert rows[-1]["id"] == "lineas:0"
+        if hay_mas:
+            assert rows[-2]["id"] == f"linea:linea-larga:{n + 1}"
+        assert len(rows) <= 10
+        assert payload["interactive"]["header"]["text"] == "🚌 Linea Larga"
+
+
+def test_build_linea_titulo_corto_en_cabecera_y_seccion():
+    linea = _linea_falsa(
+        1, nombre_corto="Ruta del norte",
+        nombre="Ruta muy larga del norte al sur de la sierra",
+    )
+    payload = build_linea(linea, [("a", "Aldea")], 0, False)
+    assert payload["interactive"]["header"]["text"] == "🚌 Ruta del norte"
+    assert payload["interactive"]["action"]["sections"][0]["title"] == "Ruta del norte"
+
+
+def test_build_escribir_boton_ver_por_linea():
+    for campo in ("origen", "destino"):
+        botones = _buttons(build_escribir(campo, "texto"))
+        assert botones[0]["reply"]["id"] == "lineas:0"
+        assert botones[0]["reply"]["title"] == "🚌 Ver por línea"
+        assert len(botones) <= MAX_BUTTONS
+
+
+def test_filas_ver_pueblos_por_linea_en_origen_y_destino():
     datos = horarios_datos.actual()
-    todas = list(datos.horarios.modelo.localidades.items())[:8]
-    localidades_pagina = [(lid, loc.nombre) for lid, loc in todas]
-    _assert_list_limits(
-        build_zona("Los Pedroches", "los-pedroches", 0, localidades_pagina, True)
-    )
-    _assert_list_limits(
-        build_zona("Los Pedroches", "los-pedroches", 0, localidades_pagina, False)
-    )
+    localidades = [
+        (lid, datos.horarios.modelo.localidades[lid].nombre)
+        for lid in datos.menu_origen
+    ]
+    rows = _rows(build_origen(localidades, con_lineas=True))
+    assert {"id": "lineas:0", "title": "🚌 Ver pueblos por línea"} in rows
+    _assert_titulos_whatsapp(build_origen(localidades, con_lineas=True))
+    nombres = [(f"x{i}", f"Pueblo {i}") for i in range(12)]
+    payload = build_destinos("Origen", nombres, con_lineas=True)
+    assert {"id": "lineas:0", "title": "🚌 Ver pueblos por línea"} in _rows(payload)
+    _assert_list_limits(payload)
+    _assert_titulos_whatsapp(payload)
 
 
 def test_build_dias_within_limits():

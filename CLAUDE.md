@@ -12,7 +12,7 @@ WhatsApp bot that answers bus schedule queries for an interurban transport compa
 - **Deployment**: same GCP VM as Peluquería, its own systemd service and port (see `design.md`, 6.1–6.2)
 - **Tests**: pytest — all external APIs mocked, no real credentials needed
 
-**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 12 líneas migradas (fase 1b-1; faltan 3 en la fase 1b-2/ciclo C), motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp; ciclo C1 hecho: celda `llegada>salida` (P21), `bus:<id>` para el mismo autobús con validación y aviso heurístico (T-1); ciclo C2 hecho: localidades pendientes (P15/P32) con `pendiente`/`ver`/`minutos`/`aviso?` en `paradas.yaml`, mensaje "Usar X / Otro pueblo" en la conversación y sección "Localidades sin hora de paso" en la revisión; C3 pendiente); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
+**Estado actual: fases 1, 2, 3 y 4 implementadas (formato de horarios, validador, herramientas, 12 líneas migradas (fase 1b-1; faltan 3 en la fase 1b-2/ciclo C), motor de consulta, calendario, coincidencia de texto, lectura de fechas y la conversación completa por WhatsApp; ciclo C1 hecho: celda `llegada>salida` (P21), `bus:<id>` para el mismo autobús con validación y aviso heurístico (T-1); ciclo C2 hecho: localidades pendientes (P15/P32) con `pendiente`/`ver`/`minutos`/`aviso?` en `paradas.yaml`, mensaje "Usar X / Otro pueblo" en la conversación y sección "Localidades sin hora de paso" en la revisión; ciclo C3 hecho: pueblos por línea en lugar de zonas (P18): sin `zonas:` en `paradas.yaml`, `Linea.nombre_corto`/`titulo`, `Horarios.lineas_pueblos`, "Ver pueblos por línea" en la conversación y "Así aparecen las líneas en el bot" en la revisión); fase 5 (infraestructura) pendiente.** Todo lo que sigue describe el diseño aprobado en [`design.md`](design.md), que es la única fuente de verdad del proyecto. Este `CLAUDE.md` marca `(pendiente)` cada módulo que aún no existe — no lo trates como código real hasta que el marcado desaparezca.
 
 ---
 
@@ -33,14 +33,14 @@ app/
       modelo.py                — entidades inmutables (design.md 2.4); `Paso` con `llegada` y `salida`, `Viaje.bus`
       formato.py               — parser + validador de horarios/ (design.md 2.3); único para tools, tests y loader
       diff.py                  — diferencias entre dos versiones de horarios/ en lenguaje de negocio
-      loader.py                — carga horarios/ a memoria al arrancar usando formato.py
+      loader.py                — carga horarios/ a memoria al arrancar usando formato.py; índice `lineas_pueblos` (P18)
       query.py                 — motor de consulta (design.md, sección 3)
       calendario.py            — temporada, tipo de día, festivos, periodo escolar
       datos.py                 — contenedor con lock de los datos cargados (Horarios + Matcher + menú de origen), leído por peticiones y por el scheduler
   utils/
-    interactive.py             — helpers genéricos copiados de Peluquería + constructores propios de listas/botones
+    interactive.py             — helpers genéricos copiados de Peluquería + constructores propios de listas/botones (incl. líneas y pueblos por línea)
     messages.py                — todos los textos en español
-    matcher.py                 — reglas de coincidencia de texto (design.md, 4.7)
+    matcher.py                 — reglas de coincidencia de texto (design.md, 4.7) y `lineas()` (líneas con sus pueblos)
     fechas.py                  — lector de fechas en formato cerrado día/mes[/año] (design.md, 4.5); sin lenguaje natural
     metrics.py                 — copiado tal cual de Peluquería
     dedup.py                   — copiado tal cual de Peluquería
@@ -53,7 +53,7 @@ tools/
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML; se borra en la fase 1b
 horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 12 líneas; las 3 restantes en la fase 1b-2/ciclo C
-tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9). `fixtures/horarios_cicloC/`: llegada>salida y `bus:` (esquema con zonas; el ciclo C3 debe migrarla); `fixtures/horarios_pendientes/`: localidades pendientes (C2)
+tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9). `fixtures/horarios_cicloC/`: llegada>salida y `bus:` (ya migrada en C3, sin zonas); `datos_muchas_lineas` en `conftest.py` genera un `horarios/` con 12 líneas para probar la paginación; `fixtures/horarios_pendientes/`: localidades pendientes (C2)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
 Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```

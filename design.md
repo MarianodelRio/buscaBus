@@ -141,7 +141,7 @@ que alguien pierda un autobús.
 
 ```
 horarios/
-  paradas.yaml          zonas, localidades y paradas (código, nombre público, alias)
+  paradas.yaml          localidades y paradas (código, nombre público, alias)
   observaciones.yaml    catálogo de observaciones y el texto exacto que ve el cliente
   lineas/
     pozoblanco-cordoba.yaml   una por línea comercial; el nombre del fichero es su id
@@ -152,15 +152,12 @@ horarios/
 #### `paradas.yaml`
 
 ```yaml
-zonas:
-  los-pedroches: Los Pedroches
 localidades:                       # lo que elige el usuario
-  pozoblanco: { nombre: Pozoblanco, zona: los-pedroches, alias: [pozo] }
-  villafranca-de-cordoba: { nombre: Villafranca de Córdoba, zona: adamuz, alias: [villafranca] }
-  villafranca-de-los-barros: { nombre: Villafranca de los Barros, zona: extremadura, alias: [villafranca] }
+  pozoblanco: { nombre: Pozoblanco, alias: [pozo] }
+  villafranca-de-cordoba: { nombre: Villafranca de Córdoba, alias: [villafranca] }
+  villafranca-de-los-barros: { nombre: Villafranca de los Barros, alias: [villafranca] }
   aldea-ejemplo:                   # localidad pendiente (P15/P32): sin hora propia
     nombre: Aldea Ejemplo
-    zona: los-pedroches
     pendiente: P32
     ver: pozoblanco
     minutos: 4
@@ -168,16 +165,22 @@ localidades:                       # lo que elige el usuario
 paradas:                           # lo que muestra el resultado
   POZ: { nombre: Pozoblanco, localidad: pozoblanco }
   PZH: { nombre: Pozoblanco (Hospital), localidad: pozoblanco }
-pendientes: [P18]                  # preguntas abiertas que no son de una línea
-                                    # concreta (zonas, localidades, paradas)
+pendientes: [P32]                  # preguntas abiertas que no son de una línea
+                                    # concreta (localidades, paradas)
 no_vendibles:                      # P12b: pares de localidades sin venta de
   - [cordoba, alcolea]              # billetes, en ninguno de los dos sentidos
 ```
 
 - **`pendientes:`** (opcional, lista): preguntas abiertas (`P\d{2}`, igual que
-  las de una línea) que afectan a zonas, localidades o paradas y no a una
+  las de una línea) que afectan a localidades o paradas y no a una
   línea concreta. Un pendiente mal formado detiene la validación, igual que
   en `lineas/*.yaml`.
+
+- **Sin zonas (P18, ciclo C3).** `paradas.yaml` no tiene bloque `zonas:` ni
+  `zona:` en las localidades: una localidad solo necesita `nombre`. Los
+  pueblos se agrupan **por línea**: el loader deduce los de cada línea de las
+  paradas de sus viajes (2.4). Un `zonas:` o un `zona:` heredado es un error
+  («campo obsoleto», con fichero y localidad), no se ignora.
 
 - **Localidad pendiente** (P15/P32, ciclo C2): una aldea en la que algunos
   autobuses paran pero de la que no se conoce la hora de paso. Campos:
@@ -206,6 +209,14 @@ no_vendibles:                      # P12b: pares de localidades sin venta de
   tablas estrechas; la vista de negocio muestra siempre el nombre completo.
 - Un alias compartido por varias localidades (`villafranca`) es la forma de
   declarar una ambigüedad: el matcher debe preguntar (4.7).
+
+- **`nombre_corto`** (opcional, en `lineas/*.yaml`, junto a `nombre`): el
+  título de la línea en la lista de líneas del bot. WhatsApp limita el título
+  de una fila a 24 caracteres, así que un `nombre` de más de 24 **exige**
+  `nombre_corto` (hoy: Adamuz – Córdoba, F. Carreteros – Córdoba, Estación AVE
+  Villanueva y Santa Eufemia-Villaralto). `Linea.titulo` es el único sitio que
+  decide qué se muestra: `nombre_corto` si existe, si no `nombre`. Con
+  `nombre_corto` la fila lleva el `nombre` completo en la descripción (4.7).
 
 #### `observaciones.yaml`
 
@@ -342,6 +353,10 @@ Reglas del formato:
 | Marcador `{xxx}` en el `texto` de una observación distinto de `{telefono}` | |
 | Pendiente mal formado en `pendientes:` de `paradas.yaml` | Ambigüedades declaradas: un alias que comparten varias localidades o que coincide con el nombre de otra (`villafranca`) |
 | Alias que no es texto, que queda vacío al normalizar o repetido en la misma localidad | |
+| `zonas:` en `paradas.yaml` o `zona:` en una localidad (campo obsoleto, P18) | |
+| `nombre` de línea de más de 24 caracteres sin `nombre_corto`; `nombre_corto` vacío, que no es texto o de más de 24 caracteres | |
+| Dos líneas con el mismo título en el bot (`titulo` normalizado, con `nombre_corto` si lo hay) | |
+| Id de línea (nombre del fichero) que no cumple `^[a-z0-9-]+$` | |
 | Dos localidades cuyo nombre normalizado coincide (ambigüedad no declarada) | |
 | Localidad pendiente: `pendiente` sin `ver` (o al revés), `pendiente` mal formado o no listado en `pendientes:` de `paradas.yaml`, `minutos` ausente, no entero o fuera de 1-60, `aviso`/`ver`/`minutos` sin `pendiente` | Localidad pendiente (con su Pnn) |
 | Localidad pendiente: `ver` sin definir, ella misma u otra pendiente; con paradas en `paradas:`; `aviso` sin definir, que no es tipo aviso o sin ámbito `viaje` | Localidad pendiente cuyo `aviso` no contiene sus `minutos` en el texto |
@@ -488,15 +503,20 @@ El loader convierte `horarios/` en objetos inmutables:
 
 | Entidad | Contenido |
 |---|---|
-| `Zona` | Id y nombre |
-| `Localidad` | Lo que elige el usuario: id, nombre, zona, alias y, solo en las pendientes (P15/P32), `pendiente`, `ver`, `minutos` y `aviso` (opcionales, `None` por defecto) |
+| `Localidad` | Lo que elige el usuario: id, nombre, alias y, solo en las pendientes (P15/P32), `pendiente`, `ver`, `minutos` y `aviso` (opcionales, `None` por defecto) |
 | `Parada` | Parada física: código, nombre público, localidad |
 | `Observacion` | Id, letra, tipo (condición/aviso), ámbitos, texto |
-| `Linea` | Id, nombre, teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
+| `Linea` | Id, nombre, `nombre_corto` opcional (`titulo` = el que ve el cliente), teléfono a demanda, avisos, meses sin servicio, temporadas, estado de cada clase de día por temporada, pendientes |
 | `Temporada` | Nombre y rangos día/mes |
 | `Tabla` | Línea, temporada, clave de días y **la lista ordenada de paradas de su cabecera**. Conserva el sentido y el orden de columnas tal como se escribieron; la vista de revisión pinta una tabla por `Tabla`, nunca mezcla tablas |
 | `Viaje` | La tabla a la que pertenece (y, por ella, línea, temporada y días), observaciones de viaje, pendientes, la lista ordenada de pasos y `bus` (id del mismo autobús declarado, o `None`) |
 | `Paso` | Parada, `llegada`, `salida` y observaciones de parada. En una celda simple `llegada == salida`; con `HH:MM>HH:MM` son distintas (P21). No hay campo `hora` |
+
+El loader añade índices de solo lectura: `localidad_paradas`,
+`localidad_viajes`, `festivos_por_linea` y `lineas_pueblos` (línea → ids de
+sus localidades, sin las pendientes; pueblos por nombre normalizado y líneas
+por título normalizado; P18). `calcular_lineas_pueblos` es el único sitio que
+lo decide y lo reutiliza la vista de revisión.
 
 Puntos clave:
 
@@ -643,6 +663,9 @@ paradas de carretera como Cruce de Villaharta (61 servicios) o El Vacar (37),
 por las que pasan todos los buses y no sube casi nadie. Ver duda D7.
 
 El usuario puede escribir en cualquier momento sin pulsar "✍️ Otro pueblo".
+Si no sabe el nombre, `🚌 Ver pueblos por línea` (fila tras un texto no
+reconocido, botón `🚌 Ver por línea` al pedir que lo escriba) lo lleva a la
+lista de líneas (4.7).
 
 ### 4.4 Paso 3 — Destino
 
@@ -669,6 +692,8 @@ Ya se conoce el origen, así que **solo se ofrecen destinos que existen**.
 - **Para los 31 orígenes con ≤9 destinos la lista es completa**: no hace falta
   la fila de escribir, y lo que no está, no existe. Cero ambigüedad.
 - Para el resto, los 8 destinos más relevantes + `✍️ Otro destino`.
+- `🚌 Ver pueblos por línea` en el destino solo enseña las líneas que salen del
+  origen y sus pueblos alcanzables (4.7); su volver es `↩️ Cambiar origen`.
 
 ### 4.5 Paso 4 — Día
 
@@ -819,7 +844,7 @@ Todas las ramas, sin excepciones:
 | Coincide con 4-9 | Lista para elegir |
 | Coincide con más de 9 | "Sé más concreto" + repregunta |
 | Errata única (`pozoblnco`) | **Confirma**: "¿Pozoblanco?" [Sí] [No] |
-| Sin coincidencia | "No conozco ese pueblo" + lista habitual + `Ver todos por zona` |
+| Sin coincidencia | "No conozco ese pueblo" + lista habitual + `Ver pueblos por línea` |
 
 Reglas precisas (decididas el 2026-09-27, fase 3):
 
@@ -846,7 +871,7 @@ Reglas precisas (decididas el 2026-09-27, fase 3):
   de 2 o más (incluido `villafranka`), se ofrecen para elegir como cualquier
   coincidencia múltiple, **nunca** un "¿Villafranca de Córdoba?" de sí o no.
 - **Tras [No] en una confirmación**, el bot pide que lo escriba de otra forma
-  y ofrece `Ver todos por zona`.
+  y ofrece `Ver pueblos por línea`.
 - **Candidatas en orden alfabético.**
 - **Se busca siempre entre todas las localidades**, también en el destino: si
   se buscara solo entre las alcanzables, `Mérida` desde Pozoblanco daría "no
@@ -871,14 +896,32 @@ habituales y los nombres coloquiales que aporte la empresa (P13).
 **Caso que siempre pregunta:** `Villafranca` (de Córdoba o de los Barros).
 Nunca se resuelve solo, ni escrito con errata.
 
-**`Ver todos por zona`** es la red de seguridad para quien no sabe escribir el
-nombre. 7 zonas: Los Pedroches, Guadiato, Vega del Guadalquivir, Adamuz,
-Campiña, Extremadura, Córdoba. Las zonas grandes (Los Pedroches tiene 18
-localidades en uso, en 3 páginas de 8+8+2; Guadiato 14, Extremadura 11) se
-parten en varias listas con una fila "ver más". No es el camino principal, pero ningún usuario se queda sin salida.
-Se muestran en el orden de `paradas.yaml`, **ocultando las zonas sin
-localidades en uso** (hoy Campiña); dentro de cada zona, localidades en orden
-alfabético y solo las que alguna línea usa. Zonas pendientes de negocio (P18).
+**`Ver pueblos por línea`** (P18) es la red de seguridad para quien no sabe
+escribir el nombre. Negocio prefiere agrupar por línea porque sus clientes
+conocen "la línea de Belalcázar", no las zonas geográficas. Flujo:
+`Ver pueblos por línea` → lista de **líneas** (8 por página + `➡️ Más líneas` +
+volver = 10 filas) → lista de **pueblos** de la línea elegida (8 por página +
+`➡️ Ver más` + `↩️ Volver a líneas`) → pueblo. En cada fila de línea el título
+es `Linea.titulo` y la descripción "N pueblos" (con `nombre_corto`: "<nombre
+completo> · N pueblos"; "1 pueblo" en singular; si no cabe se recorta el
+nombre, nunca el recuento).
+
+- Las líneas salen en orden alfabético por título; los pueblos de cada línea,
+  en orden alfabético. Un pueblo puede salir en varias líneas (Córdoba sale en
+  casi todas). Cabeza del Buey solo sale en Belalcázar – Córdoba, porque solo
+  la sirve esa línea.
+- **En el origen** se ven todas las líneas y todos sus pueblos. **En el
+  destino** solo las líneas que salen de tu origen y, de cada una, los pueblos
+  alcanzables desde él en esa línea (`destinos_desde(origen, linea)`); la
+  cifra "N pueblos" cuenta esos alcanzables, no el total de la línea. Las
+  aldeas pendientes (P15/P32) no salen en ninguna línea: se buscan por texto.
+- La fila `Volver` es `↩️ Volver al menú` en el origen y `↩️ Cambiar origen`
+  en el destino. Un id de línea o de página inexistente o mal formado (también
+  los `zonas`/`zona:*` de mensajes antiguos) vuelve a la primera página de
+  líneas, sin error.
+- `Ver pueblos por línea` aparece como fila cuando no se reconoce el texto y
+  como botón `🚌 Ver por línea` al pedir que escriba el pueblo. La vista de
+  revisión lo enseña tal cual ("Así aparecen las líneas en el bot").
 
 ### 4.8 Casos borde
 
@@ -1183,10 +1226,16 @@ importar).
 horas (`Paso.llegada`/`salida`, celda `HH:MM>HH:MM`), el mismo autobús
 declarado (`bus:<id>`, errores y aviso heurístico; T-1 cerrado) y el ajuste de
 `observaciones.yaml` (sin `entra_en_pueblo`). Ninguna línea real usa todavía
-`>` ni `bus:`: es la fase 1b-2. Quedan C2 (localidades pendientes, P15/P32) y
-C3 (pueblos por línea en lugar de zonas, P18); la fixture
-`tests/fixtures/horarios_cicloC/` se migrará en C3. Dependen de preguntas abiertas de negocio y de T-1
-(mismo autobús en dos líneas) y de las zonas por línea (P18).
+`>` ni `bus:`: es la fase 1b-2. C2 (localidades pendientes, P15/P32) también está hecho.
+
+**Ciclo C3 (cerrado): pueblos por línea en lugar de zonas (P18).** Se eliminan
+las zonas del modelo (`Zona`, `Localidad.zona`, `zonas:` de `paradas.yaml`);
+la conversación ofrece `Ver pueblos por línea` (4.7), el loader deduce los
+pueblos de cada línea (`Horarios.lineas_pueblos`), `Linea.nombre_corto` da
+título a las líneas de más de 24 caracteres y la vista de revisión enseña
+"Así aparecen las líneas en el bot". `pendientes:` de `paradas.yaml` queda en
+`[P32]`. La fixture `tests/fixtures/horarios_cicloC/` ya está migrada. Sigue
+sin migrarse ninguna línea nueva (fase 1b-2).
 
 ### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27
 Resueltas en un ciclo propio (`docs/rds_fase1_correcciones.md`). Verificado el
@@ -1348,7 +1397,7 @@ credenciales reales.
 | `test_revision.py` | El HTML contiene cada línea, temporada, leyenda y pendiente |
 | `test_calendario.py` | Temporadas, festivos, viernes lectivo, agosto |
 | `test_query.py` | Pruebas doradas; sentido correcto; sin servicio; sin trayecto |
-| `test_matcher.py` | Las 7 ramas de 4.7; `Villafranca` (también con errata); erratas por longitud; mínimo de 3 letras; zonas |
+| `test_matcher.py` | Las 7 ramas de 4.7; `Villafranca` (también con errata); erratas por longitud; mínimo de 3 letras; líneas y pueblos por línea |
 | `test_fechas.py` | Separadores y espacios; año implícito y explícito; fechas imposibles; fechas pasadas; rechazo de lenguaje natural (`mañana`, `el viernes`) |
 | `test_conversation.py` | Flujo completo; casos borde; caducidad de estado |
 | `test_interactive.py` | **Ninguna lista supera 10 filas ni ningún botón 3** |

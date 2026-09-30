@@ -281,12 +281,10 @@ def test_a_demanda_sin_telefono_demanda(tmp_path):
 def test_alias_no_es_lista_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: "no-es-lista" }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A, alias: "no-es-lista" }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-b }
@@ -302,12 +300,10 @@ paradas:
 def test_alias_vacio_al_normalizar_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["La"] }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A, alias: ["La"] }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-b }
@@ -323,12 +319,10 @@ paradas:
 def test_alias_duplicado_en_la_misma_localidad_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["El Ache", "ache"] }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A, alias: ["El Ache", "ache"] }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-b }
@@ -342,12 +336,10 @@ paradas:
 def test_alias_igual_al_propio_nombre_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test, alias: ["pueblo a"] }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A, alias: ["pueblo a"] }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-b }
@@ -363,12 +355,10 @@ paradas:
 def test_dos_localidades_mismo_nombre_normalizado_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: "Pueblo A", zona: zona-test }
-  pueblo-a2: { nombre: "Pueblo, A", zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: "Pueblo A" }
+  pueblo-a2: { nombre: "Pueblo, A" }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: Pueblo B, localidad: pueblo-a2 }
@@ -384,12 +374,10 @@ paradas:
 def test_parada_coincide_con_nombre_de_otra_localidad_es_error(tmp_path):
     horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
     paradas = """\
-zonas:
-  zona-test: Zona de prueba
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }
   BBB: { nombre: "Pueblo B", localidad: pueblo-c }
@@ -1048,8 +1036,8 @@ def test_pendiente_sin_ver_es_error(tmp_path):
 
 def test_ver_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-a: { nombre: Pueblo A, zona: zona-test }",
-                    "pueblo-a: { nombre: Pueblo A, zona: zona-test, ver: pueblo-b }")]
+        tmp_path, [("pueblo-a: { nombre: Pueblo A }",
+                    "pueblo-a: { nombre: Pueblo A, ver: pueblo-b }")]
     )
     assert f"{ruta}: localidad 'pueblo-a': 'ver' sin 'pendiente'" in r.errores
 
@@ -1082,23 +1070,23 @@ def test_minutos_fuera_de_rango_o_no_entero_es_error(tmp_path, valor):
 
 def test_minutos_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-c: { nombre: Pueblo C, zona: zona-test }",
-                    "pueblo-c: { nombre: Pueblo C, zona: zona-test, minutos: 3 }")]
+        tmp_path, [("pueblo-c: { nombre: Pueblo C }",
+                    "pueblo-c: { nombre: Pueblo C, minutos: 3 }")]
     )
     assert f"{ruta}: localidad 'pueblo-c': 'minutos' sin 'pendiente'" in r.errores
 
 
 def test_aviso_sin_pendiente_es_error(tmp_path):
     r, ruta = _pendientes(
-        tmp_path, [("pueblo-c: { nombre: Pueblo C, zona: zona-test }",
-                    "pueblo-c: { nombre: Pueblo C, zona: zona-test, "
+        tmp_path, [("pueblo-c: { nombre: Pueblo C }",
+                    "pueblo-c: { nombre: Pueblo C, "
                     "aviso: para_en_aldea_b }")]
     )
     assert f"{ruta}: localidad 'pueblo-c': 'aviso' sin 'pendiente'" in r.errores
 
 
 def test_pendiente_fuera_de_la_lista_de_paradas_es_error(tmp_path):
-    r, ruta = _pendientes(tmp_path, [("pendientes: [P32]", "pendientes: [P18]")])
+    r, ruta = _pendientes(tmp_path, [("pendientes: [P32]", "pendientes: [P19]")])
     assert (
         f"{ruta}: localidad pendiente 'aldea-a': P32 no está en 'pendientes' de "
         "paradas.yaml"
@@ -1195,4 +1183,179 @@ def test_horarios_real_no_tiene_localidades_pendientes():
     assert all(
         loc.pendiente is None for loc in resultado.modelo.localidades.values()
     )
-    assert len(resultado.avisos) == 13
+    assert len(resultado.avisos) == 12
+
+
+# ── P18: pueblos por línea (ciclo C3) ────────────────────────────────────
+
+
+def _con_paradas(tmp_path, texto_paradas: str):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    (horarios_dir / "paradas.yaml").write_text(texto_paradas, encoding="utf-8")
+    return horarios_dir
+
+
+_PARADAS_MIN = """\
+localidades:
+  pueblo-a: { nombre: Pueblo A%s }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
+paradas:
+  AAA: { nombre: Pueblo A, localidad: pueblo-a }
+  BBB: { nombre: Pueblo B, localidad: pueblo-b }
+  CCC: { nombre: Pueblo C, localidad: pueblo-c }
+"""
+
+
+def test_zonas_en_paradas_es_campo_obsoleto(tmp_path):
+    horarios_dir = _con_paradas(
+        tmp_path, "zonas:\n  z: Zona\n" + _PARADAS_MIN % ""
+    )
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "paradas.yaml"
+    assert (
+        f"{ruta}: campo obsoleto 'zonas' (P18: los pueblos se agrupan por línea)"
+        in resultado.errores
+    )
+
+
+def test_zona_en_localidad_es_campo_obsoleto(tmp_path):
+    horarios_dir = _con_paradas(tmp_path, _PARADAS_MIN % ", zona: z")
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "paradas.yaml"
+    assert (
+        f"{ruta}: localidad 'pueblo-a': campo obsoleto 'zona' (P18: los pueblos "
+        "se agrupan por línea)"
+    ) in resultado.errores
+
+
+def test_localidad_solo_necesita_nombre(tmp_path):
+    horarios_dir = _con_paradas(tmp_path, _PARADAS_MIN % "")
+    assert formato.validar(horarios_dir).errores == []
+
+
+def test_nombre_largo_sin_nombre_corto_es_error(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20").replace(
+        "nombre: Línea de prueba", "nombre: " + "N" * 25, 1
+    )
+    horarios_dir = _build(tmp_path, linea)
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "lineas" / "linea-prueba.yaml"
+    assert (
+        f"{ruta}: el nombre de la línea ('{'N' * 25}') tiene 25 caracteres "
+        "(máximo 24 para el título de fila de WhatsApp): añade 'nombre_corto'"
+    ) in resultado.errores
+
+
+def test_nombre_largo_con_nombre_corto_valido(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20").replace(
+        "nombre: Línea de prueba",
+        "nombre: " + "N" * 25 + "\nnombre_corto: Corto",
+        1,
+    )
+    horarios_dir = _build(tmp_path, linea)
+    resultado = formato.validar(horarios_dir)
+    assert resultado.errores == []
+    linea_m = resultado.modelo.lineas["linea-prueba"]
+    assert linea_m.nombre_corto == "Corto"
+    assert linea_m.titulo == "Corto"
+
+
+def test_titulo_sin_nombre_corto_es_el_nombre(tmp_path):
+    horarios_dir = _build(tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"))
+    linea = formato.validar(horarios_dir).modelo.lineas["linea-prueba"]
+    assert linea.titulo == "Línea de prueba"
+
+
+def test_nombre_corto_demasiado_largo_es_error(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20").replace(
+        "nombre: Línea de prueba",
+        "nombre: Línea de prueba\nnombre_corto: " + "C" * 25,
+        1,
+    )
+    horarios_dir = _build(tmp_path, linea)
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "lineas" / "linea-prueba.yaml"
+    assert (
+        f"{ruta}: 'nombre_corto' ('{'C' * 25}') tiene 25 caracteres; el máximo "
+        "es 24 (título de fila de WhatsApp)"
+    ) in resultado.errores
+
+
+def test_nombre_corto_vacio_es_error(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20").replace(
+        "nombre: Línea de prueba",
+        "nombre: Línea de prueba\nnombre_corto: ''",
+        1,
+    )
+    horarios_dir = _build(tmp_path, linea)
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "lineas" / "linea-prueba.yaml"
+    assert (
+        f"{ruta}: 'nombre_corto' debe ser un texto no vacío ('')"
+        in resultado.errores
+    )
+
+
+def test_nombre_corto_no_es_texto_es_error(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20").replace(
+        "nombre: Línea de prueba",
+        "nombre: Línea de prueba\nnombre_corto: [a, b]",
+        1,
+    )
+    horarios_dir = _build(tmp_path, linea)
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "lineas" / "linea-prueba.yaml"
+    assert (
+        f"{ruta}: 'nombre_corto' debe ser un texto no vacío (['a', 'b'])"
+        in resultado.errores
+    )
+
+
+def test_dos_lineas_con_el_mismo_titulo_es_error(tmp_path):
+    linea = BASE_VALIDA.format(fila="08:00  08:10  08:20")
+    horarios_dir = _build(tmp_path, linea)
+    (horarios_dir / "lineas" / "otra-linea.yaml").write_text(
+        linea.replace("nombre: Línea de prueba", "nombre: LINEA DE PRUEBA", 1),
+        encoding="utf-8",
+    )
+    resultado = formato.validar(horarios_dir)
+    lineas_dir = horarios_dir / "lineas"
+    assert (
+        f"{lineas_dir}: las líneas ['linea-prueba', 'otra-linea'] tienen el mismo "
+        "título en el bot ('linea prueba'): "
+        f"{lineas_dir / 'linea-prueba.yaml'}, {lineas_dir / 'otra-linea.yaml'}"
+    ) in resultado.errores
+
+
+def test_id_de_linea_invalido_es_error(tmp_path):
+    horarios_dir = _build(
+        tmp_path, BASE_VALIDA.format(fila="08:00  08:10  08:20"),
+        linea_nombre="Linea_Rara",
+    )
+    resultado = formato.validar(horarios_dir)
+    ruta = horarios_dir / "lineas" / "Linea_Rara.yaml"
+    assert any(
+        e.startswith(f"{ruta}: id de línea inválido 'Linea_Rara'")
+        for e in resultado.errores
+    )
+
+
+def test_horarios_real_tiene_12_avisos_y_4_nombres_cortos():
+    resultado = formato.validar(HORARIOS_REAL)
+    assert resultado.errores == []
+    assert len(resultado.avisos) == 12
+    cortos = {
+        lid: linea.nombre_corto
+        for lid, linea in resultado.modelo.lineas.items()
+        if linea.nombre_corto
+    }
+    assert cortos == {
+        "adamuz-cordoba": "Adamuz – Córdoba",
+        "fuente-carreteros-cordoba": "F. Carreteros – Córdoba",
+        "pozoblanco-estacion-ave": "Estación AVE Villanueva",
+        "santa-eufemia-villaralto-pozoblanco": "Santa Eufemia-Villaralto",
+    }
+    assert all(
+        len(linea.titulo) <= 24 for linea in resultado.modelo.lineas.values()
+    )

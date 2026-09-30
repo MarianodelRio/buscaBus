@@ -2,28 +2,25 @@
 # sintéticas para tests/test_query.py (motor de consulta, fase 2). Nombres
 # legibles inventados, sin relación con horarios/ real.
 
-zonas:
-  zona-test: Zona de prueba
-
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
-  pueblo-n: { nombre: Pueblo N, zona: zona-test }
-  pueblo-o: { nombre: Pueblo O, zona: zona-test }
-  pueblo-p: { nombre: Pueblo P, zona: zona-test }
-  pueblo-q: { nombre: Pueblo Q, zona: zona-test }
-  pueblo-e: { nombre: Pueblo E, zona: zona-test }
-  pueblo-f: { nombre: Pueblo F, zona: zona-test }
-  pueblo-g: { nombre: Pueblo G, zona: zona-test }
-  pueblo-h: { nombre: Pueblo H, zona: zona-test }
-  pueblo-i: { nombre: Pueblo I, zona: zona-test }
-  pueblo-j: { nombre: Pueblo J, zona: zona-test }
-  pueblo-k: { nombre: Pueblo K, zona: zona-test }
-  pueblo-m: { nombre: Pueblo M, zona: zona-test }
-  pueblo-l: { nombre: Pueblo L, zona: zona-test }
-  pueblo-r: { nombre: Pueblo R, zona: zona-test }
-  pueblo-s: { nombre: Pueblo S, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
+  pueblo-n: { nombre: Pueblo N }
+  pueblo-o: { nombre: Pueblo O }
+  pueblo-p: { nombre: Pueblo P }
+  pueblo-q: { nombre: Pueblo Q }
+  pueblo-e: { nombre: Pueblo E }
+  pueblo-f: { nombre: Pueblo F }
+  pueblo-g: { nombre: Pueblo G }
+  pueblo-h: { nombre: Pueblo H }
+  pueblo-i: { nombre: Pueblo I }
+  pueblo-j: { nombre: Pueblo J }
+  pueblo-k: { nombre: Pueblo K }
+  pueblo-m: { nombre: Pueblo M }
+  pueblo-l: { nombre: Pueblo L }
+  pueblo-r: { nombre: Pueblo R }
+  pueblo-s: { nombre: Pueblo S }
 
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }

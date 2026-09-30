@@ -572,6 +572,11 @@ def _comparar_linea(
 ) -> list[str]:
     nombre_linea = actual.nombre
     mensajes: list[str] = []
+    if anterior.titulo != actual.titulo:
+        mensajes.append(
+            f'{nombre_linea}: en el bot se mostrará como "{actual.titulo}" '
+            f'(antes "{anterior.titulo}")'
+        )
     mensajes.extend(_comparar_temporadas(nombre_linea, anterior, actual))
     mensajes.extend(_comparar_dias(nombre_linea, anterior, actual))
     mensajes.extend(

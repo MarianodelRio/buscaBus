@@ -1,23 +1,18 @@
 # tests/fixtures/horarios_pendientes/paradas.yaml — ciclo C2 (P15/P32):
 # localidades pendientes (aldeas sin hora de paso propia).
 
-zonas:
-  zona-test: Zona de prueba
-
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
   aldea-a:
     nombre: Aldea A
-    zona: zona-test
     pendiente: P32
     ver: pueblo-a
     minutos: 4
     aviso: pasa_por_aldea_a
   aldea-b:
     nombre: Aldea Bonita
-    zona: zona-test
     pendiente: P32
     ver: pueblo-b
     minutos: 7

@@ -428,9 +428,10 @@ pendientes: []
     assert "No circula en: agosto" in html_doc
 
 
-def test_seccion_pueblos_paradas_y_zonas_resalta_pendiente(tmp_path):
+def test_seccion_lineas_en_el_bot_muestra_titulo_descripcion_y_pueblos(tmp_path):
     linea_yaml = """\
-nombre: Línea de prueba
+nombre: Línea de prueba con nombre largo
+nombre_corto: Línea corta
 avisos: []
 no_circula: []
 temporadas:
@@ -451,13 +452,46 @@ pendientes: []
     html_doc = _construir_html(
         tmp_path, "paradas_con_pendientes.yaml", {"linea-prueba": linea_yaml}
     )
-    assert "Pueblos, paradas y zonas" in html_doc
-    assert "Cabeza del Buey" in html_doc
-    # el pendiente P18 (Cabeza del Buey) debe verse resaltado en esa sección.
-    idx_seccion = html_doc.index("Pueblos, paradas y zonas")
-    idx_localidad = html_doc.index("Cabeza del Buey", idx_seccion)
-    fragmento = html_doc[idx_localidad : idx_localidad + 200]
-    assert "P18" in fragmento
+    assert "Así aparecen las líneas en el bot" in html_doc
+    assert "Pueblos, paradas y zonas" not in html_doc
+    assert "zona" not in html_doc.lower()
+    idx = html_doc.index("Así aparecen las líneas en el bot")
+    seccion = html_doc[idx:]
+    # título que ve el cliente + descripción exacta de la fila de la lista
+    assert "<h3>Línea corta</h3>" in seccion
+    assert (
+        "En el bot: Línea de prueba con nombre largo · 3 pueblos" in seccion
+    )
+    for pueblo in ("Pueblo A", "Pueblo B", "Pueblo C"):
+        assert pueblo in seccion
+    # Cabeza del Buey no la usa ninguna línea: lista aparte
+    idx_aparte = seccion.index("Localidades que ninguna línea usa")
+    assert "Cabeza del Buey" in seccion[idx_aparte:]
+
+
+def test_seccion_lineas_en_el_bot_sin_lista_aparte_si_todas_se_usan(tmp_path):
+    html_doc = _construir_html(
+        tmp_path, "paradas_base.yaml", {"linea-prueba": LINEA_YAML}
+    )
+    assert "Localidades que ninguna línea usa" not in html_doc
+
+
+def test_html_real_seccion_lineas_con_los_4_nombres_cortos():
+    html_doc = _html_real()
+    assert "zona" not in html_doc.lower().replace("zona horaria", "")
+    idx = html_doc.index("Así aparecen las líneas en el bot")
+    seccion = html_doc[idx:]
+    for corto in (
+        "Adamuz – Córdoba",
+        "F. Carreteros – Córdoba",
+        "Estación AVE Villanueva",
+        "Santa Eufemia-Villaralto",
+    ):
+        assert f"<h3>{corto}</h3>" in seccion
+    assert "En el bot: Fuente Carreteros – Córdoba · 7 pueblos" in seccion
+    # Cabeza del Buey solo está en Belalcázar – Córdoba
+    idx_bel = seccion.index("<h3>Belalcázar – Córdoba</h3>")
+    assert "Cabeza del Buey" in seccion[idx_bel : idx_bel + 1500]
 
 
 # ── Sección "Calendario" y pendientes del calendario (P03e, P03g, P12b) ─────

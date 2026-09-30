@@ -119,11 +119,11 @@ def build_info() -> dict:
 
 
 def build_origen(localidades: list[tuple[str, str]], aviso: str | None = None,
-                  con_zonas: bool = False) -> dict:
+                  con_lineas: bool = False) -> dict:
     """localidades: lista de (id, nombre) ya recortada a como mucho 8."""
     rows = [_fila_localidad(f"loc:{lid}", nombre) for lid, nombre in localidades[:8]]
-    if con_zonas:
-        rows.append(_row("zonas", "🗺️ Ver todos por zona"))
+    if con_lineas:
+        rows.append(_row("lineas:0", "🚌 Ver pueblos por línea"))
     else:
         rows.append(_row("escribir", "✍️ Otro pueblo"))
     rows.append(_row("menu", "↩️ Volver al menú"))
@@ -139,11 +139,11 @@ def build_origen(localidades: list[tuple[str, str]], aviso: str | None = None,
 
 
 def build_destinos(origen_nombre: str, destinos_ordenados: list[tuple[str, str]],
-                    aviso: str | None = None, con_zonas: bool = False) -> dict:
+                    aviso: str | None = None, con_lineas: bool = False) -> dict:
     """destinos_ordenados: lista completa de (id, nombre) ya ordenada
     (`flujo.ordenar_destinos`). Si hay 9 o menos, se muestran todos + volver
     (cero ambigüedad, design.md 4.4). Si hay más, se muestran los 8
-    primeros + fila de escribir/zonas + volver = 10 filas."""
+    primeros + fila de escribir/líneas + volver = 10 filas."""
     n = len(destinos_ordenados)
     if n <= MAX_FILAS_LISTA - 1:
         rows = [
@@ -155,8 +155,8 @@ def build_destinos(origen_nombre: str, destinos_ordenados: list[tuple[str, str]]
             _fila_localidad(f"loc:{lid}", nombre)
             for lid, nombre in destinos_ordenados[:8]
         ]
-        if con_zonas:
-            rows.append(_row("zonas", "🗺️ Ver todos por zona"))
+        if con_lineas:
+            rows.append(_row("lineas:0", "🚌 Ver pueblos por línea"))
         else:
             rows.append(_row("escribir", "✍️ Otro destino"))
         rows.append(_row("cambiar_origen", "↩️ Cambiar origen"))
@@ -200,7 +200,7 @@ def build_escribir(campo: str, texto: str) -> dict:
     return _interactive_buttons(
         body=texto,
         buttons=[
-            _button("zonas", "🗺️ Ver por zona"),
+            _button("lineas:0", "🚌 Ver por línea"),
             _button(boton_volver, titulo_volver),
         ],
     )
@@ -238,31 +238,56 @@ def build_localidad_pendiente(
     )
 
 
-# ── Zonas ──────────────────────────────────────────────────────────────
+# ── Pueblos por línea (P18) ───────────────────────────────────────────
 
 
-def build_zonas(zonas: list[tuple[str, str]], campo: str) -> dict:
-    """zonas: lista de (id, nombre)."""
-    rows = [_row(f"zona:{zid}:0", nombre) for zid, nombre in zonas[:9]]
-    rows.append(_row("menu", "↩️ Volver al menú"))
+def descripcion_linea(linea, n_pueblos: int) -> str:
+    """Descripción de la fila de una línea en la lista de líneas: "<nombre> ·
+    N pueblos" si la línea tiene título corto (el nombre completo no cabe en el
+    título de fila), o solo "N pueblos". Se recorta el nombre, nunca el
+    recuento. Función pura, también la usa la vista de revisión."""
+    cuenta = "1 pueblo" if n_pueblos == 1 else f"{n_pueblos} pueblos"
+    if not linea.nombre_corto:
+        return cuenta
+    sufijo = f" · {cuenta}"
+    nombre = linea.nombre
+    if len(nombre) + len(sufijo) > MAX_DESCRIPCION_FILA:
+        nombre = _trunc(nombre, MAX_DESCRIPCION_FILA - len(sufijo) - 1) + "…"
+    return nombre + sufijo
+
+
+def build_lineas(lineas: list, pagina: int, hay_mas: bool, campo: str) -> dict:
+    """lineas: lista de (Linea, n_pueblos) ya recortada a como mucho 8 (la
+    página actual). 8 + "Más líneas" + volver = 10 filas."""
+    rows = [
+        _row(f"linea:{linea.id}:0", linea.titulo, descripcion_linea(linea, n))
+        for linea, n in lineas[:8]
+    ]
+    if hay_mas:
+        rows.append(_row(f"lineas:{pagina + 1}", "➡️ Más líneas"))
+    if campo == "origen":
+        rows.append(_row("menu", "↩️ Volver al menú"))
+    else:
+        rows.append(_row("cambiar_origen", "↩️ Cambiar origen"))
     return _interactive_list(
-        body="¿En qué zona está?",
-        button_label="Ver zonas",
-        sections=[_section("Zonas", rows)],
+        body="¿Qué línea pasa por tu pueblo?",
+        button_label="Ver líneas",
+        sections=[_section("Líneas", rows)],
     )
 
 
-def build_zona(zona_nombre: str, zona_id: str, pagina: int,
-               localidades_pagina: list[tuple[str, str]], hay_mas: bool) -> dict:
-    rows = [_fila_localidad(f"loc:{lid}", nombre) for lid, nombre in localidades_pagina]
+def build_linea(linea, pueblos_pagina: list[tuple[str, str]], pagina: int,
+                hay_mas: bool) -> dict:
+    """pueblos_pagina: lista de (id, nombre), como mucho 8."""
+    rows = [_fila_localidad(f"loc:{lid}", nombre) for lid, nombre in pueblos_pagina[:8]]
     if hay_mas:
-        rows.append(_row(f"zona:{zona_id}:{pagina + 1}", "➡️ Ver más"))
-    rows.append(_row("zonas", "↩️ Volver a zonas"))
+        rows.append(_row(f"linea:{linea.id}:{pagina + 1}", "➡️ Ver más"))
+    rows.append(_row("lineas:0", "↩️ Volver a líneas"))
     return _interactive_list(
-        header=f"🗺️ {zona_nombre}",
+        header=f"🚌 {linea.titulo}",
         body="Elige tu pueblo:",
         button_label="Ver pueblos",
-        sections=[_section(zona_nombre, rows)],
+        sections=[_section(linea.titulo, rows)],
     )
 
 

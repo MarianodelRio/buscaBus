@@ -45,7 +45,6 @@ OBSERVACIONES = {
 
 def _modelo(lineas: dict[str, Linea]) -> Modelo:
     return Modelo(
-        zonas={},
         localidades={},
         paradas=PARADAS,
         observaciones=OBSERVACIONES,
@@ -115,6 +114,7 @@ def _linea(
     temporadas=(Temporada(nombre="anual", rango="todo el año"),),
     dias=None,
     viajes=(),
+    nombre_corto=None,
 ) -> Linea:
     dias = dias if dias is not None else {
         "anual": {
@@ -138,6 +138,7 @@ def _linea(
         dias=dias,
         pendientes=(),
         viajes=viajes,
+        nombre_corto=nombre_corto,
     )
 
 
@@ -512,3 +513,25 @@ def test_cambio_de_bus():
         "Línea 1, anual, lunes a viernes: el identificador de autobús pasa de "
         "'a-1' a 'b-2'."
     ]
+
+
+def test_cambio_de_titulo_en_el_bot():
+    v = _viaje()
+    antes = _modelo({"l1": _linea(nombre="Línea larga de prueba", viajes=(v,))})
+    despues = _modelo(
+        {
+            "l1": _linea(
+                nombre="Línea larga de prueba", nombre_corto="Corta", viajes=(v,)
+            )
+        }
+    )
+    assert diff.comparar(antes, despues) == [
+        'Línea larga de prueba: en el bot se mostrará como "Corta" '
+        '(antes "Línea larga de prueba")'
+    ]
+
+
+def test_mismo_titulo_no_genera_mensaje():
+    v = _viaje()
+    modelo = _modelo({"l1": _linea(nombre_corto="Corta", viajes=(v,))})
+    assert diff.comparar(modelo, modelo) == []

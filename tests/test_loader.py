@@ -86,3 +86,67 @@ def test_festivos_locales_localidad_sin_lineas_avisa_sin_fallar():
     resultado = formato.validar(HORARIOS_REAL)
     assert resultado.errores == []
     assert not any("festivos_locales" in a for a in resultado.avisos)
+
+
+# ── lineas_pueblos (P18) ─────────────────────────────────────────────────
+
+
+def test_lineas_pueblos_real_orden_y_contenido():
+    horarios = loader.cargar(HORARIOS_REAL)
+    lp = horarios.lineas_pueblos
+    modelo = horarios.modelo
+    # líneas en orden de título normalizado
+    titulos = [formato.normalizar(modelo.lineas[lid].titulo) for lid in lp]
+    assert titulos == sorted(titulos)
+    assert list(lp)[:3] == [
+        "adamuz-cordoba",
+        "badajoz-cordoba",
+        "belalcazar-cordoba",
+    ]
+    assert set(lp) == set(modelo.lineas)
+    # pueblos en orden alfabético normalizado, sin columnas vacías
+    for lid, ids in lp.items():
+        assert ids, lid
+        nombres = [formato.normalizar(modelo.localidades[i].nombre) for i in ids]
+        assert nombres == sorted(nombres)
+    assert lp["adamuz-cordoba"] == (
+        "adamuz",
+        "alcolea",
+        "algallarin",
+        "aquasierra",
+        "campus-de-rabanales",
+        "cordoba",
+        "villafranca-de-cordoba",
+    )
+    assert lp["villaviciosa-cordoba"] == (
+        "cordoba",
+        "pantano",
+        "el-vacar",
+        "villaviciosa-de-cordoba",
+    )
+
+
+def test_lineas_pueblos_cabeza_del_buey_solo_en_belalcazar_cordoba():
+    horarios = loader.cargar(HORARIOS_REAL)
+    con_cabeza = [
+        lid for lid, ids in horarios.lineas_pueblos.items() if "cabeza-del-buey" in ids
+    ]
+    assert con_cabeza == ["belalcazar-cordoba"]
+
+
+def test_lineas_pueblos_excluye_localidades_pendientes():
+    horarios = loader.cargar(FIXTURES / "horarios_pendientes")
+    todos = {i for ids in horarios.lineas_pueblos.values() for i in ids}
+    assert "aldea-a" not in todos and "aldea-b" not in todos
+    assert "pueblo-a" in todos
+
+
+def test_calcular_lineas_pueblos_coincide_con_cargar():
+    horarios = loader.cargar(HORARIOS_REAL)
+    assert loader.calcular_lineas_pueblos(horarios.modelo) == horarios.lineas_pueblos
+
+
+def test_lineas_pueblos_ordena_por_titulo_no_por_nombre(datos_muchas_lineas):
+    lp = datos_muchas_lineas.horarios.lineas_pueblos
+    assert list(lp)[-2:] == ["linea-larga", "ruta-norte"]  # "Ruta del norte" al final
+    assert len(lp["linea-larga"]) == 19

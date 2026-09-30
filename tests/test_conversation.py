@@ -443,68 +443,343 @@ def test_otra_consulta_muestra_lista_origen(mock_wa, freeze_calendario):
     assert "pueblo" in payload["interactive"]["body"]["text"].lower()
 
 
-def test_zonas_en_origen_pagina(mock_wa, freeze_calendario):
+def _rows(payload):
+    return [
+        row
+        for section in payload["interactive"]["action"]["sections"]
+        for row in section["rows"]
+    ]
+
+
+def _assert_max_10_filas(mock_wa):
+    """Ningún mensaje interactivo enviado hasta ahora supera los límites."""
+    for llamada in mock_wa["interactive"].call_args_list:
+        payload = llamada[0][1]
+        if payload["interactive"]["type"] == "list":
+            assert len(_rows(payload)) <= 10
+        else:
+            assert len(payload["interactive"]["action"]["buttons"]) <= 3
+
+
+def test_lineas_en_origen_pagina(mock_wa, freeze_calendario):
     freeze_calendario(HOY)
     phone = "34600000113"
     conv.handle_message(phone, phone, None, "menu_horarios")
     conv.handle_message(phone, phone, None, "escribir")
     total_before = _n_calls(mock_wa)
-    conv.handle_message(phone, phone, None, "zonas")
+    conv.handle_message(phone, phone, None, "lineas:0")
     assert _n_calls(mock_wa) - total_before == 1
     payload = _last_interactive(mock_wa)
-    assert any(r.startswith("zona:extremadura:0") for r in _row_ids(payload))
+    assert payload["interactive"]["body"]["text"] == "¿Qué línea pasa por tu pueblo?"
+    ids = _row_ids(payload)
+    assert len(ids) == 10  # 8 líneas + Más líneas + volver
+    assert ids[0] == "linea:adamuz-cordoba:0"
+    assert ids[8] == "lineas:1"
+    assert ids[9] == "menu"
+    assert _rows(payload)[0]["title"] == "Adamuz – Córdoba"
+    assert _rows(payload)[0]["description"] == (
+        "Adamuz – Villafranca – Córdoba · 7 pueblos"
+    )
 
-    total_before = _n_calls(mock_wa)
-    conv.handle_message(phone, phone, None, "zona:extremadura:0")
-    assert _n_calls(mock_wa) - total_before == 1
-    payload = _last_interactive(mock_wa)
-    rows = _row_ids(payload)
-    assert "zona:extremadura:1" in rows
-
-    total_before = _n_calls(mock_wa)
-    conv.handle_message(phone, phone, None, "zona:extremadura:1")
-    assert _n_calls(mock_wa) - total_before == 1
-    payload = _last_interactive(mock_wa)
-    assert "zona:extremadura:2" not in _row_ids(payload)
+    conv.handle_message(phone, phone, None, "lineas:1")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert len(ids) == 5  # 4 líneas + volver
+    assert not any(r.startswith("lineas:") for r in ids)
+    assert ids[-1] == "menu"
+    _assert_max_10_filas(mock_wa)
 
 
-def test_zona_los_pedroches_tres_paginas(mock_wa, freeze_calendario):
+def test_origen_linea_pueblo_destinos(mock_wa, freeze_calendario):
     freeze_calendario(HOY)
     phone = "34600000115"
     conv.handle_message(phone, phone, None, "menu_horarios")
     conv.handle_message(phone, phone, None, "escribir")
-    conv.handle_message(phone, phone, None, "zonas")
+    conv.handle_message(phone, phone, None, "lineas:0")
 
-    conv.handle_message(phone, phone, None, "zona:los-pedroches:0")
-    rows = _row_ids(_last_interactive(mock_wa))
-    assert "zona:los-pedroches:1" in rows
-    assert len([r for r in rows if r.startswith("loc:")]) == 8
+    conv.handle_message(phone, phone, None, "linea:belalcazar-cordoba:0")
+    payload = _last_interactive(mock_wa)
+    ids = _row_ids(payload)
+    assert payload["interactive"]["header"]["text"] == "🚌 Belalcázar – Córdoba"
+    assert len([r for r in ids if r.startswith("loc:")]) == 8
+    assert "linea:belalcazar-cordoba:1" in ids
+    assert ids[-1] == "lineas:0"
+    assert "loc:alcaracejos" in ids
 
-    conv.handle_message(phone, phone, None, "zona:los-pedroches:1")
-    rows = _row_ids(_last_interactive(mock_wa))
-    assert "zona:los-pedroches:2" in rows
-    assert len([r for r in rows if r.startswith("loc:")]) == 8
+    conv.handle_message(phone, phone, None, "linea:belalcazar-cordoba:1")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert len([r for r in ids if r.startswith("loc:")]) == 2
+    assert "loc:cabeza-del-buey" not in ids  # va antes, alfabéticamente
+    assert not any(r.startswith("linea:") for r in ids)
 
-    conv.handle_message(phone, phone, None, "zona:los-pedroches:2")
-    rows = _row_ids(_last_interactive(mock_wa))
-    assert len([r for r in rows if r.startswith("loc:")]) == 2
-    assert not any(r.startswith("zona:los-pedroches:") for r in rows)
+    conv.handle_message(phone, phone, None, "lineas:0")
+    conv.handle_message(phone, phone, None, "linea:pozoblanco-cordoba:0")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert "loc:pozoblanco" in ids
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    payload = _last_interactive(mock_wa)
+    assert "Desde Pozoblanco" in payload["interactive"]["header"]["text"]
+    assert conv._get(phone).origen == "pozoblanco"
+    _assert_max_10_filas(mock_wa)
 
 
-def test_zonas_en_destino_solo_alcanzables(mock_wa, freeze_calendario):
+def test_cabeza_del_buey_esta_en_la_linea_de_belalcazar(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000118"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    conv.handle_message(phone, phone, None, "linea:belalcazar-cordoba:0")
+    filas = _rows(_last_interactive(mock_wa))
+    assert "loc:cabeza-del-buey" in [f["id"] for f in filas]
+
+
+def test_lineas_en_destino_solo_lineas_y_pueblos_alcanzables(
+    mock_wa, freeze_calendario
+):
     freeze_calendario(HOY)
     phone = "34600000114"
     conv.handle_message(phone, phone, None, "menu_horarios")
     conv.handle_message(phone, phone, None, "loc:pozoblanco")
     conv.handle_message(phone, phone, "escribir", None)
     total_before = _n_calls(mock_wa)
-    conv.handle_message(phone, phone, "zonas", None)
+    conv.handle_message(phone, phone, "lineas:0", None)
     assert _n_calls(mock_wa) - total_before == 1
     payload = _last_interactive(mock_wa)
-    zonas_ids = {r.split(":")[1] for r in _row_ids(payload) if r.startswith("zona:")}
-    assert "adamuz" not in zonas_ids
-    assert "extremadura" not in zonas_ids
-    assert "los-pedroches" in zonas_ids
+    ids = _row_ids(payload)
+    lineas = {r.split(":")[1] for r in ids if r.startswith("linea:")}
+    assert lineas == {
+        "belalcazar-pozoblanco",
+        "cardena-pozoblanco",
+        "pozoblanco-estacion-ave",
+        "torrecampo-pozoblanco",
+        "pozoblanco-cordoba",
+        "santa-eufemia-villaralto-pozoblanco",
+    }
+    assert ids[-1] == "cambiar_origen"
+    # "N pueblos" cuenta los alcanzables desde el origen en esa línea
+    desc = {r["id"]: r["description"] for r in _rows(payload) if "description" in r}
+    assert desc["linea:cardena-pozoblanco:0"] == "2 pueblos"
+    assert desc["linea:belalcazar-pozoblanco:0"] == "5 pueblos"
+
+    conv.handle_message(phone, phone, "linea:pozoblanco-cordoba:0", None)
+    ids = _row_ids(_last_interactive(mock_wa))
+    pueblos = {r for r in ids if r.startswith("loc:")}
+    assert "loc:pozoblanco" not in pueblos
+    assert pueblos == {
+        "loc:alcaracejos",
+        "loc:conquista",
+        "loc:cordoba",
+        "loc:cruce-de-villaharta",
+        "loc:villaharta",
+        "loc:villanueva-de-cordoba",
+    }
+    conv.handle_message(phone, phone, "loc:cordoba", None)
+    assert any(
+        r.startswith("dia:") for r in _row_ids(_last_interactive(mock_wa))
+    )
+    _assert_max_10_filas(mock_wa)
+
+
+def test_lineas_en_destino_volver_es_cambiar_origen(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000119"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, "escribir", None)
+    conv.handle_message(phone, phone, "lineas:0", None)
+    conv.handle_message(phone, phone, None, "cambiar_origen")
+    payload = _last_interactive(mock_wa)
+    assert "pueblo" in payload["interactive"]["body"]["text"].lower()
+    assert "loc:pozoblanco" in _row_ids(payload)
+    assert conv._get(phone).step == conv.flujo.SEL_ORIGEN
+    assert conv._get(phone).origen is None
+
+
+def test_lineas_en_destino_volver_a_lineas_desde_una_linea(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000120"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, "lineas:0", None)
+    conv.handle_message(phone, phone, "linea:torrecampo-pozoblanco:0", None)
+    assert _row_ids(_last_interactive(mock_wa))[-1] == "lineas:0"
+    conv.handle_message(phone, phone, "lineas:0", None)
+    assert _row_ids(_last_interactive(mock_wa))[-1] == "cambiar_origen"
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        "linea:no-existe:0",
+        "linea:adamuz-cordoba:99",
+        "linea:adamuz-cordoba:-1",
+        "linea:x",
+        "linea:x:abc",
+        "linea:x:-1",
+        "linea:adamuz-cordoba:abc",
+        "linea:a:b:c",
+        "linea:",
+        "lineas:zz",
+        "lineas:99",
+        "lineas:-3",
+        "lineas:",
+        "zonas",
+        "zona:extremadura:0",
+        "zona:x",
+    ],
+)
+def test_ids_malformados_o_antiguos_muestran_la_lista_de_lineas(
+    mock_wa, freeze_calendario, valor
+):
+    freeze_calendario(HOY)
+    phone = "34600000121"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    total_before = _n_calls(mock_wa)
+    conv.handle_message(phone, phone, None, valor)
+    assert _n_calls(mock_wa) - total_before == 1
+    payload = _last_interactive(mock_wa)
+    assert payload["interactive"]["body"]["text"] == "¿Qué línea pasa por tu pueblo?"
+    assert _row_ids(payload)[0] == "linea:adamuz-cordoba:0"
+    assert "No conozco ese pueblo" not in payload["interactive"]["body"]["text"]
+    _assert_max_10_filas(mock_wa)
+
+
+@pytest.mark.parametrize(
+    "valor",
+    [
+        "linea:adamuz-cordoba:0",  # existe, pero no sale de Pozoblanco
+        "linea:no-existe:0",
+        "linea:x:abc",
+        "linea:pozoblanco-cordoba:-1",
+        "linea:pozoblanco-cordoba:99",
+        "lineas:zz",
+        "zonas",
+        "zona:los-pedroches:0",
+    ],
+)
+def test_ids_malformados_en_destino_muestran_la_lista_de_lineas(
+    mock_wa, freeze_calendario, valor
+):
+    freeze_calendario(HOY)
+    phone = "34600000122"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, None, valor)
+    payload = _last_interactive(mock_wa)
+    assert payload["interactive"]["body"]["text"] == "¿Qué línea pasa por tu pueblo?"
+    ids = _row_ids(payload)
+    assert "linea:adamuz-cordoba:0" not in ids
+    assert ids[-1] == "cambiar_origen"
+
+
+def test_sin_coincidencia_ofrece_ver_pueblos_por_linea(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000123"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, "xyzxyz", None)
+    payload = _last_interactive(mock_wa)
+    assert "No conozco ese pueblo" in payload["interactive"]["body"]["text"]
+    assert {"id": "lineas:0", "title": "🚌 Ver pueblos por línea"} in _rows(payload)
+    conv.handle_message(phone, phone, None, "lineas:0")
+    assert _row_ids(_last_interactive(mock_wa))[0] == "linea:adamuz-cordoba:0"
+
+
+def test_sin_coincidencia_en_destino_ofrece_ver_pueblos_por_linea(
+    mock_wa, freeze_calendario
+):
+    freeze_calendario(HOY)
+    phone = "34600000124"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, "xyzxyz", None)
+    payload = _last_interactive(mock_wa)
+    assert "No conozco ese pueblo" in payload["interactive"]["body"]["text"]
+    assert "lineas:0" in _row_ids(payload)
+    _assert_max_10_filas(mock_wa)
+
+
+def test_escribir_ofrece_boton_ver_por_linea(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000125"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    botones = _last_interactive(mock_wa)["interactive"]["action"]["buttons"]
+    assert botones[0]["reply"] == {"id": "lineas:0", "title": "🚌 Ver por línea"}
+    conv.handle_message(phone, phone, None, "loc:pozoblanco")
+    conv.handle_message(phone, phone, "escribir", None)
+    botones = _last_interactive(mock_wa)["interactive"]["action"]["buttons"]
+    assert botones[0]["reply"]["id"] == "lineas:0"
+    assert botones[1]["reply"]["id"] == "cambiar_origen"
+
+
+def test_lineas_con_muchas_lineas_paginan_y_no_pasan_de_10_filas(
+    mock_wa, freeze_calendario, datos_muchas_lineas
+):
+    freeze_calendario(HOY)
+    phone = "34600000126"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    conv.handle_message(phone, phone, None, "lineas:0")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert len(ids) == 10 and ids[8] == "lineas:1"
+    conv.handle_message(phone, phone, None, "lineas:1")
+    payload = _last_interactive(mock_wa)
+    ids = _row_ids(payload)
+    assert ids[-2:] == ["linea:ruta-norte:0", "menu"]
+    fila_ruta = _rows(payload)[-2]
+    assert fila_ruta["title"] == "Ruta del norte"
+    assert fila_ruta["description"] == (
+        "Ruta muy larga del norte al sur de la sierra · 3 pueblos"
+    )
+    # la línea de 19 pueblos: 3 páginas
+    conv.handle_message(phone, phone, None, "linea:linea-larga:0")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert "linea:linea-larga:1" in ids
+    conv.handle_message(phone, phone, None, "linea:linea-larga:1")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert "linea:linea-larga:2" in ids
+    conv.handle_message(phone, phone, None, "linea:linea-larga:2")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert len([r for r in ids if r.startswith("loc:")]) == 3
+    assert not any(r.startswith("linea:") for r in ids)
+    _assert_max_10_filas(mock_wa)
+
+
+def test_destino_con_muchas_lineas_solo_las_del_origen(
+    mock_wa, freeze_calendario, datos_muchas_lineas
+):
+    freeze_calendario(HOY)
+    phone = "34600000127"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:origen")
+    payload = _last_interactive(mock_wa)
+    assert "escribir" in _row_ids(payload)  # 29 destinos: no caben en la lista
+    _assert_max_10_filas(mock_wa)
+    conv.handle_message(phone, phone, None, "escribir")
+    conv.handle_message(phone, phone, None, "lineas:0")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert len(ids) == 10 and ids[8] == "lineas:1"
+    conv.handle_message(phone, phone, None, "linea:linea-larga:0")
+    ids = _row_ids(_last_interactive(mock_wa))
+    assert "loc:origen" not in ids
+    _assert_max_10_filas(mock_wa)
+
+
+def test_aldea_pendiente_no_sale_en_ninguna_linea(
+    mock_wa, freeze_calendario, datos_pendientes
+):
+    freeze_calendario(HOY)
+    phone = "34600000128"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "escribir")
+    conv.handle_message(phone, phone, None, "lineas:0")
+    payload = _last_interactive(mock_wa)
+    linea_ids = [r for r in _row_ids(payload) if r.startswith("linea:")]
+    assert linea_ids
+    for fila in linea_ids:
+        conv.handle_message(phone, phone, None, fila)
+        assert "loc:aldea-a" not in _row_ids(_last_interactive(mock_wa))
+        assert "loc:aldea-b" not in _row_ids(_last_interactive(mock_wa))
 
 
 def test_demasiadas_coincidencias_pide_mas_concreto(mock_wa, freeze_calendario):
@@ -543,7 +818,7 @@ def test_no_tras_confirmar_pide_escribirlo_de_otra_forma(mock_wa, freeze_calenda
     body = payload["interactive"]["body"]["text"].lower()
     assert "otra forma" in body
     botones = payload["interactive"]["action"]["buttons"]
-    assert any(b["reply"]["id"] == "zonas" for b in botones)
+    assert any(b["reply"]["id"] == "lineas:0" for b in botones)
     assert conv._get(phone).step == conv.flujo.ESCRIBIR_ORIGEN
 
 

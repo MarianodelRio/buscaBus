@@ -1,14 +1,11 @@
 # Fixture sintética para los festivos locales por línea (P03e): pueblo-a tiene
 # festivos locales; linea-con-a pasa por pueblo-a, linea-sin-a no.
-zonas:
-  zona-test: Zona de prueba
-
 localidades:
-  pueblo-a: { nombre: Pueblo A, zona: zona-test }
-  pueblo-b: { nombre: Pueblo B, zona: zona-test }
-  pueblo-c: { nombre: Pueblo C, zona: zona-test }
-  pueblo-d: { nombre: Pueblo D, zona: zona-test }
-  pueblo-e: { nombre: Pueblo E, zona: zona-test }
+  pueblo-a: { nombre: Pueblo A }
+  pueblo-b: { nombre: Pueblo B }
+  pueblo-c: { nombre: Pueblo C }
+  pueblo-d: { nombre: Pueblo D }
+  pueblo-e: { nombre: Pueblo E }
 
 paradas:
   AAA: { nombre: Pueblo A, localidad: pueblo-a }

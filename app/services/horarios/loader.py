@@ -44,6 +44,39 @@ class Horarios:
     festivos_por_linea: dict[str, dict[date, tuple[str, str]]] = field(
         default_factory=dict
     )
+    # línea -> ids de las localidades por las que pasa (excluidas las aldeas
+    # pendientes), en orden alfabético por nombre normalizado. El propio dict
+    # está ordenado por título de línea normalizado (P18).
+    lineas_pueblos: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+
+def calcular_lineas_pueblos(modelo: Modelo) -> dict[str, tuple[str, ...]]:
+    """línea -> localidades por las que pasa (P18). Único sitio que lo decide;
+    lo usan `cargar()` y la vista de revisión. Excluye las localidades
+    pendientes (P15/P32: aldeas sin hora de paso propia). Pueblos por nombre
+    normalizado (desempate por id); líneas por título normalizado (desempate
+    por id); el dict devuelto ya está en ese orden."""
+    por_linea: dict[str, list[str]] = {}
+    for lid, linea in modelo.lineas.items():
+        ids = {
+            modelo.paradas[paso.parada].localidad
+            for viaje in linea.viajes
+            for paso in viaje.pasos
+            if paso.parada in modelo.paradas
+        }
+        ids = {
+            i
+            for i in ids
+            if i in modelo.localidades and modelo.localidades[i].pendiente is None
+        }
+        por_linea[lid] = sorted(
+            ids, key=lambda i: (formato.normalizar(modelo.localidades[i].nombre), i)
+        )
+    orden = sorted(
+        modelo.lineas,
+        key=lambda lid: (formato.normalizar(modelo.lineas[lid].titulo), lid),
+    )
+    return {lid: tuple(por_linea[lid]) for lid in orden}
 
 
 def calcular_festivos_por_linea(
@@ -110,4 +143,5 @@ def cargar(directorio: Path | str) -> Horarios:
             lid: tuple(viajes) for lid, viajes in localidad_viajes.items()
         },
         festivos_por_linea=calcular_festivos_por_linea(modelo),
+        lineas_pueblos=calcular_lineas_pueblos(modelo),
     )

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Sequence, TypeVar
 
 from app.services.horarios import formato
-from app.services.horarios.modelo import Localidad, Zona
+from app.services.horarios.modelo import Linea, Localidad
 
 if TYPE_CHECKING:
     from app.services.horarios.loader import Horarios
@@ -144,23 +144,23 @@ class Matcher:
         return formato.normalizar(self._localidades[lid].nombre)
 
 
-def zonas(
+def lineas(
     horarios: "Horarios",
-) -> tuple[tuple[Zona, tuple[Localidad, ...]], ...]:
-    """Zonas en el orden de `paradas.yaml`, con sus localidades en uso
-    (ordenadas alfabéticamente), descartando las zonas sin localidades en uso
-    (design.md 4.7; hoy descarta 'Campiña')."""
-    resultado: list[tuple[Zona, tuple[Localidad, ...]]] = []
-    for zona in horarios.modelo.zonas.values():
-        localidades_zona = [
-            loc
-            for loc in horarios.modelo.localidades.values()
-            if loc.zona == zona.id and loc.id in horarios.localidad_viajes
-        ]
-        if not localidades_zona:
+) -> tuple[tuple[Linea, tuple[Localidad, ...]], ...]:
+    """Líneas en orden alfabético por título (`Linea.titulo`, normalizado),
+    cada una con sus pueblos en orden alfabético (P18, design.md 4.7).
+    Descarta las líneas sin pueblos y las aldeas pendientes (ya excluidas en
+    `Horarios.lineas_pueblos`)."""
+    resultado: list[tuple[Linea, tuple[Localidad, ...]]] = []
+    for lid, ids in horarios.lineas_pueblos.items():
+        if not ids:
             continue
-        localidades_zona.sort(key=lambda loc: formato.normalizar(loc.nombre))
-        resultado.append((zona, tuple(localidades_zona)))
+        resultado.append(
+            (
+                horarios.modelo.lineas[lid],
+                tuple(horarios.modelo.localidades[i] for i in ids),
+            )
+        )
     return tuple(resultado)
 
 

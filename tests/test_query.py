@@ -590,3 +590,38 @@ def test_destinos_desde_nunca_incluye_pendientes():
             PENDIENTES.modelo.localidades[d].pendiente for d in destinos
         )
     assert set(query.destinos_desde(PENDIENTES, "pueblo-a")) == {"pueblo-b", "pueblo-c"}
+
+
+# ── destinos_desde(..., linea=...) (P18) ────────────────────────────────
+
+
+def test_destinos_desde_por_linea_solo_cuenta_esa_linea():
+    todos = query.destinos_desde(HORARIOS, "pozoblanco")
+    por_linea = {
+        lid: query.destinos_desde(HORARIOS, "pozoblanco", lid)
+        for lid in HORARIOS.lineas_pueblos
+    }
+    assert por_linea["belalcazar-pozoblanco"] == frozenset(
+        {
+            "alcaracejos",
+            "belalcazar",
+            "fuente-la-lancha",
+            "hinojosa-del-duque",
+            "villanueva-del-duque",
+        }
+    )
+    assert por_linea["torrecampo-pozoblanco"] == frozenset({"pedroche", "torrecampo"})
+    assert por_linea["adamuz-cordoba"] == frozenset()
+    # la unión de las líneas es el resultado sin filtrar
+    assert frozenset().union(*por_linea.values()) == todos
+
+
+def test_destinos_desde_linea_inexistente_es_vacio():
+    assert query.destinos_desde(HORARIOS, "pozoblanco", "no-existe") == frozenset()
+
+
+def test_destinos_desde_cordoba_nunca_ofrece_rabanales_ni_alcolea():
+    for linea in [None, *HORARIOS.lineas_pueblos]:
+        destinos = query.destinos_desde(HORARIOS, "cordoba", linea)
+        assert "campus-de-rabanales" not in destinos
+        assert "alcolea" not in destinos

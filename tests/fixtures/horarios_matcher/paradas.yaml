@@ -3,20 +3,17 @@
 # límite de candidatas de app/utils/matcher.py (9 -> elegir, 10 -> demasiadas).
 # Ninguna línea las usa (fixture solo para el matcher, no para el motor).
 
-zonas:
-  zona-pref: Zona de prueba del matcher
-
 localidades:
-  pref-uno: { nombre: Prefijotest Uno, zona: zona-pref }
-  pref-dos: { nombre: Prefijotest Dos, zona: zona-pref }
-  pref-tres: { nombre: Prefijotest Tres, zona: zona-pref }
-  pref-cuatro: { nombre: Prefijotest Cuatro, zona: zona-pref }
-  pref-cinco: { nombre: Prefijotest Cinco, zona: zona-pref }
-  pref-seis: { nombre: Prefijotest Seis, zona: zona-pref }
-  pref-siete: { nombre: Prefijotest Siete, zona: zona-pref }
-  pref-ocho: { nombre: Prefijotest Ocho, zona: zona-pref }
-  pref-nueve: { nombre: Prefijotest Nueve, zona: zona-pref }
-  pref-diez: { nombre: Prefijotest Diez, zona: zona-pref }
+  pref-uno: { nombre: Prefijotest Uno }
+  pref-dos: { nombre: Prefijotest Dos }
+  pref-tres: { nombre: Prefijotest Tres }
+  pref-cuatro: { nombre: Prefijotest Cuatro }
+  pref-cinco: { nombre: Prefijotest Cinco }
+  pref-seis: { nombre: Prefijotest Seis }
+  pref-siete: { nombre: Prefijotest Siete }
+  pref-ocho: { nombre: Prefijotest Ocho }
+  pref-nueve: { nombre: Prefijotest Nueve }
+  pref-diez: { nombre: Prefijotest Diez }
 
 paradas:
   PUN: { nombre: Prefijotest Uno, localidad: pref-uno }

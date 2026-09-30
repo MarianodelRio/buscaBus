@@ -34,7 +34,6 @@ from app.services.horarios.modelo import (
     Tabla,
     Temporada,
     Viaje,
-    Zona,
 )
 
 PENDIENTE_RE = re.compile(r"^P\d{2}$")
@@ -88,7 +87,11 @@ CAMPOS_LINEA_PERMITIDOS = CAMPOS_LINEA_OBLIGATORIOS | {
     "avisos",
     "no_circula",
     "pendientes",
+    "nombre_corto",
 }
+# Título de fila de una lista interactiva de WhatsApp (design.md 2.3, 4.4).
+MAX_TITULO_LINEA = 24
+LINEA_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
 # ── calendario.yaml (fase 2, design.md 2.3 y 3) ─────────────────────────────
 # Fechas con año real (a diferencia de las temporadas de línea, que no lo
@@ -154,7 +157,6 @@ def normalizar(texto: str) -> str:
 
 @dataclass
 class Modelo:
-    zonas: dict[str, Zona]
     localidades: dict[str, Localidad]
     paradas: dict[str, Parada]
     observaciones: dict[str, Observacion]
@@ -259,37 +261,30 @@ def _parse_rango_fechas_calendario(txt: str) -> tuple[date, date] | None:
     return f1, f2
 
 
-def _validar_zonas_localidades_paradas(
+def _validar_localidades_paradas(
     datos_paradas: dict[str, Any], path: Path, errores: list[str], avisos: list[str]
-) -> tuple[dict[str, Zona], dict[str, Localidad], dict[str, Parada]]:
-    zonas: dict[str, Zona] = {}
+) -> tuple[dict[str, Localidad], dict[str, Parada]]:
     localidades: dict[str, Localidad] = {}
     paradas: dict[str, Parada] = {}
 
-    zonas_raw = datos_paradas.get("zonas")
-    if not isinstance(zonas_raw, dict):
-        errores.append(f"{path}: falta el campo obligatorio 'zonas' (mapa)")
-        zonas_raw = {}
-    for zid, nombre in zonas_raw.items():
-        zonas[zid] = Zona(id=zid, nombre=str(nombre))
+    if "zonas" in datos_paradas:
+        errores.append(
+            f"{path}: campo obsoleto 'zonas' (P18: los pueblos se agrupan por "
+            "línea)"
+        )
 
     localidades_raw = datos_paradas.get("localidades")
     if not isinstance(localidades_raw, dict):
         errores.append(f"{path}: falta el campo obligatorio 'localidades' (mapa)")
         localidades_raw = {}
     for lid, campos in localidades_raw.items():
-        if (
-            not isinstance(campos, dict)
-            or "nombre" not in campos
-            or "zona" not in campos
-        ):
-            errores.append(f"{path}: localidad '{lid}' sin 'nombre' u 'zona'")
+        if not isinstance(campos, dict) or "nombre" not in campos:
+            errores.append(f"{path}: localidad '{lid}' sin 'nombre'")
             continue
-        zona_id = campos["zona"]
-        if zona_id not in zonas:
+        if "zona" in campos:
             errores.append(
-                f"{path}: localidad '{lid}' referencia una zona sin definir "
-                f"('{zona_id}')"
+                f"{path}: localidad '{lid}': campo obsoleto 'zona' (P18: los "
+                "pueblos se agrupan por línea)"
             )
 
         nombre_norm = normalizar(str(campos["nombre"]))
@@ -379,7 +374,6 @@ def _validar_zonas_localidades_paradas(
         localidades[lid] = Localidad(
             id=lid,
             nombre=str(campos["nombre"]),
-            zona=zona_id,
             alias=alias,
             pendiente=pendiente,
             ver=ver,
@@ -461,7 +455,7 @@ def _validar_zonas_localidades_paradas(
                 f"de varias localidades {sorted(lids)}"
             )
 
-    return zonas, localidades, paradas
+    return localidades, paradas
 
 
 def _validar_pendientes_paradas(
@@ -469,7 +463,7 @@ def _validar_pendientes_paradas(
 ) -> tuple[str, ...]:
     """Lee el campo opcional `pendientes:` de paradas.yaml (design.md 2.3):
     preguntas abiertas que no están ligadas a ninguna línea concreta (p.ej.
-    P18, zonas/localidades propuestas por negocio sin confirmar)."""
+    P32, posición de una aldea en la ruta)."""
     raw = datos_paradas.get("pendientes", []) or []
     if not isinstance(raw, list):
         errores.append(f"{path}: 'pendientes' debe ser una lista")
@@ -1014,6 +1008,27 @@ def _validar_linea(
         return None
 
     nombre = datos["nombre"]
+    nombre_corto = datos.get("nombre_corto")
+    if nombre_corto is not None:
+        if not isinstance(nombre_corto, str) or nombre_corto.strip() == "":
+            errores.append(
+                f"{path}: 'nombre_corto' debe ser un texto no vacío "
+                f"({nombre_corto!r})"
+            )
+            nombre_corto = None
+        elif len(nombre_corto) > MAX_TITULO_LINEA:
+            errores.append(
+                f"{path}: 'nombre_corto' ('{nombre_corto}') tiene "
+                f"{len(nombre_corto)} caracteres; el máximo es "
+                f"{MAX_TITULO_LINEA} (título de fila de WhatsApp)"
+            )
+            nombre_corto = None
+    if nombre_corto is None and len(str(nombre)) > MAX_TITULO_LINEA:
+        errores.append(
+            f"{path}: el nombre de la línea ('{nombre}') tiene "
+            f"{len(str(nombre))} caracteres (máximo {MAX_TITULO_LINEA} para el "
+            "título de fila de WhatsApp): añade 'nombre_corto'"
+        )
     telefono_demanda = datos.get("telefono_demanda")
     avisos_linea = datos.get("avisos", []) or []
     no_circula = datos.get("no_circula", []) or []
@@ -1432,6 +1447,7 @@ def _validar_linea(
         pendientes=tuple(pendientes_linea),
         viajes=tuple(viajes),
         tablas=tuple(tablas),
+        nombre_corto=nombre_corto,
     )
 
 
@@ -1644,7 +1660,7 @@ def validar(directorio: Path | str) -> Resultado:
     lineas_dir = directorio / "lineas"
 
     datos_paradas = _cargar_yaml(paradas_path, errores)
-    zonas, localidades, paradas = _validar_zonas_localidades_paradas(
+    localidades, paradas = _validar_localidades_paradas(
         datos_paradas or {}, paradas_path, errores, avisos
     )
     pendientes_paradas = _validar_pendientes_paradas(
@@ -1667,6 +1683,12 @@ def validar(directorio: Path | str) -> Resultado:
     if lineas_dir.is_dir():
         for path in sorted(lineas_dir.glob("*.yaml")):
             lid = path.stem
+            if not LINEA_ID_RE.match(lid):
+                errores.append(
+                    f"{path}: id de línea inválido '{lid}' (el nombre del "
+                    "fichero solo puede tener minúsculas sin tilde, dígitos "
+                    "y guiones)"
+                )
             datos_linea = _cargar_yaml(path, errores)
             if datos_linea is None:
                 continue
@@ -1687,6 +1709,17 @@ def validar(directorio: Path | str) -> Resultado:
                         paradas_usadas.add(paso.parada)
     else:
         errores.append(f"{lineas_dir}: no existe el directorio de líneas")
+
+    titulos_vistos: dict[str, list[str]] = {}
+    for lid, linea in lineas.items():
+        titulos_vistos.setdefault(normalizar(linea.titulo), []).append(lid)
+    for titulo_norm, lids in sorted(titulos_vistos.items()):
+        if len(lids) > 1:
+            ficheros = ", ".join(str(lineas_dir / f"{x}.yaml") for x in sorted(lids))
+            errores.append(
+                f"{lineas_dir}: las líneas {sorted(lids)} tienen el mismo "
+                f"título en el bot ('{titulo_norm}'): {ficheros}"
+            )
 
     _validar_localidades_pendientes(
         paradas_path,
@@ -1753,7 +1786,6 @@ def validar(directorio: Path | str) -> Resultado:
         return Resultado(modelo=None, errores=errores, avisos=avisos)
 
     modelo = Modelo(
-        zonas=zonas,
         localidades=localidades,
         paradas=paradas,
         observaciones=observaciones,

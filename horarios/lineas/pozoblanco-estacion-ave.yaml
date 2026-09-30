@@ -2,6 +2,7 @@
 # Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas TORR INV y TORR VER (filas 48-55 de INV y 49-56 de VER).
 # La Estación AVE de Villanueva de Córdoba es un sitio aparte del pueblo (P11).
 nombre: Estación AVE Vva de Córdoba
+nombre_corto: Estación AVE Villanueva
 avisos: []
 no_circula: []
 

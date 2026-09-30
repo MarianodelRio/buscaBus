@@ -443,12 +443,17 @@ def consultar(
     )
 
 
-def destinos_desde(horarios: Horarios, origen: str) -> frozenset[str]:
+def destinos_desde(
+    horarios: Horarios, origen: str, linea: str | None = None
+) -> frozenset[str]:
     """Localidades a las que se llega en servicio directo desde `origen`, en
     cualquier temporada/día (no filtrado por fecha). Nunca incluye `origen` ni
-    los destinos no vendibles desde él (P12b)."""
+    los destinos no vendibles desde él (P12b). Con `linea`, solo cuenta los
+    viajes de esa línea (id)."""
     resultado: set[str] = set()
     for viaje in horarios.localidad_viajes.get(origen, ()):
+        if linea is not None and viaje.linea != linea:
+            continue
         localidades_viaje = _localidades_del_viaje(horarios, viaje)
         if origen not in localidades_viaje:
             continue

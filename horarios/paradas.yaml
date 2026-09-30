@@ -1,81 +1,72 @@
-# horarios/paradas.yaml — zonas, localidades y paradas.
+# horarios/paradas.yaml — localidades y paradas.
 #
 # Fuente de verdad editada a mano (design.md, 2.3). Solo se incluyen las
-# zonas, localidades y paradas que usan las 12 líneas migradas hasta ahora
+# localidades y paradas que usan las 12 líneas migradas hasta ahora
 # (Ochavillos-Córdoba, Pozoblanco-Córdoba, Belalcázar-Córdoba, Adamuz-Córdoba,
 # Badajoz-Córdoba, Fuente Carreteros-Córdoba, Villaviciosa-Córdoba,
 # Belalcázar-Pozoblanco y las 4 líneas de la hoja TORR). Las 3 restantes se
 # añaden en la fase 1b-2.
 #
-# Zonas y localidades: negocio ha confirmado las de Coronada (Valle del
-# Guadiato) y Cabeza del Buey (Los Pedroches). Lo que sigue abierto está
-# declarado en `pendientes:`, al final (P18, P32).
-
-zonas:
-  cordoba: Córdoba
-  los-pedroches: Los Pedroches
-  guadiato: Valle del Guadiato
-  vega-guadalquivir: Vega del Guadalquivir
-  adamuz: Adamuz
-  campina: Campiña                       # sin localidades de las 5 líneas de prueba
-  extremadura: Extremadura
+# Los pueblos se agrupan por línea, no por comarcas (P18): el bot deduce la lista
+# de pueblos de cada línea a partir de sus viajes. Lo que sigue abierto está
+# declarado en `pendientes:`, al final (P32).
 
 localidades:                             # lo que elige el usuario
-  cordoba: { nombre: Córdoba, zona: cordoba }
-  campus-de-rabanales: { nombre: Campus de Rabanales, zona: cordoba }
-  alcolea: { nombre: Alcolea, zona: cordoba }
-  ochavillos: { nombre: Ochavillos, zona: vega-guadalquivir }
-  la-herreria: { nombre: La Herrería, zona: vega-guadalquivir }
-  fuente-palmera: { nombre: Fuente Palmera, zona: vega-guadalquivir }
-  la-ventilla: { nombre: La Ventilla, zona: vega-guadalquivir }
-  fuencubierta: { nombre: Fuencubierta, zona: vega-guadalquivir }
-  conquista: { nombre: Conquista, zona: los-pedroches }
-  villanueva-de-cordoba: { nombre: Villanueva de Córdoba, zona: los-pedroches }
-  pozoblanco: { nombre: Pozoblanco, zona: los-pedroches, alias: [pozo] }
-  alcaracejos: { nombre: Alcaracejos, zona: los-pedroches }
-  villaharta: { nombre: Villaharta, zona: guadiato }
-  cruce-de-villaharta: { nombre: Cruce de Villaharta, zona: guadiato, alias: [el cruce] }
-  el-vacar: { nombre: El Vacar, zona: guadiato }
-  cabeza-del-buey: { nombre: Cabeza del Buey, zona: los-pedroches }
-  belalcazar: { nombre: Belalcázar, zona: los-pedroches }
-  hinojosa-del-duque: { nombre: Hinojosa del Duque, zona: los-pedroches }
-  fuente-la-lancha: { nombre: Fuente La Lancha, zona: los-pedroches }
-  villanueva-del-duque: { nombre: Villanueva del Duque, zona: los-pedroches }
-  villaralto: { nombre: Villaralto, zona: los-pedroches }
-  algallarin: { nombre: Algallarín, zona: adamuz }
-  adamuz: { nombre: Adamuz, zona: adamuz }
-  villafranca-de-cordoba: { nombre: Villafranca de Córdoba, zona: adamuz, alias: [villafranca] }
-  aquasierra: { nombre: Aquasierra, zona: adamuz }
-  espiel: { nombre: Espiel, zona: guadiato }
-  villanueva-del-rey: { nombre: Villanueva del Rey, zona: guadiato }
-  belmez: { nombre: Belmez, zona: guadiato }
-  penarroya-pueblonuevo: { nombre: Peñarroya-Pueblonuevo, zona: guadiato }
-  fuente-obejuna: { nombre: Fuente Obejuna, zona: guadiato }
-  coronada: { nombre: Coronada, zona: guadiato }
-  granja-de-torrehermosa: { nombre: Granja de Torrehermosa, zona: extremadura }
-  azuaga: { nombre: Azuaga, zona: extremadura }
-  berlanga: { nombre: Berlanga, zona: extremadura }
-  ahillones: { nombre: Ahillones, zona: extremadura }
-  llerena: { nombre: Llerena, zona: extremadura }
-  villagarcia-de-la-torre: { nombre: Villagarcía de la Torre, zona: extremadura }
-  zafra: { nombre: Zafra, zona: extremadura }
-  villafranca-de-los-barros: { nombre: Villafranca de los Barros, zona: extremadura, alias: [villafranca] }
-  almendralejo: { nombre: Almendralejo, zona: extremadura }
-  merida: { nombre: Mérida, zona: extremadura }
-  badajoz: { nombre: Badajoz, zona: extremadura }
-  fuente-carreteros: { nombre: Fuente Carreteros, zona: vega-guadalquivir }
-  silillos: { nombre: Silillos, zona: vega-guadalquivir }
-  guadalcazar: { nombre: Guadalcázar, zona: vega-guadalquivir }
-  villaviciosa-de-cordoba: { nombre: Villaviciosa de Córdoba, zona: guadiato }
-  pantano: { nombre: Pantano, zona: guadiato }
-  torrecampo: { nombre: Torrecampo, zona: los-pedroches }
-  pedroche: { nombre: Pedroche, zona: los-pedroches }
-  santa-eufemia: { nombre: Santa Eufemia, zona: los-pedroches }
-  el-viso: { nombre: El Viso, zona: los-pedroches }
-  dos-torres: { nombre: Dos Torres, zona: los-pedroches }
-  anora: { nombre: Añora, zona: los-pedroches }
-  cardena: { nombre: Cardeña, zona: los-pedroches }
-  estacion-ave-villanueva: { nombre: Estación AVE Villanueva de Córdoba, zona: los-pedroches }
+  cordoba: { nombre: Córdoba }
+  campus-de-rabanales: { nombre: Campus de Rabanales }
+  alcolea: { nombre: Alcolea }
+  ochavillos: { nombre: Ochavillos }
+  la-herreria: { nombre: La Herrería }
+  fuente-palmera: { nombre: Fuente Palmera }
+  la-ventilla: { nombre: La Ventilla }
+  fuencubierta: { nombre: Fuencubierta }
+  conquista: { nombre: Conquista }
+  villanueva-de-cordoba: { nombre: Villanueva de Córdoba }
+  pozoblanco: { nombre: Pozoblanco, alias: [pozo] }
+  alcaracejos: { nombre: Alcaracejos }
+  villaharta: { nombre: Villaharta }
+  cruce-de-villaharta: { nombre: Cruce de Villaharta, alias: [el cruce] }
+  el-vacar: { nombre: El Vacar }
+  cabeza-del-buey: { nombre: Cabeza del Buey }
+  belalcazar: { nombre: Belalcázar }
+  hinojosa-del-duque: { nombre: Hinojosa del Duque }
+  fuente-la-lancha: { nombre: Fuente La Lancha }
+  villanueva-del-duque: { nombre: Villanueva del Duque }
+  villaralto: { nombre: Villaralto }
+  algallarin: { nombre: Algallarín }
+  adamuz: { nombre: Adamuz }
+  villafranca-de-cordoba: { nombre: Villafranca de Córdoba, alias: [villafranca] }
+  aquasierra: { nombre: Aquasierra }
+  espiel: { nombre: Espiel }
+  villanueva-del-rey: { nombre: Villanueva del Rey }
+  belmez: { nombre: Belmez }
+  penarroya-pueblonuevo: { nombre: Peñarroya-Pueblonuevo }
+  fuente-obejuna: { nombre: Fuente Obejuna }
+  coronada: { nombre: Coronada }
+  granja-de-torrehermosa: { nombre: Granja de Torrehermosa }
+  azuaga: { nombre: Azuaga }
+  berlanga: { nombre: Berlanga }
+  ahillones: { nombre: Ahillones }
+  llerena: { nombre: Llerena }
+  villagarcia-de-la-torre: { nombre: Villagarcía de la Torre }
+  zafra: { nombre: Zafra }
+  villafranca-de-los-barros: { nombre: Villafranca de los Barros, alias: [villafranca] }
+  almendralejo: { nombre: Almendralejo }
+  merida: { nombre: Mérida }
+  badajoz: { nombre: Badajoz }
+  fuente-carreteros: { nombre: Fuente Carreteros }
+  silillos: { nombre: Silillos }
+  guadalcazar: { nombre: Guadalcázar }
+  villaviciosa-de-cordoba: { nombre: Villaviciosa de Córdoba }
+  pantano: { nombre: Pantano }
+  torrecampo: { nombre: Torrecampo }
+  pedroche: { nombre: Pedroche }
+  santa-eufemia: { nombre: Santa Eufemia }
+  el-viso: { nombre: El Viso }
+  dos-torres: { nombre: Dos Torres }
+  anora: { nombre: Añora }
+  cardena: { nombre: Cardeña }
+  estacion-ave-villanueva: { nombre: Estación AVE Villanueva de Córdoba }
 
 paradas:                                 # lo que muestra el resultado
   COR: { nombre: Córdoba, localidad: cordoba }
@@ -135,11 +126,10 @@ paradas:                                 # lo que muestra el resultado
   CAR: { nombre: Cardeña, localidad: cardena }
   EAV: { nombre: Estación AVE Villanueva de Córdoba, localidad: estacion-ave-villanueva }
 
-# Preguntas abiertas que afectan a zonas, localidades o paradas de este
-# fichero (docs/preguntas_negocio.txt): P18 negocio prefiere zonas por línea
-# en vez de las actuales (ciclo C); P32 posición de Rivero de Posadas y Los
+# Preguntas abiertas que afectan a localidades o paradas de este fichero
+# (docs/preguntas_negocio.txt): P32 posición de Rivero de Posadas y Los
 # Mochos en la ruta.
-pendientes: [P18, P32]
+pendientes: [P32]
 
 # Pares de localidades entre los que la empresa no vende billetes, en ninguno
 # de los dos sentidos (P12b, respuesta de negocio). El bot no ofrece esos

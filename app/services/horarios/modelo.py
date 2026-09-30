@@ -12,16 +12,9 @@ from datetime import date
 
 
 @dataclass(frozen=True)
-class Zona:
-    id: str
-    nombre: str
-
-
-@dataclass(frozen=True)
 class Localidad:
     id: str
     nombre: str
-    zona: str
     alias: tuple[str, ...] = ()
     # Localidad pendiente (P15/P32): aldea sin hora de paso propia. `ver` es la
     # localidad en cuyo lugar se consulta; `minutos` la distancia hasta ella;
@@ -121,3 +114,10 @@ class Linea:
     pendientes: tuple[str, ...] = ()
     viajes: tuple[Viaje, ...] = ()
     tablas: tuple[Tabla, ...] = ()  # en orden de aparición en el fichero
+    # Título corto para la lista de líneas del bot (WhatsApp: 24 caracteres).
+    nombre_corto: str | None = None
+
+    @property
+    def titulo(self) -> str:
+        """Único sitio que decide el título visible de la línea en el bot."""
+        return self.nombre_corto or self.nombre

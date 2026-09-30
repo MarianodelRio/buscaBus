@@ -1,23 +1,20 @@
 # Fixture con 13 paradas (por encima del límite de 12 columnas de
 # tools/revision.py) para probar la tabla trasponida (design.md 8,
 # "Correcciones de la fase 1", punto 2).
-zonas:
-  zona-ancha: Zona Ancha
-
 localidades:
-  loc-aaa: { nombre: Localidad AAA, zona: zona-ancha }
-  loc-bbb: { nombre: Localidad BBB, zona: zona-ancha }
-  loc-ccc: { nombre: Localidad CCC, zona: zona-ancha }
-  loc-ddd: { nombre: Localidad DDD, zona: zona-ancha }
-  loc-eee: { nombre: Localidad EEE, zona: zona-ancha }
-  loc-fff: { nombre: Localidad FFF, zona: zona-ancha }
-  loc-ggg: { nombre: Localidad GGG, zona: zona-ancha }
-  loc-hhh: { nombre: Localidad HHH, zona: zona-ancha }
-  loc-iii: { nombre: Localidad III, zona: zona-ancha }
-  loc-jjj: { nombre: Localidad JJJ, zona: zona-ancha }
-  loc-kkk: { nombre: Localidad KKK, zona: zona-ancha }
-  loc-lll: { nombre: Localidad LLL, zona: zona-ancha }
-  loc-mmm: { nombre: Localidad MMM, zona: zona-ancha }
+  loc-aaa: { nombre: Localidad AAA }
+  loc-bbb: { nombre: Localidad BBB }
+  loc-ccc: { nombre: Localidad CCC }
+  loc-ddd: { nombre: Localidad DDD }
+  loc-eee: { nombre: Localidad EEE }
+  loc-fff: { nombre: Localidad FFF }
+  loc-ggg: { nombre: Localidad GGG }
+  loc-hhh: { nombre: Localidad HHH }
+  loc-iii: { nombre: Localidad III }
+  loc-jjj: { nombre: Localidad JJJ }
+  loc-kkk: { nombre: Localidad KKK }
+  loc-lll: { nombre: Localidad LLL }
+  loc-mmm: { nombre: Localidad MMM }
 
 paradas:
   AAA: { nombre: Parada AAA, localidad: loc-aaa }

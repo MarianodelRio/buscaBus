@@ -276,30 +276,44 @@ def test_limite_9_elegir_10_demasiadas():
     assert len(r9.localidades) == 9
 
 
-def test_localidad_no_usada_se_encuentra_pero_no_sale_en_zonas():
+def test_localidad_no_usada_se_encuentra_pero_no_sale_en_lineas():
     h = loader.cargar(FIXTURES / "horarios_matcher")
     m = matcher.Matcher(h)
     r = m.buscar("Prefijotest Uno")
     assert r.tipo == "unico"
     assert _nombres(h, r) == ["Prefijotest Uno"]
-    assert matcher.zonas(h) == ()  # ninguna localidad de esta fixture está en uso
+    assert matcher.lineas(h) == ()  # esta fixture no tiene ninguna línea
 
 
-# ── zonas() sobre horarios/ real ────────────────────────────────────────────
+# ── lineas() sobre horarios/ real ───────────────────────────────────────────
 
 
-def test_zonas_reales_excluye_campina_y_ordena():
+def test_zonas_ya_no_existe():
+    assert not hasattr(matcher, "zonas")
+
+
+def test_lineas_reales_en_orden_de_titulo_con_pueblos_ordenados():
     h = _horarios_real()
-    zs = matcher.zonas(h)
-    ids_zona = [z.id for z, _ in zs]
-    assert "campina" not in ids_zona
-
-    for zona, localidades in zs:
+    ls = matcher.lineas(h)
+    assert len(ls) == 12
+    titulos = [formato.normalizar(linea.titulo) for linea, _ in ls]
+    assert titulos == sorted(titulos)
+    assert [linea.id for linea, _ in ls] == list(h.lineas_pueblos)
+    for linea, localidades in ls:
         nombres_norm = [formato.normalizar(loc.nombre) for loc in localidades]
         assert nombres_norm == sorted(nombres_norm)
-        # solo localidades en uso
+        assert localidades  # sin líneas vacías
         for loc in localidades:
             assert loc.id in h.localidad_viajes
+            assert loc.pendiente is None
+
+
+def test_lineas_pendientes_no_aparecen_en_ninguna_linea():
+    h = loader.cargar(FIXTURES / "horarios_pendientes")
+    ids = {loc.id for _, locs in matcher.lineas(h) for loc in locs}
+    assert "aldea-a" not in ids
+    assert "aldea-b" not in ids
+    assert {"pueblo-a", "pueblo-b", "pueblo-c"} <= ids
 
 
 # ── paginar() ────────────────────────────────────────────────────────────

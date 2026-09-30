@@ -132,6 +132,10 @@ def msg_no_conozco_ese_pueblo() -> str:
     return "No conozco ese pueblo."
 
 
+def msg_sin_lineas() -> str:
+    return "Ahora mismo no puedo mostrarte la lista de líneas."
+
+
 def msg_demasiadas_coincidencias() -> str:
     return "Hay muchos pueblos que coinciden. Sé más concreto, por favor."
 

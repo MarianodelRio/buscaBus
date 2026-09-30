@@ -25,14 +25,14 @@ from app.utils.interactive import (
     build_dias,
     build_escribir,
     build_info,
+    build_linea,
+    build_lineas,
     build_localidad_pendiente,
     build_menu,
     build_origen,
     build_resultado,
-    build_zona,
-    build_zonas,
 )
-from app.utils.matcher import zonas as matcher_zonas, paginar
+from app.utils.matcher import lineas as matcher_lineas, paginar
 from app.utils import messages as msg
 
 logger = logging.getLogger(__name__)
@@ -113,13 +113,13 @@ def _ir_a_origen(identifier: str, state, aviso: str | None = None) -> None:
 
 
 def _mostrar_paso(identifier: str, state, campo: str, aviso: str | None = None,
-                   con_zonas: bool = False) -> None:
+                   con_lineas: bool = False) -> None:
     datos = horarios_datos.actual()
     if campo == "origen":
         localidades = _nombres(datos, datos.menu_origen)
         wa.send_interactive(
             identifier,
-            build_origen(localidades, aviso=aviso, con_zonas=con_zonas),
+            build_origen(localidades, aviso=aviso, con_lineas=con_lineas),
         )
     else:
         origen_nombre = _nombre_localidad(datos, state.origen)
@@ -128,7 +128,9 @@ def _mostrar_paso(identifier: str, state, campo: str, aviso: str | None = None,
         ordenados = ordenar_destinos(alcanzables, list(datos.menu_origen), nombres_map)
         wa.send_interactive(
             identifier,
-            build_destinos(origen_nombre, ordenados, aviso=aviso, con_zonas=con_zonas),
+            build_destinos(
+                origen_nombre, ordenados, aviso=aviso, con_lineas=con_lineas
+            ),
         )
 
 
@@ -170,7 +172,7 @@ def _buscar(identifier: str, state, campo: str, texto: str) -> None:
     )
     state.campo = campo
     _mostrar_paso(identifier, state, campo, aviso=msg.msg_no_conozco_ese_pueblo(),
-                  con_zonas=True)
+                  con_lineas=True)
 
 
 def _elegir(identifier: str, state, campo: str, localidad_id: str) -> None:
@@ -239,57 +241,80 @@ def _usar(identifier: str, state, campo: str, value: str) -> None:
     _elegir(identifier, state, campo, lid)
 
 
-# ── Zonas ──────────────────────────────────────────────────────────────
+# ── Pueblos por línea (P18) ───────────────────────────────────────────
 
 
-def _localidades_de_zona(datos, zona_id: str, campo: str, origen: str | None):
-    for zona, locs in matcher_zonas(datos.horarios):
-        if zona.id == zona_id:
-            if campo == "destino" and origen is not None:
-                alcanzables = query.destinos_desde(datos.horarios, origen)
-                locs = tuple(loc for loc in locs if loc.id in alcanzables)
-            return zona, locs
-    return None, ()
+def _lineas_visibles(datos, campo: str, origen: str | None):
+    """[(Linea, pueblos)] que ve el cliente. Origen: todas las líneas. Destino:
+    de cada línea solo los pueblos alcanzables desde `origen` en esa línea,
+    descartando las líneas que se quedan sin ninguno."""
+    todas = matcher_lineas(datos.horarios)
+    if campo != "destino" or origen is None:
+        return [(linea, locs) for linea, locs in todas]
+    resultado = []
+    for linea, locs in todas:
+        alcanzables = query.destinos_desde(datos.horarios, origen, linea.id)
+        visibles = tuple(loc for loc in locs if loc.id in alcanzables)
+        if visibles:
+            resultado.append((linea, visibles))
+    return resultado
 
 
-def _mostrar_zonas(identifier: str, state, campo: str) -> None:
+def _mostrar_lineas(identifier: str, state, campo: str, pagina: int = 0) -> None:
     datos = horarios_datos.actual()
-    filtradas: list[tuple[str, str]] = []
-    for zona, locs in matcher_zonas(datos.horarios):
-        if campo == "destino" and state.origen is not None:
-            alcanzables = query.destinos_desde(datos.horarios, state.origen)
-            locs = tuple(loc for loc in locs if loc.id in alcanzables)
-        if locs:
-            filtradas.append((zona.id, zona.nombre))
+    visibles = _lineas_visibles(datos, campo, state.origen)
+    if not visibles:
+        state.campo = campo
+        _mostrar_paso(identifier, state, campo, aviso=msg.msg_sin_lineas())
+        return
+    paginas = paginar(visibles)
+    if pagina < 0 or pagina >= len(paginas):
+        pagina = 0
+    hay_mas = pagina + 1 < len(paginas)
+    filas = [(linea, len(locs)) for linea, locs in paginas[pagina]]
     state.campo = campo
-    wa.send_interactive(identifier, build_zonas(filtradas, campo))
+    wa.send_interactive(identifier, build_lineas(filas, pagina, hay_mas, campo))
 
 
-def _mostrar_zona_pagina(identifier: str, state, campo: str, value: str) -> None:
+def _pagina_de_lineas(value: str) -> int:
+    try:
+        return int(value.split(":", 1)[1])
+    except (ValueError, IndexError):
+        return 0
+
+
+def _mostrar_linea_pagina(identifier: str, state, campo: str, value: str) -> None:
     partes = value.split(":")
     if len(partes) != 3:
-        _mostrar_zonas(identifier, state, campo)
+        _mostrar_lineas(identifier, state, campo, 0)
         return
-    zid, pag_txt = partes[1], partes[2]
+    lid, pag_txt = partes[1], partes[2]
     try:
         pagina = int(pag_txt)
     except ValueError:
-        pagina = 0
-    datos = horarios_datos.actual()
-    zona, locs = _localidades_de_zona(datos, zid, campo, state.origen)
-    if zona is None or not locs:
-        _mostrar_zonas(identifier, state, campo)
+        _mostrar_lineas(identifier, state, campo, 0)
         return
+    datos = horarios_datos.actual()
+    elegida = next(
+        (
+            (linea, locs)
+            for linea, locs in _lineas_visibles(datos, campo, state.origen)
+            if linea.id == lid
+        ),
+        None,
+    )
+    if elegida is None:
+        _mostrar_lineas(identifier, state, campo, 0)
+        return
+    linea, locs = elegida
     paginas = paginar(locs)
     if pagina < 0 or pagina >= len(paginas):
-        pagina = 0
-    pagina_locs = paginas[pagina]
+        _mostrar_lineas(identifier, state, campo, 0)
+        return
     hay_mas = pagina + 1 < len(paginas)
-    filas = [(loc.id, loc.nombre) for loc in pagina_locs]
+    filas = [(loc.id, loc.nombre) for loc in paginas[pagina]]
     state.campo = campo
-    wa.send_interactive(
-        identifier, build_zona(zona.nombre, zid, pagina, filas, hay_mas)
-    )
+    wa.send_interactive(identifier, build_linea(linea, filas, pagina, hay_mas))
 
 
 # ── Día ────────────────────────────────────────────────────────────────
@@ -455,10 +480,13 @@ def _handle_sel_origen(identifier: str, state, value: str) -> None:
         wa.send_interactive(
             identifier, build_escribir("origen", msg.msg_pedir_pueblo("origen"))
         )
-    elif value == "zonas":
-        _mostrar_zonas(identifier, state, "origen")
-    elif value.startswith("zona:"):
-        _mostrar_zona_pagina(identifier, state, "origen", value)
+    elif value.startswith("lineas:"):
+        _mostrar_lineas(identifier, state, "origen", _pagina_de_lineas(value))
+    elif value.startswith("linea:"):
+        _mostrar_linea_pagina(identifier, state, "origen", value)
+    elif value == "zonas" or value.startswith("zona:"):
+        # Botones y filas antiguos (antes de P18): lista de líneas.
+        _mostrar_lineas(identifier, state, "origen", 0)
     elif value == "menu":
         to_menu(identifier, state)
     else:
@@ -476,10 +504,13 @@ def _handle_sel_destino(identifier: str, state, value: str) -> None:
         wa.send_interactive(
             identifier, build_escribir("destino", msg.msg_pedir_pueblo("destino"))
         )
-    elif value == "zonas":
-        _mostrar_zonas(identifier, state, "destino")
-    elif value.startswith("zona:"):
-        _mostrar_zona_pagina(identifier, state, "destino", value)
+    elif value.startswith("lineas:"):
+        _mostrar_lineas(identifier, state, "destino", _pagina_de_lineas(value))
+    elif value.startswith("linea:"):
+        _mostrar_linea_pagina(identifier, state, "destino", value)
+    elif value == "zonas" or value.startswith("zona:"):
+        # Botones y filas antiguos (antes de P18): lista de líneas.
+        _mostrar_lineas(identifier, state, "destino", 0)
     elif value == "cambiar_origen":
         _ir_a_origen(identifier, state)
     else:
