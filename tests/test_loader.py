@@ -50,7 +50,7 @@ def test_cargar_motor_fixture():
     assert set(horarios.localidad_paradas["pueblo-a"]) == {"AAA"}
 
 
-def test_festivos_por_linea_real_las_7_lineas_que_tocan_cordoba():
+def test_festivos_por_linea_real_las_10_lineas_que_tocan_cordoba():
     horarios = loader.cargar(HORARIOS_REAL)
     esperado = {
         date(2026, 9, 8): ("Virgen de la Fuensanta", "cordoba"),
@@ -65,7 +65,7 @@ def test_festivos_por_linea_real_las_7_lineas_que_tocan_cordoba():
     }
     assert set(horarios.modelo.lineas) >= sin_cordoba
     assert set(horarios.festivos_por_linea) == set(horarios.modelo.lineas) - sin_cordoba
-    assert len(horarios.festivos_por_linea) == 7
+    assert len(horarios.festivos_por_linea) == 10
     assert {"fuente-carreteros-cordoba", "villaviciosa-cordoba"} <= set(
         horarios.festivos_por_linea
     )
@@ -150,3 +150,13 @@ def test_lineas_pueblos_ordena_por_titulo_no_por_nombre(datos_muchas_lineas):
     lp = datos_muchas_lineas.horarios.lineas_pueblos
     assert list(lp)[-2:] == ["linea-larga", "ruta-norte"]  # "Ruta del norte" al final
     assert len(lp["linea-larga"]) == 19
+
+
+def test_lineas_pueblos_real_los_blazquez_y_sin_pendientes():
+    horarios = loader.cargar(HORARIOS_REAL)
+    blazquez = horarios.lineas_pueblos["los-blazquez"]
+    for loc in ("el-porvenir", "la-granjuela", "valsequillo", "los-blazquez"):
+        assert loc in blazquez
+    for pueblos in horarios.lineas_pueblos.values():
+        assert "rivero-de-posadas" not in pueblos
+        assert "los-mochos" not in pueblos

@@ -1,11 +1,11 @@
 # horarios/paradas.yaml — localidades y paradas.
 #
 # Fuente de verdad editada a mano (design.md, 2.3). Solo se incluyen las
-# localidades y paradas que usan las 12 líneas migradas hasta ahora
-# (Ochavillos-Córdoba, Pozoblanco-Córdoba, Belalcázar-Córdoba, Adamuz-Córdoba,
-# Badajoz-Córdoba, Fuente Carreteros-Córdoba, Villaviciosa-Córdoba,
-# Belalcázar-Pozoblanco y las 4 líneas de la hoja TORR). Las 3 restantes se
-# añaden en la fase 1b-2.
+# localidades y paradas que usan las 15 líneas (Ochavillos-Córdoba,
+# Pozoblanco-Córdoba, Belalcázar-Córdoba, Adamuz-Córdoba, Badajoz-Córdoba,
+# Fuente Carreteros-Córdoba, Villaviciosa-Córdoba, Belalcázar-Pozoblanco, las
+# 4 líneas de la hoja TORR, Peñarroya-Córdoba, Los Blázquez y
+# Hornachuelos-Córdoba). Ninguna línea queda pendiente de migrar.
 #
 # Los pueblos se agrupan por línea, no por comarcas (P18): el bot deduce la lista
 # de pueblos de cada línea a partir de sus viajes. Lo que sigue abierto está
@@ -67,6 +67,25 @@ localidades:                             # lo que elige el usuario
   anora: { nombre: Añora }
   cardena: { nombre: Cardeña }
   estacion-ave-villanueva: { nombre: Estación AVE Villanueva de Córdoba }
+  el-porvenir: { nombre: El Porvenir }
+  la-granjuela: { nombre: La Granjuela }
+  valsequillo: { nombre: Valsequillo }
+  los-blazquez: { nombre: Los Blázquez }
+  hornachuelos: { nombre: Hornachuelos }
+  posadas: { nombre: Posadas }
+  almodovar-del-rio: { nombre: Almodóvar del Río }
+  rivero-de-posadas:                     # sin hora de paso propia (P32)
+    nombre: Rivero de Posadas
+    pendiente: P32
+    ver: posadas
+    minutos: 4
+    aviso: pasa_por_rivero
+  los-mochos:                            # sin hora de paso propia (P32)
+    nombre: Los Mochos
+    pendiente: P32
+    ver: almodovar-del-rio
+    minutos: 7
+    aviso: para_en_los_mochos
 
 paradas:                                 # lo que muestra el resultado
   COR: { nombre: Córdoba, localidad: cordoba }
@@ -96,7 +115,8 @@ paradas:                                 # lo que muestra el resultado
   VFC: { nombre: Villafranca de Córdoba, localidad: villafranca-de-cordoba }
   AQU: { nombre: Aquasierra, localidad: aquasierra }
   ESP: { nombre: Espiel, localidad: espiel }
-  VRE: { nombre: Villanueva del Rey, localidad: villanueva-del-rey }
+  VRE: { nombre: Villanueva del Rey (pueblo), localidad: villanueva-del-rey }
+  VRC: { nombre: Villanueva del Rey (cruce, gasolinera), localidad: villanueva-del-rey }   # P20
   BEL: { nombre: Belmez, localidad: belmez }
   PNR: { nombre: Peñarroya-Pueblonuevo, localidad: penarroya-pueblonuevo }
   FOB: { nombre: Fuente Obejuna, localidad: fuente-obejuna }
@@ -125,6 +145,13 @@ paradas:                                 # lo que muestra el resultado
   ANO: { nombre: Añora, localidad: anora }
   CAR: { nombre: Cardeña, localidad: cardena }
   EAV: { nombre: Estación AVE Villanueva de Córdoba, localidad: estacion-ave-villanueva }
+  PVN: { nombre: El Porvenir, localidad: el-porvenir }
+  GRJ: { nombre: La Granjuela, localidad: la-granjuela }
+  VSQ: { nombre: Valsequillo, localidad: valsequillo }
+  BLQ: { nombre: Los Blázquez, localidad: los-blazquez }
+  HOR: { nombre: Hornachuelos, localidad: hornachuelos }
+  POS: { nombre: Posadas, localidad: posadas }
+  ADR: { nombre: Almodóvar del Río, localidad: almodovar-del-rio }
 
 # Preguntas abiertas que afectan a localidades o paradas de este fichero
 # (docs/preguntas_negocio.txt): P32 posición de Rivero de Posadas y Los

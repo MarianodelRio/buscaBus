@@ -984,11 +984,21 @@ def test_bus_y_pendiente_conviven_en_la_misma_fila(tmp_path):
     assert viaje.bus == "x" and viaje.pendientes == ("P01",)
 
 
-def test_horarios_real_tiene_exactamente_3_avisos_de_posible_mismo_autobus():
+def test_horarios_real_tiene_exactamente_6_avisos_de_posible_mismo_autobus():
     resultado = formato.validar(HORARIOS_REAL)
     assert resultado.errores == []
     posibles = [a for a in resultado.avisos if "posible mismo autobús" in a]
-    assert len(posibles) == 3
+    assert len(posibles) == 6
+    pares = [
+        ("Belalcázar – Córdoba", "Villaviciosa – Córdoba"),
+        ("Belalcázar – Córdoba", "Belalcázar – Pozoblanco"),
+        ("Belalcázar – Córdoba", "Pozoblanco – Córdoba"),
+        ("Los Blázquez", "Pozoblanco – Córdoba"),
+        ("Peñarroya – Córdoba", "Pozoblanco – Córdoba"),
+        ("Peñarroya – Córdoba", "Villaviciosa – Córdoba"),
+    ]
+    for a, b in pares:
+        assert sum(f"'{a}' y '{b}'" in p for p in posibles) == 1, (a, b)
 
 
 # ── Localidades pendientes (ciclo C2, P15/P32) ────────────────────────────
@@ -1177,13 +1187,16 @@ def test_aviso_cuyo_texto_no_contiene_los_minutos_avisa(tmp_path):
     ) in r.avisos
 
 
-def test_horarios_real_no_tiene_localidades_pendientes():
+def test_horarios_real_solo_tiene_pendientes_rivero_y_los_mochos():
     resultado = formato.validar(HORARIOS_REAL)
     assert resultado.errores == []
-    assert all(
-        loc.pendiente is None for loc in resultado.modelo.localidades.values()
-    )
-    assert len(resultado.avisos) == 12
+    pendientes = {
+        lid: loc.pendiente
+        for lid, loc in resultado.modelo.localidades.items()
+        if loc.pendiente is not None
+    }
+    assert pendientes == {"rivero-de-posadas": "P32", "los-mochos": "P32"}
+    assert len(resultado.avisos) == 32
 
 
 # ── P18: pueblos por línea (ciclo C3) ────────────────────────────────────
@@ -1341,10 +1354,10 @@ def test_id_de_linea_invalido_es_error(tmp_path):
     )
 
 
-def test_horarios_real_tiene_12_avisos_y_4_nombres_cortos():
+def test_horarios_real_tiene_32_avisos_y_4_nombres_cortos():
     resultado = formato.validar(HORARIOS_REAL)
     assert resultado.errores == []
-    assert len(resultado.avisos) == 12
+    assert len(resultado.avisos) == 32
     cortos = {
         lid: linea.nombre_corto
         for lid, linea in resultado.modelo.lineas.items()

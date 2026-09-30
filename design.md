@@ -89,8 +89,9 @@ decisiones ya tomadas (D-a a D-p) están en
    amarillo es "a demanda" en Pozoblanco, Belalcázar-Córdoba y Badajoz, pero
    "entran en pueblo" en Peñarroya; en Los Blázquez eso mismo es verde.
 2. **Las marcas actúan a tres niveles**: toda la hoja (Badajoz, "horarios de
-   paso aproximado"), todo el viaje (Posadas: Rivero, Los Mochos, El Pedrera) o
-   **una sola parada de un viaje** (a demanda; "solo viernes lectivo" solo en
+   paso aproximado"), todo el viaje (Posadas: Rivero, Los Mochos) o
+   **una sola parada de un viaje** (El Pedrera, letra `E` en la celda de Posadas;
+   solo se muestra con origen o destino Posadas, P16) (a demanda; "solo viernes lectivo" solo en
    la última parada; "solo si hay viajeros desde Córdoba" solo en Villanueva de
    Córdoba).
 3. **Formatos de hora heterogéneos**: `datetime.time`, `"8:00*"`, `"18.10"`,
@@ -238,7 +239,7 @@ hora_aproximada:
   `solo_si_viajeros_desde_cordoba`); el validador rechaza una condición que el
   código no sepa aplicar.
 - **Aviso**: solo informa (`pasa_por_rivero`, `para_en_los_mochos`,
-  `no_para_en_el_pedrera`, `solo_virgen_remedios`, `hora_aproximada`...). Se
+  `no_para_en_el_pedrera` (letra `E`, parada), `solo_virgen_remedios`, `hora_aproximada`...). Se
   pueden añadir libremente. `entra_en_pueblo` ya no existe: en Villanueva del
   Rey "entrar en el pueblo" es **otra parada** (P20, `VRE` frente a `VRC`), no
   una nota. `hora_aproximada` lleva la letra `A` y sirve como aviso de línea o
@@ -1217,16 +1218,20 @@ Córdoba, Belalcázar – Pozoblanco y las 4 de la hoja TORR (Línea Torrecampo,
 Santa Eufemia – Villaralto, Cardeña, Estación AVE Vva de Córdoba). El bot pasa
 a 12 líneas; el cuadre con el Excel es del 100 % en las hojas nuevas y la
 única discrepancia sigue siendo POZOB VER, fila 48.
-**Faltan 3 líneas (fase 1b-2 / ciclo C):** Posadas/Hornachuelos (P15, P32,
-P16), Peñarroya (P20, P21, P33) y Los
-Blázquez (P21, D-e). P01 se respondió: ambas son anuales (P27 deja de
-importar).
+**Fase 1b-2 (hecha): las 3 líneas restantes.** Migradas Peñarroya – Córdoba
+(P20, P21, `bus:`), Los Blázquez (P21, D-e, anual por P01) y Hornachuelos –
+Córdoba (P15, P16, P32, P36). El bot tiene 15 líneas; el cuadre con el Excel es
+del 100 % en las 18 hojas salvo POZOB VER, fila 48. Badajoz pasa de `VRE` a
+`VRC` y declara sus `bus:` (P33 cerrada); se registran las notas P34, P35 y
+P36 para el PDF. `no_para_en_el_pedrera` pasa a ser una nota de parada (letra
+`E`). Queda el paso manual: cuando negocio apruebe el PDF, borrar
+`tools/migracion/`, quitar `openpyxl` y archivar el Excel.
 
 **Ciclo C1 (`docs/rds_cicloC_extensiones_modelo.md`):** hecho el modelo de
 horas (`Paso.llegada`/`salida`, celda `HH:MM>HH:MM`), el mismo autobús
 declarado (`bus:<id>`, errores y aviso heurístico; T-1 cerrado) y el ajuste de
 `observaciones.yaml` (sin `entra_en_pueblo`). Ninguna línea real usa todavía
-`>` ni `bus:`: es la fase 1b-2. C2 (localidades pendientes, P15/P32) también está hecho.
+`>` ni `bus:` (lo hizo la fase 1b-2). C2 (localidades pendientes, P15/P32) también está hecho.
 
 **Ciclo C3 (cerrado): pueblos por línea en lugar de zonas (P18).** Se eliminan
 las zonas del modelo (`Zona`, `Localidad.zona`, `zonas:` de `paradas.yaml`);
@@ -1234,8 +1239,7 @@ la conversación ofrece `Ver pueblos por línea` (4.7), el loader deduce los
 pueblos de cada línea (`Horarios.lineas_pueblos`), `Linea.nombre_corto` da
 título a las líneas de más de 24 caracteres y la vista de revisión enseña
 "Así aparecen las líneas en el bot". `pendientes:` de `paradas.yaml` queda en
-`[P32]`. La fixture `tests/fixtures/horarios_cicloC/` ya está migrada. Sigue
-sin migrarse ninguna línea nueva (fase 1b-2).
+`[P32]`. La fixture `tests/fixtures/horarios_cicloC/` ya está migrada.
 
 ### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27
 Resueltas en un ciclo propio (`docs/rds_fase1_correcciones.md`). Verificado el

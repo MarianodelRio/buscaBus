@@ -147,9 +147,9 @@ def test_build_lineas_real_within_limits():
     from app.utils.matcher import paginar
 
     todas = [(linea, len(locs)) for linea, locs in _lineas_reales()]
-    assert len(todas) == 12
+    assert len(todas) == 15
     paginas = paginar(todas)
-    assert [len(p) for p in paginas] == [8, 4]
+    assert [len(p) for p in paginas] == [8, 7]
     lineas = list(paginas[1])
     for campo in ("origen", "destino"):
         payload = build_lineas(lineas, 0, False, campo)
@@ -467,3 +467,16 @@ def test_build_localidad_pendiente_acorta_nombre_largo():
     assert titulo("Almodóvar del Río") == "Usar Almodóvar"
     assert titulo("Villanueva de Córdoba") == "Usar Villanueva"
     assert titulo("Superextraordinariamente") == "Usar Superextraordin"
+
+
+def test_build_localidad_pendiente_los_mochos_real():
+    from app.utils.interactive import build_localidad_pendiente
+
+    modelo = horarios_datos.actual().horarios.modelo
+    mochos = modelo.localidades["los-mochos"]
+    ver = modelo.localidades[mochos.ver]
+    payload = build_localidad_pendiente("Texto", mochos.ver, ver.nombre, "origen")
+    _assert_button_limits(payload)
+    titulos = [b["reply"]["title"] for b in _buttons(payload)]
+    assert titulos[0] == "Usar Almodóvar"
+    assert len(titulos[0]) <= 20

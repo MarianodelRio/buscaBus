@@ -1,0 +1,151 @@
+# horarios/lineas/hornachuelos-cordoba.yaml
+# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas POSADAS INV y
+# POSADAS VER.
+#
+# Rivero de Posadas y Los Mochos no son columnas: no tienen hora de paso propia
+# (P32). Los viajes que pasan por Rivero (naranja en el Excel) llevan
+# `pasa_por_rivero` y los que paran dentro de Los Mochos (verde) llevan
+# `para_en_los_mochos`; la conversación ofrece "Usar Posadas" / "Usar Almodóvar".
+# El asterisco del Excel (no para en El Pedrera, calle Sevilla) es la letra E
+# en la celda de Posadas (P16): solo se muestra con origen o destino Posadas.
+# Las notas internas de POSADAS VER r38/r39 no se publican (D-m).
+#
+# Posadas 08:30 (ida, lunes a viernes) ya no lleva asterisco: cambio de la
+# empresa en el Excel modificado; ahora para en El Pedrera. No sale en "cambios
+# desde la versión publicada" porque la línea es nueva.
+#
+# Domingo, 09:30 desde Hornachuelos: Posadas–Almodóvar 40 min y
+# Almodóvar–Córdoba 20 min, se publica tal cual (P36; fila 45 de POSADAS INV y
+# VER).
+nombre: Hornachuelos – Córdoba
+avisos: []
+no_circula: []
+
+temporadas:
+  invierno: 15/09 - 22/06   # P02
+  verano: 23/06 - 14/09     # P02
+
+dias:
+  invierno: { lunes-viernes: horario, sabado: horario, domingos-festivos: horario }
+  verano:   { lunes-viernes: horario, sabado: horario, domingos-festivos: horario }
+
+horarios:
+  # ── INVIERNO — lunes a viernes ─────────────────────────────────────────────
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      HOR    POS     ADR    COR
+      06:15  06:35   06:50  07:30  | pasa_por_rivero
+      -      07:15   -      07:55
+      -      07:15   07:30  08:10
+      -      08:30   08:45  09:35
+      09:00  09:30   09:45  10:30  | pasa_por_rivero para_en_los_mochos
+      -      11:30E  11:45  12:25
+      14:30  14:55   15:10  15:55  | pasa_por_rivero
+      -      18:15E  18:30  19:05
+
+  - temporada: invierno
+    dias: lunes-viernes
+    tabla: |
+      COR    ADR    POS     HOR
+      08:00  08:30  08:45E  -
+      10:00  10:30  10:40   11:00  | pasa_por_rivero
+      12:00  12:30  12:40E  13:10
+      13:30  14:00  14:15   14:45  | pasa_por_rivero
+      14:45  15:15  15:35E  -  | para_en_los_mochos
+      16:00  16:30  16:45   -  | pasa_por_rivero
+      18:00  18:30  18:45   19:10  | pasa_por_rivero
+      20:00  20:30  20:45E  -
+
+  # ── INVIERNO — sábado ──────────────────────────────────────────────────────
+  - temporada: invierno
+    dias: sabado
+    tabla: |
+      HOR    POS    ADR    COR
+      08:00  08:30  08:40  09:30  | pasa_por_rivero para_en_los_mochos
+      16:00  16:30  16:40  17:20  | pasa_por_rivero
+
+  - temporada: invierno
+    dias: sabado
+    tabla: |
+      COR    ADR    POS    HOR
+      13:30  13:55  14:10  14:45  | pasa_por_rivero para_en_los_mochos
+      20:00  20:25  20:40  21:15  | pasa_por_rivero
+
+  # ── INVIERNO — domingos y festivos ─────────────────────────────────────────
+  - temporada: invierno
+    dias: domingos-festivos
+    tabla: |
+      HOR    POS     ADR    COR
+      09:30  10:00   10:40  11:00  | pasa_por_rivero P36
+      -      15:30E  15:40  16:10
+      -      19:00E  19:10  19:40
+
+  - temporada: invierno
+    dias: domingos-festivos
+    tabla: |
+      COR    ADR    POS     HOR
+      13:30  13:55  14:10E  -
+      16:30  16:55  17:10E  -
+      20:00  20:25  20:40   21:15  | pasa_por_rivero
+
+  # ── VERANO — lunes a viernes ─────────────────────────────────────────────
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      HOR    POS     ADR    COR
+      06:15  06:35   06:50  07:30  | pasa_por_rivero
+      -      07:15   -      07:55
+      -      07:15   07:30  08:10
+      -      08:30   08:45  09:35
+      09:00  09:30   09:45  10:30  | pasa_por_rivero para_en_los_mochos
+      -      11:30E  11:45  12:25
+      14:30  14:55   15:10  15:55  | pasa_por_rivero
+      -      18:15E  18:30  19:05
+
+  - temporada: verano
+    dias: lunes-viernes
+    tabla: |
+      COR    ADR    POS     HOR
+      08:00  08:30  08:45E  -
+      10:00  10:30  10:40   11:00  | pasa_por_rivero
+      12:00  12:30  12:40E  13:10
+      13:30  14:00  14:15   14:45  | pasa_por_rivero
+      14:45  15:15  15:35E  -  | para_en_los_mochos
+      16:00  16:30  16:45   -  | pasa_por_rivero
+      18:00  18:30  18:45   19:10  | pasa_por_rivero
+      20:00  20:30  20:45E  -
+
+  # ── VERANO — sábado ──────────────────────────────────────────────────────
+  - temporada: verano
+    dias: sabado
+    tabla: |
+      HOR    POS    ADR    COR
+      08:00  08:30  08:40  09:30  | pasa_por_rivero para_en_los_mochos
+      16:00  16:30  16:40  17:20  | pasa_por_rivero
+
+  - temporada: verano
+    dias: sabado
+    tabla: |
+      COR    ADR    POS    HOR
+      13:30  13:55  14:10  14:45  | pasa_por_rivero para_en_los_mochos
+      20:00  20:25  20:40  21:15  | pasa_por_rivero
+
+  # ── VERANO — domingos y festivos ─────────────────────────────────────────
+  - temporada: verano
+    dias: domingos-festivos
+    tabla: |
+      HOR    POS     ADR    COR
+      09:30  10:00   10:40  11:00  | pasa_por_rivero P36
+      -      12:30E  12:40  13:10
+      -      19:00E  19:10  19:40
+
+  - temporada: verano
+    dias: domingos-festivos
+    tabla: |
+      COR    ADR    POS     HOR
+      11:30  11:55  12:10E  -
+      13:30  13:55  14:10E  -
+      20:00  20:25  20:40   21:15  | pasa_por_rivero
+
+pendientes: [P32, P36]

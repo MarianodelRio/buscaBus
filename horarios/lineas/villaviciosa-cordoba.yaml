@@ -38,7 +38,7 @@ horarios:
     dias: martes-viernes
     tabla: |
       VVS    PAN    VAC    COR
-      07:10  07:20  07:30  08:00
+      07:10  07:20  07:30  08:00  | P35
       10:30  10:40  10:50  11:20
 
   - temporada: invierno
@@ -54,7 +54,7 @@ horarios:
     dias: sabado
     tabla: |
       VVS    PAN    VAC    COR
-      08:25  08:35  09:00  09:15
+      08:25  08:35  09:00  09:15  | P35
 
   - temporada: invierno
     dias: sabado
@@ -67,7 +67,7 @@ horarios:
     dias: lunes-viernes
     tabla: |
       VVS    PAN    VAC    COR
-      07:10  07:20  07:30  08:00
+      07:10  07:20  07:30  08:00  | P35
       10:30  10:40  10:50  11:20
 
   - temporada: verano
@@ -82,7 +82,7 @@ horarios:
     dias: sabado
     tabla: |
       VVS    PAN    VAC    COR
-      08:25  08:35  09:00  09:15
+      08:25  08:35  09:00  09:15  | P35
 
   - temporada: verano
     dias: sabado
@@ -90,4 +90,4 @@ horarios:
       COR    VAC    PAN    VVS
       13:00  13:25  13:35  13:50
 
-pendientes: []
+pendientes: [P35]

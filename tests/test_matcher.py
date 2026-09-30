@@ -295,7 +295,7 @@ def test_zonas_ya_no_existe():
 def test_lineas_reales_en_orden_de_titulo_con_pueblos_ordenados():
     h = _horarios_real()
     ls = matcher.lineas(h)
-    assert len(ls) == 12
+    assert len(ls) == 15
     titulos = [formato.normalizar(linea.titulo) for linea, _ in ls]
     assert titulos == sorted(titulos)
     assert [linea.id for linea, _ in ls] == list(h.lineas_pueblos)
@@ -306,6 +306,25 @@ def test_lineas_reales_en_orden_de_titulo_con_pueblos_ordenados():
         for loc in localidades:
             assert loc.id in h.localidad_viajes
             assert loc.pendiente is None
+
+
+def test_pendientes_reales_rivero_y_los_mochos_y_vecinas():
+    h = _horarios_real()
+    m = matcher.Matcher(h)
+    esperado = {
+        "los mochos": ["Los Mochos"],
+        "rivero": ["Rivero de Posadas"],
+        "posadas": ["Posadas"],
+        "blazquez": ["Los Blázquez"],
+        "granja": ["Granja de Torrehermosa"],
+    }
+    for texto, nombres in esperado.items():
+        r = m.buscar(texto)
+        assert r.tipo == "unico", texto
+        assert _nombres(h, r) == nombres, texto
+    assert m.buscar("los mochos").localidades == ("los-mochos",)
+    assert m.buscar("rivero").localidades == ("rivero-de-posadas",)
+    assert m.buscar("blazquez").localidades == ("los-blazquez",)
 
 
 def test_lineas_pendientes_no_aparecen_en_ninguna_linea():

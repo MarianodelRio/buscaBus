@@ -625,3 +625,104 @@ def test_destinos_desde_cordoba_nunca_ofrece_rabanales_ni_alcolea():
         destinos = query.destinos_desde(HORARIOS, "cordoba", linea)
         assert "campus-de-rabanales" not in destinos
         assert "alcolea" not in destinos
+
+
+# ── Fase 1b-2: Peñarroya, Los Blázquez y Hornachuelos (datos reales) ──────────
+
+JUEVES_INVIERNO = date(2026, 10, 1)  # jueves lectivo de invierno
+
+
+def _salida_a_las(consulta: query.Consulta, hhmm: str) -> query.Salida:
+    return next(s for s in consulta.salidas if s.hora_salida.strftime("%H:%M") == hhmm)
+
+
+def test_cordoba_los_blazquez_una_sola_salida():
+    c = query.consultar(HORARIOS, "cordoba", "los-blazquez", JUEVES_INVIERNO)
+    assert _horas(c) == [("10:30", "13:20")]
+
+
+def test_cordoba_penarroya_llegada_1155_y_fusion_con_badajoz():
+    c = query.consultar(HORARIOS, "cordoba", "penarroya-pueblonuevo", JUEVES_INVIERNO)
+    assert c.estado == "con_salidas"
+    horas = [s.hora_salida.strftime("%H:%M") for s in c.salidas]
+    assert horas.count("10:30") == 1
+    s1030 = _salida_a_las(c, "10:30")
+    assert s1030.hora_llegada.strftime("%H:%M") == "11:55"
+    assert s1030.lineas == ("los-blazquez", "penarroya-cordoba")
+    assert _salida_a_las(c, "15:00").lineas == ("badajoz-cordoba", "penarroya-cordoba")
+
+
+def test_penarroya_los_blazquez_sale_a_las_1230():
+    ahora = datetime(2026, 10, 1, 12, 0, tzinfo=MADRID)
+    c = query.consultar(
+        HORARIOS, "penarroya-pueblonuevo", "los-blazquez", JUEVES_INVIERNO, ahora=ahora
+    )
+    assert _horas(c) == [("12:30", "13:20")]
+    assert c.salidas[0].ya_salio is False
+
+
+def test_posadas_cordoba_no_para_en_el_pedrera():
+    c = query.consultar(HORARIOS, "posadas", "cordoba", JUEVES_INVIERNO)
+    pedrera = "No para en El Pedrera."
+    assert pedrera in _salida_a_las(c, "11:30").notas
+    assert pedrera in _salida_a_las(c, "18:15").notas
+    assert pedrera not in _salida_a_las(c, "08:30").notas
+
+
+def test_almodovar_cordoba_sin_nota_de_el_pedrera():
+    c = query.consultar(HORARIOS, "almodovar-del-rio", "cordoba", JUEVES_INVIERNO)
+    assert c.estado == "con_salidas"
+    assert all("Pedrera" not in n for s in c.salidas for n in s.notas)
+
+
+def test_cordoba_villanueva_del_rey_pueblo_y_cruce():
+    c = query.consultar(HORARIOS, "cordoba", "villanueva-del-rey", JUEVES_INVIERNO)
+    paradas = {s.hora_salida.strftime("%H:%M"): s.parada_destino for s in c.salidas}
+    assert paradas == {
+        "10:30": "VRE",
+        "13:10": "VRC",
+        "15:00": "VRC",
+        "18:30": "VRC",
+        "20:00": "VRE",
+    }
+
+
+def test_badajoz_villanueva_del_rey_domingo_llega_al_cruce():
+    c = query.consultar(HORARIOS, "badajoz", "villanueva-del-rey", date(2026, 10, 4))
+    assert _horas(c) == [("14:30", "19:10")]
+    assert c.salidas[0].parada_destino == "VRC"
+
+
+def test_festivo_penarroya_cordoba_y_los_blazquez_sin_servicio():
+    festivo = date(2026, 10, 12)  # lunes, Fiesta Nacional
+    c = query.consultar(HORARIOS, "penarroya-pueblonuevo", "cordoba", festivo)
+    assert _horas(c) == [("08:20", "09:40"), ("18:50", "20:10")]
+    c = query.consultar(HORARIOS, "los-blazquez", "cordoba", festivo)
+    assert c.estado == "sin_servicio"
+
+
+def test_los_blazquez_cordoba_sabado_sin_servicio_y_siguiente_lunes():
+    c = query.consultar(HORARIOS, "los-blazquez", "cordoba", date(2026, 10, 3))
+    assert c.estado == "sin_servicio"
+    assert c.siguiente_con_servicio == date(2026, 10, 5)
+
+
+def test_fuente_obejuna_2150_solo_viernes_lectivo():
+    viernes = query.consultar(
+        HORARIOS, "cordoba", "fuente-obejuna", date(2026, 10, 2)
+    )
+    jueves = query.consultar(HORARIOS, "cordoba", "fuente-obejuna", JUEVES_INVIERNO)
+    assert ("20:00", "21:50") in _horas(viernes)
+    assert ("20:00", "21:50") not in _horas(jueves)
+    for dia in (date(2026, 10, 2), JUEVES_INVIERNO):
+        c = query.consultar(HORARIOS, "cordoba", "penarroya-pueblonuevo", dia)
+        assert "20:00" in [s.hora_salida.strftime("%H:%M") for s in c.salidas]
+
+
+def test_hornachuelos_domingo_posadas_cordoba_invierno_y_verano():
+    inv = query.consultar(HORARIOS, "posadas", "cordoba", date(2026, 10, 4))
+    ver = query.consultar(HORARIOS, "posadas", "cordoba", date(2027, 7, 4))
+    assert ("15:30", "16:10") in _horas(inv)
+    assert ("12:30", "13:10") in _horas(ver)
+    assert ("15:30", "16:10") not in _horas(ver)
+    assert ("12:30", "13:10") not in _horas(inv)

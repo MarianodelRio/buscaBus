@@ -49,7 +49,10 @@ para_en_los_mochos:
   ambitos: [viaje]
   texto: "Para dentro de Los Mochos, a unos 7 minutos de Almodóvar del Río."
 
+# P16: solo aparece con origen o destino Posadas; la letra E va siempre en la
+# celda de Posadas.
 no_para_en_el_pedrera:
+  letra: E
   tipo: aviso
-  ambitos: [viaje]
+  ambitos: [parada]
   texto: "No para en El Pedrera."

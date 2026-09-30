@@ -658,5 +658,32 @@ def test_html_pendientes_sin_viajes_declarados(tmp_path):
     assert html_doc.count("ningún viaje declarado") == 2
 
 
-def test_html_real_no_tiene_seccion_de_pendientes():
-    assert "Localidades sin hora de paso" not in _html_real()
+def test_html_real_seccion_de_pendientes_lista_rivero_y_los_mochos():
+    html_doc = _html_real()
+    assert "<h2>Localidades sin hora de paso</h2>" in html_doc
+    seccion = html_doc[html_doc.index("<h2>Localidades sin hora de paso</h2>") :]
+    seccion = seccion[: seccion.index("<h2>Calendario</h2>")]
+    assert "Rivero de Posadas" in seccion and "Los Mochos" in seccion
+    assert "Consultar en su lugar: Posadas" in seccion
+    assert "Consultar en su lugar: Almodóvar del Río" in seccion
+    assert "a unos 4 minutos" in seccion and "a unos 7 minutos" in seccion
+    assert "Hornachuelos – Córdoba" in seccion
+    assert "<td>06:15</td>" in seccion  # primer viaje que pasa por Rivero
+
+
+def test_html_real_tiene_15_secciones_de_linea():
+    html_doc = _html_real()
+    inicio = html_doc.index("<h2>Cambios desde la versión publicada</h2>")
+    fin = html_doc.index("<h2>Así aparecen las líneas en el bot</h2>")
+    bloque = html_doc[inicio:fin]
+    assert bloque.count("<h2>") - 1 == 15
+    for nombre in ("Peñarroya – Córdoba", "Los Blázquez", "Hornachuelos – Córdoba"):
+        assert f"<h2>{nombre}</h2>" in bloque
+
+
+def test_html_real_anexo_incluye_p28_a_p36_sin_p27_ni_p33():
+    html_doc = _html_real()
+    anexo = html_doc[html_doc.index("<h2>Anexo") :]
+    for codigo in ("P28", "P29", "P30", "P31", "P32", "P34", "P35", "P36"):
+        assert f"{codigo}:" in anexo, codigo
+    assert "P27" not in anexo and "P33" not in anexo

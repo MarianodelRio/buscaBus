@@ -1,15 +1,25 @@
 """tools/migracion/cuadre_excel.py — cuadre de horas entre el Excel y horarios/.
 
-De un solo uso: se borra en la fase 1b (design.md, 5.4). Compara, para cada
+De un solo uso: se borra después de que negocio apruebe el PDF de la fase 1b-2
+(design.md, 5.4 y 8). Compara, para cada
 hoja migrada, el multiconjunto de "horas públicas" del Excel (celdas de filas
 visibles cuyo valor completo es una hora, con asterisco(s) opcional, fuera de
 las columnas RUTA y VALIDADORA) con el multiconjunto de horas de la tabla YAML
 de la línea y temporada correspondientes.
 
 Hojas de la fase 1b-1: FTE CARRET, VILLAVIC INV/VER, BELAL - POZ INV/VER y
-TORR INV/VER (esta ultima suma 4 ficheros de linea). Caso especial: la celda
-"VIERNES ESCOLAR 16:00" (VILLAVIC INV) cuenta como hora; es un patron
-explicito, no una busqueda generica de horas dentro de texto.
+TORR INV/VER (esta ultima suma 4 ficheros de linea). Hojas de la fase 1b-2:
+PYA INV (peñarroya-cordoba), BLAZQUEZ (los-blazquez) y POSADAS INV/VER
+(hornachuelos-cordoba, invierno y verano): 18 hojas en total.
+
+Casos especiales, todos patrones explicitos y no una busqueda generica de horas
+dentro de texto:
+- La celda "VIERNES ESCOLAR 16:00" (VILLAVIC INV) cuenta como hora.
+- La celda completa "18.10" (PYA INV, filas 23 y 36) cuenta como la hora 18:10
+  (D-p): solo si el valor completo es de la forma H.MM o HH.MM.
+- En el YAML, una celda "A>B" (llegada>salida, P21) cuenta solo B: la hoja de
+  Peñarroya tiene 11:55 y la hoja BLAZQUEZ tiene 12:30, cada una en su fichero
+  (la salida de Los Blázquez y la llegada de Peñarroya no se cuentan dos veces).
 
 Única discrepancia aceptada: hoja POZOB VER, fila 48, 17:50 (x1) y 19:05 (x1).
 Negocio indica (P09b) que ese viaje no está en vigor en verano; se borró del
@@ -36,6 +46,7 @@ EXCEL_PATH = RAIZ / "horarios_fuente" / "HORARIOS NUEVOS MODIFICADO.xlsx"
 HORARIOS_DIR = RAIZ / "horarios"
 
 _HORA_EXCEL_RE = re.compile(r"^\d{1,2}:\d{2}\*{0,2}$")
+_HORA_PUNTO_RE = re.compile(r"^\d{1,2}\.\d{2}$")   # "18.10" (D-p)
 _VIERNES_ESCOLAR_RE = re.compile(r"^VIERNES ESCOLAR\s+(\d{1,2}:\d{2})\*{0,2}$")
 
 # hoja -> lista de (fichero de línea, temporadas a incluir; None = todas)
@@ -54,12 +65,19 @@ HOJAS = {
     "VILLAVIC VER": [("villaviciosa-cordoba", {"verano"})],
     "BELAL - POZ INV": [("belalcazar-pozoblanco", {"invierno"})],
     "BELAL - POZ VER": [("belalcazar-pozoblanco", {"verano"})],
+    "PYA INV": [("penarroya-cordoba", None)],
+    "BLAZQUEZ": [("los-blazquez", None)],
+    "POSADAS INV": [("hornachuelos-cordoba", {"invierno"})],
+    "POSADAS VER": [("hornachuelos-cordoba", {"verano"})],
     "TORR INV": [(f, {"invierno"}) for f in _TORR],
     "TORR VER": [(f, {"verano"}) for f in _TORR],
 }
 
 
 def _normalizar(hhmm: str) -> str:
+    if ">" in hhmm:                       # llegada>salida: cuenta la salida
+        hhmm = hhmm.split(">", 1)[1]
+    hhmm = hhmm.replace(".", ":") if _HORA_PUNTO_RE.match(hhmm.strip()) else hhmm
     hhmm = hhmm.rstrip("*").rstrip("A-Za-z").strip()
     hhmm = re.sub(r"[A-Za-z]+$", "", hhmm)
     h, m = hhmm.split(":")
@@ -78,7 +96,10 @@ def horas_excel(nombre_hoja: str) -> Counter[str]:
             valor = cell.value
             if isinstance(valor, datetime.time):
                 contador[f"{valor.hour:02d}:{valor.minute:02d}"] += 1
-            elif isinstance(valor, str) and _HORA_EXCEL_RE.match(valor.strip()):
+            elif isinstance(valor, str) and (
+                _HORA_EXCEL_RE.match(valor.strip())
+                or _HORA_PUNTO_RE.match(valor.strip())
+            ):
                 contador[_normalizar(valor.strip())] += 1
             elif isinstance(valor, str):
                 m = _VIERNES_ESCOLAR_RE.match(valor.strip())

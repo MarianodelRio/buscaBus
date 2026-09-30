@@ -483,7 +483,7 @@ def test_lineas_en_origen_pagina(mock_wa, freeze_calendario):
 
     conv.handle_message(phone, phone, None, "lineas:1")
     ids = _row_ids(_last_interactive(mock_wa))
-    assert len(ids) == 5  # 4 líneas + volver
+    assert len(ids) == 8  # 7 líneas + volver
     assert not any(r.startswith("lineas:") for r in ids)
     assert ids[-1] == "menu"
     _assert_max_10_filas(mock_wa)
@@ -1222,3 +1222,43 @@ def test_usar_manipulado_repite_el_paso(
     assert conv._states[phone].step == "SEL_DESTINO"
     assert conv._states[phone].origen == "pueblo-a"
     _no_hay_sin_trayecto(mock_wa)
+
+
+# ── Los Mochos y Rivero de Posadas con los datos reales (P32) ─────────────────
+
+
+def test_real_los_mochos_como_origen_ofrece_almodovar(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000121"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, "Los Mochos", None)
+    payload = _last_interactive(mock_wa)
+    assert "Los Mochos" in payload["interactive"]["body"]["text"]
+    assert "Almodóvar del Río" in payload["interactive"]["body"]["text"]
+    assert _button_ids(payload) == ["usar:almodovar-del-rio", "escribir"]
+    assert conv._states[phone].origen is None
+
+    conv.handle_message(phone, phone, None, "usar:almodovar-del-rio")
+    payload = _last_interactive(mock_wa)
+    assert "Desde Almodóvar del Río" in payload["interactive"]["header"]["text"]
+    assert conv._states[phone].origen == "almodovar-del-rio"
+
+
+def test_real_los_mochos_como_destino_llega_al_resultado(mock_wa, freeze_calendario):
+    freeze_calendario(HOY)
+    phone = "34600000122"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, None, "loc:cordoba")
+    conv.handle_message(phone, phone, "Los Mochos", None)
+    payload = _last_interactive(mock_wa)
+    assert _button_ids(payload) == ["usar:almodovar-del-rio", "escribir"]
+    assert conv._states[phone].origen == "cordoba"
+
+    conv.handle_message(phone, phone, None, "usar:almodovar-del-rio")
+    payload = _last_interactive(mock_wa)
+    assert "Córdoba → Almodóvar del Río" in payload["interactive"]["header"]["text"]
+
+    manana = (HOY + timedelta(days=1)).isoformat()
+    conv.handle_message(phone, phone, None, f"dia:{manana}")
+    payload = _last_interactive(mock_wa)
+    assert "Almodóvar del Río" in payload["interactive"]["body"]["text"]
