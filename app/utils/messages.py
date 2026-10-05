@@ -113,11 +113,6 @@ def msg_info() -> str:
         valor = NEGOCIO_ENLACES.get(clave)
         if valor:
             lineas.append(f"{etiqueta}: {valor}")
-    lineas.append("")
-    lineas.append(
-        "🔒 No guardamos tus datos: la conversación se borra a los 30 minutos"
-        " de inactividad. No hace falta ningún consentimiento."
-    )
     return "\n".join(lineas)
 
 
