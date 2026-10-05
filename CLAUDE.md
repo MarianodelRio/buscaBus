@@ -51,11 +51,12 @@ tools/
   validar.py                   — make validar
   formatear.py                 — make formatear: realinea tablas sin tocar datos
   revision.py                  — make revision: HTML + PDF para negocio con cambios vs última versión publicada
+  telegram_pruebas.py          — make telegram: herramienta interna, la misma conversación por Telegram (long polling) para el feedback de negocio mientras no hay WhatsApp. No se despliega, sin tests propios (design.md 9.1)
   migracion/                   — cuadre_excel.py, de un solo uso: cuadre de horas Excel↔YAML (18 hojas); se borra cuando negocio apruebe el PDF de la fase 1b-2
 horarios/                      — FUENTE DE VERDAD: paradas.yaml, observaciones.yaml, lineas/*.yaml (design.md 2.3). Hoy 15 líneas
 tests/                         — test_formato, test_formatear, test_diff, test_revision, test_loader, test_query, test_calendario, test_matcher, test_fechas, test_conversation, test_interactive, test_webhook, test_config, test_admin, test_main + fixtures/ (design.md sección 9). `fixtures/horarios_cicloC/`: llegada>salida y `bus:` (ya migrada en C3, sin zonas); `datos_muchas_lineas` en `conftest.py` genera un `horarios/` con 12 líneas para probar la paginación; `fixtures/horarios_pendientes/`: localidades pendientes (C2)
 watchdog.py                    (pendiente) — copiado de Peluquería, cambia URL y claves de alerta
-Makefile                       — hoy: validar, formatear, revision. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
+Makefile                       — hoy: validar, formatear, revision, telegram. La fase 5 añade publicar, despliegue, puerto/dominio/servicio
 ```
 
 Ficheros ya creados en esta fase de esqueleto: estructura de carpetas, `config.yaml`, `.env.example`, `requirements.txt`, `requirements-dev.txt`, `pytest.ini`, `pyproject.toml`, `.gitignore`, `README.md`, este `CLAUDE.md`, agentes y comandos de `.claude/`. También `docs/preguntas_negocio.txt`: preguntas P01-P27 enviadas a negocio y decisiones D-a a D-p.
@@ -146,6 +147,7 @@ PUBLIC_DOMAIN=               # Obligatoria — subdominio sin https://
 DUCKDNS_TOKEN=               # Obligatoria
 LOG_LEVEL=INFO               # Opcional
 LOG_FILE=                    # Opcional
+TELEGRAM_BOT_TOKEN=          # Opcional — solo `make telegram` (herramienta interna, design.md 9.1); producción no la usa
 ```
 
 No hacen falta `GOOGLE_CALENDAR_ID` ni `GOOGLE_CREDENTIALS_PATH`: este bot no usa Google Calendar.

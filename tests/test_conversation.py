@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 import app.handlers.conversation as conv
+from app.config import NEGOCIO_TELEFONO
 
 HOY = date(2026, 9, 23)  # miércoles, dentro de vigencia (design.md ejemplo)
 
@@ -995,7 +996,7 @@ def test_resultado_25_12_sin_servicio_en_ninguna_linea(mock_wa, freeze_calendari
     body = payload["interactive"]["body"]["text"]
     assert "festivo (Navidad)" in body
     assert "El 25/12 no hay servicio en ninguna línea" in body
-    assert "957 42 90 30" in body
+    assert NEGOCIO_TELEFONO in body
     assert "sábado 26/12" in body
     assert "dia:2026-12-26" in _button_ids(payload)
     assert "No hay salidas en los próximos días" not in body

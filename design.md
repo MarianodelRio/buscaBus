@@ -389,6 +389,7 @@ que usan `make validar`, los tests y el loader al arrancar el bot.
 | `make formatear` | Realinea las columnas de todas las tablas. No cambia ningún dato |
 | `make revision` | Genera `revision/horarios.html` y `revision/horarios.pdf` (ver abajo) |
 | `make publicar` | Crea el tag `horarios-AAAA-MM-DD` y despliega (fase 5) |
+| `make telegram` | Herramienta interna: la misma conversación por un bot de Telegram (ver 9.1) |
 
 **Vista de revisión para negocio** (HTML y PDF A4 apaisado, del mismo HTML):
 
@@ -1006,6 +1007,7 @@ tools/
   validar.py      # make validar
   formatear.py    # make formatear
   revision.py     # make revision: HTML + PDF para negocio
+  telegram_pruebas.py  # make telegram: conversación por Telegram, solo pruebas (9.1)
   migracion/      # Solo mientras dure la migración desde el Excel; se borra en la fase 1b
 ```
 
@@ -1023,7 +1025,7 @@ buscabus/
     services/    whatsapp.py  scheduler.py  horarios/
     utils/       interactive.py  messages.py  matcher.py  fechas.py
                  metrics.py  dedup.py  rate_limiter.py  security.py  admin.py
-  tools/         validar.py  formatear.py  revision.py  migracion/
+  tools/         validar.py  formatear.py  revision.py  telegram_pruebas.py  migracion/
   tests/
   watchdog.py  Makefile  requirements.txt
 ```
@@ -1411,6 +1413,29 @@ credenciales reales.
 más fácil de cometer, porque la lista de destinos se genera dinámicamente y su
 longitud depende del origen elegido.
 
+### 9.1 Pruebas con negocio por Telegram (herramienta interna)
+
+Mientras llega el alta de WhatsApp (6.4), negocio prueba el bot y da su
+feedback por Telegram (decidido el 2026-10-05). **El producto sigue siendo
+solo WhatsApp**: Telegram no se despliega ni se ofrece a clientes.
+
+- `tools/telegram_pruebas.py` (`make telegram`) lee mensajes con long polling
+  (sin dominio ni TLS) y los pasa a `conversation.handle_message`, igual que el
+  webhook. Mientras corre sustituye las funciones de envío de
+  `app/services/whatsapp.py` por envíos a Telegram, así que la conversación,
+  los textos y el motor son los mismos. `app/` no lo importa.
+- Formato: los botones y las filas de lista son botones de Telegram, uno por
+  fila; la cabecera es la primera línea del texto, el pie se descarta, y las
+  descripciones de fila (días, líneas) van en el texto como `título:
+  descripción`. Las listas de WhatsApp se verán como desplegable: el aspecto
+  de las listas no se valida en Telegram.
+- Solo chats privados; `/start` va al menú; sin comandos de administrador.
+- Necesita `TELEGRAM_BOT_TOKEN` (de @BotFather) en `.env`; producción no.
+- Sin tests propios, a propósito: es una herramienta interna. Un cambio en
+  `whatsapp.py` puede romperla sin que falle `pytest`.
+- Se borra (script, target del Makefile y variable) cuando el piloto de
+  WhatsApp (fase 8) esté estable.
+
 ---
 
 ## 10. Dudas abiertas
@@ -1449,11 +1474,17 @@ longitud depende del origen elegido.
   encargo suyo? El diseño asume su teléfono, su horario de oficina y sus
   enlaces. *(Nota, ciclo B: el horario de oficina ya está cargado por días en
   `config.yaml` (P19c); el operador y los enlaces siguen sin confirmar.)*
+  *(Nota, 2026-10-05: `config.yaml` lleva nombre y teléfono genéricos
+  ("Autocares XX", "957 XX XX XX") para las pruebas por Telegram (9.1); el
+  `telefono_demanda` de las líneas sigue con el real. Hay que fijarlos antes
+  del despliegue con WhatsApp.)*
 - **D10.** ¿Qué enlaces van en "Información"? Propuesta: teléfono, horario de
   oficina (L-V 9:00-14:00 y 17:00-19:30), compra online, bonos y PDF de
   horarios. *(Nota, ciclo B: el horario de oficina propuesto queda
   sustituido por el de P19c, por días, en `config.yaml`; los enlaces siguen
-  abiertos.)*
+  abiertos.)* *(Nota, 2026-10-05: `config.yaml` lleva URLs ficticias de
+  `example.com` para las pruebas por Telegram (9.1). Hay que sustituirlas
+  antes del despliegue con WhatsApp.)*
 - **D11.** ¿Solo español? El diseño lo asume.
 
 ### Técnicas
@@ -1463,6 +1494,9 @@ longitud depende del origen elegido.
 - **D13.** ¿Hace falta aviso de privacidad? El bot procesa números de teléfono.
   Hoy no se guarda nada en disco (el estado vive en memoria y caduca a los 30
   min), lo cual ayuda, pero conviene confirmarlo con la empresa.
+  *(Nota, 2026-10-05: decisión del desarrollador, el mensaje de "Información"
+  ya no lleva el aviso "🔒 No guardamos tus datos…". Pendiente de confirmar
+  con la empresa antes del despliegue con WhatsApp.)*
 - **D14.** ¿Repositorio propio en GitHub y quién lo administra?
 
 ## 11. Fuentes

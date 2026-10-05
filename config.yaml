@@ -23,7 +23,8 @@ negocio:
   enlaces:
     # TODO D10: confirmar qué enlaces van en el paso "Información" del menú.
     # Propuesta del design: compra online, bonos, PDF de horarios.
-    # PRUEBA (rama pruebas-telegram): URLs ficticias, D10 sigue abierta
+    # PRUEBA: URLs ficticias (example.com) para las pruebas por Telegram.
+    # D10 sigue abierta: sustituir antes del despliegue con WhatsApp.
     compra_online: "https://example.com/compra-billetes"
     bonos: "https://example.com/bonos"
     pdf_horarios: "https://example.com/horarios.pdf"

@@ -1,6 +1,7 @@
 """tests/test_interactive.py — ninguna lista supera 10 filas ni ningún botón
 3 (design.md, 4 y 9). La prueba más importante: la lista de destinos depende
 del origen elegido y nunca puede pasarse del límite."""
+from app.config import NEGOCIO_TELEFONO
 from app.handlers import flujo
 from app.services.horarios import datos as horarios_datos, query
 from app.utils.interactive import (
@@ -366,7 +367,7 @@ def test_msg_resultado_sin_servicio_general_sin_siguiente_da_hecho_y_telefono():
     )
     texto = msg_resultado(consulta, datos.horarios, "Pozoblanco", "Córdoba", fecha)
     assert "El 25/12 no hay servicio en ninguna línea" in texto
-    assert "957 42 90 30" in texto
+    assert NEGOCIO_TELEFONO in texto
     assert "próximos días" not in texto
     assert "festivo" not in texto  # sin nombre cargado, la cabecera es solo el día
 

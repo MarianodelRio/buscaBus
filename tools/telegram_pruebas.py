@@ -1,5 +1,10 @@
 # tools/telegram_pruebas.py
-"""Canal de pruebas por Telegram: solo rama pruebas-telegram, nunca a main.
+"""Canal de pruebas por Telegram: herramienta interna de desarrollo.
+
+Sirve para probar la conversacion (y recoger el feedback de negocio) mientras
+no hay WhatsApp. No forma parte del despliegue: `app.main` no lo importa y
+solo se ejecuta a mano. El producto sigue siendo solo WhatsApp. Sin tests
+propios: si cambia `app/services/whatsapp.py` puede dejar de funcionar.
 
 Hace long polling contra la API de Telegram y alimenta la misma conversacion
 que el webhook de WhatsApp (`handle_message`). Los envios de
