@@ -98,7 +98,7 @@ def build_menu() -> dict:
         body=f"¿Qué necesitas?\n\n{msg_menu_footer()}",
         buttons=[
             _button("menu_horarios", "🚌 Ver horarios"),
-            _button("menu_info", "ℹ️ Teléfono y contacto"),
+            _button("menu_info", "ℹ️ Contacto"),
         ],
     )
 

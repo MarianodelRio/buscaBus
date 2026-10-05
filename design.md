@@ -639,7 +639,7 @@ para las ramas de texto libre. Mismo patrón que `conversation.py` de Peluquerí
 ```
 🚌 Autocares · Horarios
 ¿Qué necesitas?
-          [🚌 Ver horarios]  [ℹ️ Teléfono y contacto]
+          [🚌 Ver horarios]  [ℹ️ Contacto]
 ```
 
 ### 4.3 Paso 2 — Origen

@@ -108,7 +108,7 @@ def test_traducir_botones_un_boton_por_fila():
     _, markup = tg.traducir(build_menu())
     assert markup == {"inline_keyboard": [
         [{"text": "🚌 Ver horarios", "callback_data": "menu_horarios"}],
-        [{"text": "ℹ️ Teléfono y contac", "callback_data": "menu_info"}],
+        [{"text": "ℹ️ Contacto", "callback_data": "menu_info"}],
     ]}
 
 
@@ -284,7 +284,8 @@ def test_entrega_ok(entrega):
     client = FakeClient([OK])
     assert tg.tg_send_text_message(client, TOKEN, "42", "hola") is True
     assert wa.reply_was_delivered() is True
-    assert client.calls[0][1] == {"chat_id": "42", "text": "hola"}
+    assert client.calls[0][1] == {"chat_id": "42", "text": "hola",
+                                  "link_preview_options": {"is_disabled": True}}
 
 
 def test_interactive_envia_texto_y_teclado(entrega):
@@ -293,6 +294,7 @@ def test_interactive_envia_texto_y_teclado(entrega):
     cuerpo = client.calls[0][1]
     assert cuerpo["chat_id"] == "42"
     assert "parse_mode" not in cuerpo
+    assert cuerpo["link_preview_options"] == {"is_disabled": True}
     assert len(cuerpo["reply_markup"]["inline_keyboard"]) == 2
     assert wa.reply_was_delivered() is True
 

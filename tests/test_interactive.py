@@ -56,6 +56,12 @@ def test_menu_within_limits():
     _assert_button_limits(build_menu())
 
 
+def test_menu_boton_contacto_sin_recorte():
+    titulos = {b["reply"]["id"]: b["reply"]["title"] for b in _buttons(build_menu())}
+    assert titulos["menu_info"] == "ℹ️ Contacto"
+    assert len(titulos["menu_info"]) <= MAX_BUTTON_TITLE
+
+
 def test_info_within_limits():
     _assert_button_limits(build_info())
 

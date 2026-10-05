@@ -5,8 +5,8 @@
 # sección 10.
 
 negocio:
-  nombre: "Autocares San Sebastián"    # TODO D9: confirmar operador y encargo
-  telefono_contacto: "957 42 90 30"    # TODO D9
+  nombre: "Autocares XX"    # TODO D9: confirmar operador y encargo
+  telefono_contacto: "957 XX XX XX"    # TODO D9
   admin_phone: ""         # Fallback si no se define ADMIN_PHONE en .env. Solo dígitos, sin '+' ni espacios.
 
   horario_oficina:
@@ -23,9 +23,10 @@ negocio:
   enlaces:
     # TODO D10: confirmar qué enlaces van en el paso "Información" del menú.
     # Propuesta del design: compra online, bonos, PDF de horarios.
-    compra_online: ""
-    bonos: ""
-    pdf_horarios: ""
+    # PRUEBA (rama pruebas-telegram): URLs ficticias, D10 sigue abierta
+    compra_online: "https://example.com/compra-billetes"
+    bonos: "https://example.com/bonos"
+    pdf_horarios: "https://example.com/horarios.pdf"
 
 # Los 8 pueblos que aparecen en la lista de inicio (paso ORIGEN, ver design.md 4.3).
 # TODO D7: el orden y la selección los decide la empresa, que sabe dónde vende

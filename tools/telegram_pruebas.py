@@ -122,9 +122,14 @@ def _api(client, token: str, method: str, payload: dict | None = None,
 # ── Envios que sustituyen a los de WhatsApp ───────────────────────────────
 
 
+# WhatsApp no muestra tarjeta de vista previa; Telegram sí por defecto.
+_SIN_VISTA_PREVIA = {"is_disabled": True}
+
+
 def tg_send_text_message(client, token: str, to: str, text: str) -> bool:
     ok = _api(client, token, "sendMessage",
-              {"chat_id": to, "text": text[:_MAX_TEXTO]}) is not None
+              {"chat_id": to, "text": text[:_MAX_TEXTO],
+               "link_preview_options": _SIN_VISTA_PREVIA}) is not None
     wa._delivery.attempted = True
     if ok:
         wa._delivery.delivered = True
@@ -133,7 +138,8 @@ def tg_send_text_message(client, token: str, to: str, text: str) -> bool:
 
 def tg_send_interactive(client, token: str, to: str, payload: dict) -> bool:
     texto, markup = traducir(payload)
-    cuerpo: dict = {"chat_id": to, "text": texto}
+    cuerpo: dict = {"chat_id": to, "text": texto,
+                    "link_preview_options": _SIN_VISTA_PREVIA}
     if markup:
         cuerpo["reply_markup"] = markup
     ok = _api(client, token, "sendMessage", cuerpo) is not None
