@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja OCHAVILLOS.
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hoja OCHAVILLOS.
 nombre: Ochavillos – Córdoba
 avisos: [hora_aproximada]
 no_circula: []

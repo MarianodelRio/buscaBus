@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja BADAJOZ (traspuesta:
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hoja BADAJOZ (traspuesta:
 # las paradas están en filas, no en columnas).
 #
 # De septiembre a julio, de lunes a jueves la ida termina en Zafra; de lunes a

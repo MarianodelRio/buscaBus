@@ -2,9 +2,9 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas POZOB INV y POZOB VER.
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hojas POZOB INV y POZOB VER.
 #
-# Villaharta (VHA) es parada a demanda todo el año (D-f, docs/preguntas_negocio.txt),
+# Villaharta (VHA) es parada a demanda todo el año (D-f),
 # salvo en el viaje de las 10:35 (Pozoblanco → Córdoba, lunes a viernes), que
 # no es a demanda. Se marca D en toda celda donde el autobús para en Villaharta,
 # excepto en ese viaje.

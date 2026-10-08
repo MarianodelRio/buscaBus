@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja BLAZQUEZ.
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hoja BLAZQUEZ.
 #
 # Todo el año (P01; P27: el "hasta 21/06/26" era un error, negocio confirma
 # "ES UN ERROR, ACABA EL 22/06"). Solo de lunes a viernes; sábados y domingos

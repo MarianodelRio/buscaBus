@@ -569,16 +569,6 @@ def test_html_real_sin_anexo_ni_pendientes_en_portada():
     assert "Pendientes abiertos" not in html_doc
 
 
-def test_pendientes_del_calendario_se_recogen(tmp_path):
-    resultado = validar_horarios(Path(__file__).parent.parent / "horarios")
-    assert "P28" in revision._pendientes_del_modelo(resultado.modelo)
-    assert "P03" not in revision._pendientes_del_modelo(resultado.modelo)
-    assert "P12" not in revision._pendientes_del_modelo(resultado.modelo)
-    assert "P12" not in {
-        p for ps in revision.PENDIENTES_POR_LOCALIDAD.values() for p in ps
-    }
-
-
 def test_seccion_calendario_sin_festivos_locales_ni_no_vendibles(tmp_path):
     html_doc = _construir_html(
         tmp_path, "paradas_base.yaml", {"linea-prueba": ADAMUZ_LINEA_YAML}

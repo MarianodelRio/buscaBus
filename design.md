@@ -82,8 +82,9 @@ Cifras recalculadas el 2026-09-24:
 
 Se documentan para migrar bien, no porque el sistema tenga que tolerarlos en el
 futuro. El análisis completo, las preguntas a negocio (P01-P27) y las
-decisiones ya tomadas (D-a a D-p) están en
-[`docs/preguntas_negocio.txt`](docs/preguntas_negocio.txt).
+decisiones ya tomadas (D-a a D-p) están en el historial de git:
+`git show acf6ff8:docs/preguntas_negocio.txt`. El fichero se retiró del árbol el 2026-10-08, con todo
+respondido salvo P28, P30 y P37.
 
 1. **El significado está en los colores, y cada hoja tiene su leyenda.** El
    amarillo es "a demanda" en Pozoblanco, Belalcázar-Córdoba y Badajoz, pero
@@ -1041,7 +1042,6 @@ tools/
   formatear.py    # make formatear
   revision.py     # make revision: HTML + PDF para negocio
   telegram_pruebas.py  # make telegram: conversación por Telegram, solo pruebas (9.1)
-  migracion/      # Solo mientras dure la migración desde el Excel; se borra en la fase 1b
 ```
 
 ### 5.5 Mapa de módulos resultante
@@ -1051,14 +1051,13 @@ buscabus/
   config.yaml            # Negocio: teléfono, horario oficina, enlaces, pueblos del menú
   horarios/              # FUENTE DE VERDAD de los horarios, editada a mano (2.3)
   revision/              # HTML + PDF generados para negocio. No se versiona
-  horarios_fuente/       # El Excel inicial, de uso único (se archiva tras la fase 1b)
   app/
     config.py  main.py
     handlers/    webhook.py  conversation.py
     services/    whatsapp.py  scheduler.py  horarios/
     utils/       interactive.py  messages.py  matcher.py  fechas.py
                  metrics.py  dedup.py  rate_limiter.py  security.py  admin.py
-  tools/         validar.py  formatear.py  revision.py  telegram_pruebas.py  migracion/
+  tools/         validar.py  formatear.py  revision.py  telegram_pruebas.py
   tests/
   watchdog.py  Makefile  requirements.txt
 ```
@@ -1066,8 +1065,7 @@ buscabus/
 ### 5.6 Dependencias
 
 Se quitan `google-api-python-client` y `google-auth`. En `requirements-dev.txt`
-(no se instalan en la VM): `openpyxl` (solo para la migración; se quita tras la
-fase 1b) y `weasyprint` (PDF de la vista de revisión; necesita Pango en el
+(no se instalan en la VM): `weasyprint` (PDF de la vista de revisión; necesita Pango en el
 sistema). Se mantiene el resto: fastapi, starlette, uvicorn,
 python-dotenv, httpx, apscheduler, pyyaml, pytest, pytest-cov, psutil, ruff,
 mypy. **Migrar `pytz` a `zoneinfo`** desde el principio: es código nuevo y no
@@ -1259,8 +1257,10 @@ Córdoba (P15, P16, P32, P36). El bot tiene 15 líneas; el cuadre con el Excel e
 del 100 % en las 18 hojas salvo POZOB VER, fila 48. Badajoz pasa de `VRE` a
 `VRC` y declara sus `bus:` (P33 cerrada); se registran las notas P34, P35 y
 P36 para el PDF. `no_para_en_el_pedrera` pasa a ser una nota de parada (letra
-`E`). Queda el paso manual: cuando negocio apruebe el PDF, borrar
-`tools/migracion/`, quitar `openpyxl` y archivar el Excel.
+`E`). **Cierre (2026-10-08):** con las 15 líneas al día con el Excel del 07/10/2026
+(cuadre al 100 % en las 18 hojas), se borran `tools/migracion/` y `openpyxl`
+y los Excel salen del repo (`horarios_fuente/` ya no existe). Desde aquí la
+única fuente de verdad son los YAML de `horarios/`.
 
 **Ciclo C1 (`docs/rds_cicloC_extensiones_modelo.md`):** hecho el modelo de
 horas (`Paso.llegada`/`salida`, celda `HH:MM>HH:MM`), el mismo autobús
@@ -1492,8 +1492,28 @@ solo WhatsApp**: Telegram no se despliega ni se ofrece a clientes.
 
 ## 10. Dudas abiertas
 
+> **Decisiones del 2026-10-08** (usuario con negocio), que cierran o aplazan
+> las dudas de producto y técnicas de abajo:
+> - **D6:** negocio avisa de los cambios a mano; cada actualización se trata
+>   como un ciclo de datos.
+> - **D7:** se queda la lista actual de 8 pueblos; se cambiará si hace falta.
+> - **D8:** sin precios por ahora (fase 7 aplazada).
+> - **D9:** operador Autocares San Sebastián.
+> - **D10:** en "Información", solo la web oficial
+>   (`negocio.enlaces.web` en `config.yaml`).
+> - **D11:** solo español.
+> - **D12:** DuckDNS, lo configura el desarrollador.
+> - **D13:** sin aviso de privacidad por ahora.
+> - **D14:** el repositorio se queda en `MarianodelRio/buscaBus`.
+> - **Coste de Meta:** lo asume la empresa, con su tarjeta en su cuenta de
+>   Meta.
+> - **Alta en Meta (fase 6):** la hace el desarrollador a mano con negocio.
+>
+> Siguen abiertos P28 (días especiales; hace falta antes del 24/12) y P30
+> (inicio del verano de Adamuz, hacia junio). P37 es informativo.
+
 > Las dudas sobre los datos se han detallado y enviado a negocio el
-> 2026-09-26: [`docs/preguntas_negocio.txt`](docs/preguntas_negocio.txt)
+> 2026-09-26 en `docs/preguntas_negocio.txt` (hoy solo en git: `git show acf6ff8:docs/preguntas_negocio.txt`)
 > (P01-P27, y las decisiones ya tomadas D-a a D-p). D1, D2, D4 y D5 quedan
 > desglosadas allí: D1 → P01, D-a; D2 → P06, D-m; D4 → P02, D-b, D-c;
 > D5 → P10-P14. D3 → P03 y P04. D6 deja de aplicar: el Excel no se mantiene.

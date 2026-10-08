@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja PYA INV.
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hoja PYA INV.
 #
 # Todo el año (P01). Villanueva del Rey tiene dos paradas (P20): VRE es el
 # pueblo (celda con marca amarilla en el Excel) y VRC es el cruce (sin marca).

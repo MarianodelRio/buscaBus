@@ -1,12 +1,13 @@
 # config.yaml — Configuración del negocio. Rastreado en git.
 #
-# TODO (esqueleto, sin datos reales): rellenar cuando se confirmen D9 (operador),
-# D10 (enlaces de "Información") y D7 (los 8 pueblos del menú). Ver design.md,
+# Decisiones con negocio (2026-10-08): operador Autocares San Sebastián (D9);
+# en "Información" solo la web oficial por ahora (D10); los 8 pueblos del menú
+# se quedan como están y se cambiarán si hace falta (D7). Ver design.md,
 # sección 10.
 
 negocio:
-  nombre: "Autocares XX"    # TODO D9: confirmar operador y encargo
-  telefono_contacto: "957 42 90 30"    # TODO D9
+  nombre: "Autocares San Sebastián"    # D9
+  telefono_contacto: "957 42 90 30"
   admin_phone: ""         # Fallback si no se define ADMIN_PHONE en .env. Solo dígitos, sin '+' ni espacios.
 
   horario_oficina:
@@ -21,21 +22,16 @@ negocio:
         - ["08:00", "15:00"]
 
   enlaces:
-    # TODO D10: confirmar qué enlaces van en el paso "Información" del menú.
-    # Propuesta del design: compra online, bonos, PDF de horarios.
-    # PRUEBA: URLs ficticias (example.com) para las pruebas por Telegram.
-    # D10 sigue abierta: sustituir antes del despliegue con WhatsApp.
-    compra_online: "https://example.com/compra-billetes"
-    bonos: "https://example.com/bonos"
-    pdf_horarios: "https://example.com/horarios.pdf"
+    # D10: de momento solo la web oficial. Claves que muestra "Información"
+    # (app/utils/messages.py, msg_info): web, compra_online, bonos,
+    # pdf_horarios; las vacías u omitidas no salen.
+    web: "https://www.autocaressansebastian.es"
 
 # Los 8 pueblos que aparecen en la lista de inicio (paso ORIGEN, ver design.md 4.3).
-# TODO D7: el orden y la selección los decide la empresa, que sabe dónde vende
-# billetes. NO usar el ranking de servicios del Excel tal cual: sobrevalora
+# D7: negocio acepta esta lista por ahora (2026-10-08); se cambiará si hace
+# falta. No usar el ranking de servicios del Excel tal cual: sobrevalora
 # paradas de paso como Cruce de Villaharta o El Vacar.
 pueblos_menu_inicio:
-  # TODO D7: provisional, verificado contra horarios/ real (fase 4). El orden
-  # y la selección definitivos los tiene que confirmar la empresa.
   - "Córdoba"
   - "Pozoblanco"
   - "Peñarroya-Pueblonuevo"

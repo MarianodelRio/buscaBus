@@ -37,13 +37,6 @@ from app.services.horarios.formato import (
 from app.utils.interactive import descripcion_linea
 from app.utils.messages import msg_no_vendible
 
-# Pendientes (`Pnn`) que afectan a una localidad concreta
-# de paradas.yaml. Mapeo fijado a mano (design.md, 8, "Correcciones de la
-# fase 1", punto 6). Hoy vacío: ninguna localidad tiene un pendiente propio
-# fuera de las aldeas con `pendiente:` (sección "Localidades sin hora de
-# paso").
-PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {}
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HORARIOS_DIR = REPO_ROOT / "horarios"
 REVISION_DIR = REPO_ROOT / "revision"
@@ -120,17 +113,6 @@ def resolver_anterior(
                 f"calcular el diff:\n{mensajes}"
             )
         return ref, resultado_anterior.modelo
-
-
-def _pendientes_del_modelo(modelo: Modelo) -> set[str]:
-    pendientes: set[str] = set(modelo.pendientes)
-    if modelo.calendario is not None:
-        pendientes.update(modelo.calendario.pendientes)
-    for linea in modelo.lineas.values():
-        pendientes.update(linea.pendientes)
-        for viaje in linea.viajes:
-            pendientes.update(viaje.pendientes)
-    return pendientes
 
 
 def _contar_viajes(modelo: Modelo) -> int:
@@ -450,19 +432,11 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
     de la lista del bot, su título, la descripción que ve el cliente (misma
     función que `build_lineas`) y sus pueblos con paradas/alias. Después, las
     localidades que ninguna línea usa (solo si hay alguna)."""
-    pendientes_modelo = set(modelo.pendientes)
     paradas_por_localidad: dict[str, list] = {}
     for parada in modelo.paradas.values():
         paradas_por_localidad.setdefault(parada.localidad, []).append(parada)
 
-    def _badges(pendientes: tuple[str, ...]) -> str:
-        aplicables = [p for p in pendientes if p in pendientes_modelo]
-        return "".join(
-            f'<span class="pendiente">{html.escape(p)}</span>' for p in aplicables
-        )
-
     def _item(localidad) -> str:
-        badges = _badges(PENDIENTES_POR_LOCALIDAD.get(localidad.id, ()))
         alias_txt = (
             f" (alias: {html.escape(', '.join(localidad.alias))})"
             if localidad.alias
@@ -483,7 +457,7 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
             primeras = ", ".join(html.escape(n) for n in nombres[:-1])
             detalle = f" — para en: {primeras} o {html.escape(nombres[-1])}"
         return (
-            f"<li>{html.escape(localidad.nombre)}{alias_txt}{detalle} {badges}</li>"
+            f"<li>{html.escape(localidad.nombre)}{alias_txt}{detalle}</li>"
         )
 
     lineas_pueblos = calcular_lineas_pueblos(modelo)

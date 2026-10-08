@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas TORR INV y TORR VER (filas 20-32 de INV y VER).
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hojas TORR INV y TORR VER (filas 20-32 de INV y VER).
 # Cuatro tablas, una por cabecera del Excel: Santa Eufemia y Villaralto son dos
 # ramales distintos; ningún viaje pasa por los dos.
 # POZ. HOSPITAL = PZH y POZOBLANCO / POZO.EST = POZ (P10).

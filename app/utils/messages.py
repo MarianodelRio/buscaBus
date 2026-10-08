@@ -110,6 +110,7 @@ def msg_info() -> str:
         f"🕒 Horario de oficina: {_horario_oficina_txt()}",
     ]
     etiquetas = {
+        "web": "🌐 Web",
         "compra_online": "🛒 Compra online",
         "bonos": "🎫 Bonos",
         "pdf_horarios": "📄 PDF de horarios",

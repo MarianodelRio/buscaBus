@@ -8,7 +8,7 @@ Para quién: personas que necesitan saber a qué hora sale su autobús sin llama
 
 ## Estado del proyecto
 
-**Fase 1 implementada.** Ya existen el formato de horarios (`horarios/`, con 5 líneas de prueba migradas del Excel), el validador y las herramientas `make validar`, `make formatear` y `make revision`. El motor de consulta, la conversación y la infraestructura llegan en las fases 2 a 5. Las 10 líneas restantes se migran en la fase 1b, cuando la empresa responda a `docs/preguntas_negocio.txt`.
+**Fases 1 a 4 implementadas.** Las 15 líneas están migradas y al día con el Excel de negocio del 07/10/2026; existen el validador, el motor de consulta, la conversación completa y las herramientas `make validar`, `make formatear`, `make revision` y `make telegram`. Falta la infraestructura (fase 5) y el alta en Meta (fase 6).
 
 **[`design.md`](design.md) es la única fuente de verdad del proyecto.** Ahí está todo: el modelo de datos, el motor de consulta, la conversación completa, qué se reutiliza del bot de la peluquería, la infraestructura, las fases de implementación y las dudas abiertas. Este README no lo duplica.
 
@@ -27,8 +27,7 @@ buscabus/
   config.yaml            # Negocio: teléfono, horario de oficina, enlaces, pueblos del menú
   horarios/              # FUENTE DE VERDAD de los horarios, editada a mano (design.md 2.3)
   revision/              # HTML + PDF generados para negocio (no se versiona)
-  horarios_fuente/       # El Excel inicial, de uso único para la migración
-  docs/                  # preguntas_negocio.txt: dudas enviadas a la empresa
+  docs/                  # RDS de los ciclos de trabajo (se crea al hacer uno)
   app/
     config.py            # Carga y valida config.yaml + variables de entorno
     main.py               # FastAPI app + lifespan + /health
@@ -38,8 +37,7 @@ buscabus/
       whatsapp.py  scheduler.py
     utils/                # interactive.py, messages.py, matcher.py, fechas.py, ...
   tools/
-    validar.py  formatear.py  revision.py
-    migracion/            # Scripts de un solo uso para migrar desde el Excel
+    validar.py  formatear.py  revision.py  telegram_pruebas.py
   tests/
   .claude/                # Agentes y comandos para trabajar con Claude Code en este repo
 ```
@@ -60,7 +58,7 @@ uvicorn app.main:app --reload --port 8001
 pytest
 ```
 
-`requirements-dev.txt` incluye `openpyxl` (solo para la migración inicial desde el Excel) y `weasyprint` (PDF de la vista de revisión). Ninguno se instala en la VM de producción.
+`requirements-dev.txt` incluye `weasyprint` (PDF de la vista de revisión), que no se instala en la VM de producción.
 
 ---
 

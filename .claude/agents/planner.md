@@ -45,7 +45,6 @@ app/
     messages.py                   # Spanish text strings
 tools/
   validar.py  formatear.py  revision.py   # make validar / formatear / revision (HTML + PDF for business)
-  migracion/              # one-off Excel migration scripts, deleted in fase 1b
 horarios/                 # SOURCE OF TRUTH: paradas.yaml, observaciones.yaml, lineas/*.yaml
 tests/                   # pytest suite — all external APIs mocked
 ```
@@ -55,7 +54,7 @@ tests/                   # pytest suite — all external APIs mocked
 - **No database, no external API per query.** Everything the engine needs lives in memory, loaded once at startup from `horarios/`. There are no CSV files and no `data/`.
 - **The validator never guesses.** Unknown stop code/letter/observation, hours going backwards, undeclared day class or seasons not covering the year must fail with a concrete error (file, table, row, reason) — never a silent fallback. One single parser/validator (`formato.py`).
 - **`sin_servicio` ≠ `sin_datos`.** The bot never presents an unknown day as "no service".
-- **Pending business questions are marked `Pnn`** (see `docs/preguntas_negocio.txt`) — never resolved silently.
+- **Pending business questions are marked `Pnn`** next to the data they affect — never resolved silently.
 - **Ambiguity is never resolved silently.** See the full text-matching table in `design.md`, 4.7 — exact match, unique prefix, 2-3 matches (buttons), 4-9 matches (list), edit-distance ≤2 (confirm), no match (fallback list). `Villafranca` always asks.
 - **User picks a locality, result shows the stop.** Don't design flows where the user must pick between a locality's physical stops.
 - **Thread safety**: per-phone locks in `conversation.py`. Any new concurrent code must follow this pattern.

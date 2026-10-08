@@ -26,7 +26,7 @@ You research and return **actionable findings**. You never invent results — if
 
 - **Runtime**: Python 3.11, FastAPI, uvicorn, APScheduler 3.x
 - **External APIs**: WhatsApp Cloud API (Meta Graph API v23.0) — the only external call, and never per query
-- **Data**: hand-edited YAML files in `horarios/` (source of truth), loaded into memory at startup. The Excel in `horarios_fuente/` is only for the one-off initial migration
+- **Data**: hand-edited YAML files in `horarios/` (source of truth), loaded into memory at startup. The company Excel was used only for the one-off initial migration (closed)
 - **Auth**: WhatsApp Bearer token + HMAC webhook verification (`WHATSAPP_APP_SECRET`, obligatorio)
 - **Deployment**: GCP VM (shared with the Peluquería bot) + systemd + nginx (TLS reverse proxy) + DuckDNS + Let's Encrypt
 - **State**: in-memory only. No database.
@@ -41,7 +41,6 @@ You research and return **actionable findings**. You never invent results — if
 
 ### Transport data modeling
 - GTFS reference (`gtfs.org`) — the design borrows concepts (service/calendar separation, `pickup_type`, `timepoint`) without adopting it wholesale; useful when checking whether a concept already has a standard shape
-- openpyxl docs for Excel cell color/format extraction
 
 ### Python ecosystem
 - FastAPI docs: `fastapi.tiangolo.com`

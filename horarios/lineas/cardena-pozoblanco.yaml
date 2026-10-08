@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas TORR INV y TORR VER (filas 38-43 de INV y 39-44 de VER).
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hojas TORR INV y TORR VER (filas 38-43 de INV y 39-44 de VER).
 # En agosto esta línea no circula (D-d): "EN AGOSTO LINEA CARDEÑA - POZOBLANCO
 # NO ESTARÁ DISPONIBLE" (TORR VER, fila 36).
 nombre: Cardeña

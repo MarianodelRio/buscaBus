@@ -146,7 +146,7 @@ paradas:                                 # lo que muestra el resultado
   MOC: { nombre: Los Mochos, localidad: los-mochos }                 # P32
 
 # Preguntas abiertas que afectan a localidades o paradas de este fichero
-# (docs/preguntas_negocio.txt): P37 (lectura de "desde 01/10/2026" en los
+# (Pnn): P37 (lectura de "desde 01/10/2026" en los
 # títulos del Excel; afecta a las temporadas de todas las líneas).
 pendientes: [P37]
 

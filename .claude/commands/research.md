@@ -35,7 +35,7 @@ Explore 2–3 options before converging. For each option mention:
 
 ## Phase 3 — Invoke subagents as needed
 
-- **Invoke `researcher`** when: you need to verify an API capability (WhatsApp message type, openpyxl feature), find a pattern in the codebase, or explore external approaches before deciding.
+- **Invoke `researcher`** when: you need to verify an API capability (e.g. a WhatsApp message type), find a pattern in the codebase, or explore external approaches before deciding.
 - **Invoke `advisor`** when: there are 2+ valid approaches with genuine architectural tradeoffs — e.g. how to model a calendar exception, matching threshold tuning, diff format for schedule changes.
 
 Always show the user the subagent's output before continuing.

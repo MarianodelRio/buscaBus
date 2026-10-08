@@ -2,7 +2,7 @@
 # Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
 # títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
 # de temporada (P37).
-# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas BELAL - POZ INV y BELAL - POZ VER.
+# Fuente: Excel de negocio del 07/10/2026 («2026-10-07 ACTUALIZACION HORARIOS.xlsx», ya fuera del repo), hojas BELAL - POZ INV y BELAL - POZ VER.
 #
 # Las filas ocultas del Excel (INV 10, 12, 16 y 18; VER 11, 13, 17 y 19) y el
 # régimen interno no se publican (P06). Esta línea no se une con

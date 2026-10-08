@@ -44,7 +44,6 @@ app/
     metrics.py  dedup.py  rate_limiter.py  security.py  admin.py   # copied/adapted from Peluquería
 tools/
   validar.py  formatear.py  revision.py   # make validar / formatear / revision
-  migracion/              # one-off Excel migration scripts, deleted in fase 1b
 horarios/                 # SOURCE OF TRUTH, hand-edited: paradas.yaml, observaciones.yaml, lineas/*.yaml
 tests/                    # pytest — run after every change
 ```
@@ -65,7 +64,7 @@ tests/                    # pytest — run after every change
 ### Schedule data (`horarios/` + `formato.py`)
 - **Never guess.** Every rule in design.md 2.3 ("Comprobaciones") is an error with a concrete message (file, table, row, reason), not a warning or a fallback default.
 - One parser/validator only: `app/services/horarios/formato.py`. Tools, tests and the loader all use it — never re-parse `horarios/` elsewhere.
-- When transcribing data from the Excel, copy it exactly; anything doubtful gets its `Pnn` marker from `docs/preguntas_negocio.txt`, never an invented value.
+- When transcribing data from the Excel, copy it exactly; anything doubtful gets a `Pnn` marker (next free number; history in `git show acf6ff8:docs/preguntas_negocio.txt`), never an invented value.
 
 ### WhatsApp interactive message limits
 - Interactive list: max 10 rows total (sum of all sections).
