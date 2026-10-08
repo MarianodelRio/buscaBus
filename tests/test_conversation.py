@@ -242,7 +242,9 @@ def test_dia_sin_servicio_ofrece_siguiente(mock_wa, freeze_calendario, datos_mot
     assert "no hay servicio" not in payload["interactive"]["body"]["text"].lower()
 
 
-def test_sin_servicio_largo_sin_boton_dia(mock_wa, freeze_calendario, datos_motor):
+def test_sin_servicio_a_mas_de_7_dias_ofrece_boton_dia(
+    mock_wa, freeze_calendario, datos_motor
+):
     freeze_calendario(HOY)  # 23/09/2026, dentro del no_circula [septiembre]
     phone = "34600000102"
     conv.handle_message(phone, phone, None, "menu_horarios")
@@ -253,10 +255,29 @@ def test_sin_servicio_largo_sin_boton_dia(mock_wa, freeze_calendario, datos_moto
     assert _n_calls(mock_wa) - total_before == 1
     payload = _last_interactive(mock_wa)
     body = payload["interactive"]["body"]["text"]
+    assert "Ese día no hay servicio en este trayecto." in body
+    assert "jueves 01/10" in body
+    ids = _button_ids(payload)
+    assert "dia:2026-10-01" in ids
+    for b in payload["interactive"]["action"]["buttons"]:
+        assert len(b["reply"]["title"]) <= 20
+
+
+def test_sin_servicio_sin_dia_con_salidas_en_45_dias_da_telefono(
+    mock_wa, freeze_calendario, datos_motor
+):
+    agosto = date(2026, 8, 1)
+    freeze_calendario(agosto)
+    phone = "34600000104"
+    conv.handle_message(phone, phone, None, "menu_horarios")
+    conv.handle_message(phone, phone, "pueblo p", None)
+    conv.handle_message(phone, phone, "pueblo q", None)
+    conv.handle_message(phone, phone, None, f"dia:{agosto.isoformat()}")
+    payload = _last_interactive(mock_wa)
+    body = payload["interactive"]["body"]["text"]
     assert "no hay salidas" in body.lower()
     assert "957" in body or "tel" in body.lower() or "📞" in body
-    ids = _button_ids(payload)
-    assert not any(i.startswith("dia:") for i in ids)
+    assert not any(i.startswith("dia:") for i in _button_ids(payload))
 
 
 def test_dia_sin_datos_no_es_sin_servicio(mock_wa, freeze_calendario, datos_motor):
@@ -1225,24 +1246,18 @@ def test_usar_manipulado_repite_el_paso(
     _no_hay_sin_trayecto(mock_wa)
 
 
-# ── Los Mochos y Rivero de Posadas con los datos reales (P32) ─────────────────
+# ── Los Mochos y Rivero de Posadas con los datos reales (P32 cerrada) ─────────
 
 
-def test_real_los_mochos_como_origen_ofrece_almodovar(mock_wa, freeze_calendario):
+def test_real_los_mochos_como_origen_es_un_pueblo_normal(mock_wa, freeze_calendario):
     freeze_calendario(HOY)
     phone = "34600000121"
     conv.handle_message(phone, phone, None, "menu_horarios")
     conv.handle_message(phone, phone, "Los Mochos", None)
     payload = _last_interactive(mock_wa)
-    assert "Los Mochos" in payload["interactive"]["body"]["text"]
-    assert "Almodóvar del Río" in payload["interactive"]["body"]["text"]
-    assert _button_ids(payload) == ["usar:almodovar-del-rio", "escribir"]
-    assert conv._states[phone].origen is None
-
-    conv.handle_message(phone, phone, None, "usar:almodovar-del-rio")
-    payload = _last_interactive(mock_wa)
-    assert "Desde Almodóvar del Río" in payload["interactive"]["header"]["text"]
-    assert conv._states[phone].origen == "almodovar-del-rio"
+    assert "Desde Los Mochos" in payload["interactive"]["header"]["text"]
+    assert conv._states[phone].step == "SEL_DESTINO"
+    assert conv._states[phone].origen == "los-mochos"
 
 
 def test_real_los_mochos_como_destino_llega_al_resultado(mock_wa, freeze_calendario):
@@ -1252,14 +1267,14 @@ def test_real_los_mochos_como_destino_llega_al_resultado(mock_wa, freeze_calenda
     conv.handle_message(phone, phone, None, "loc:cordoba")
     conv.handle_message(phone, phone, "Los Mochos", None)
     payload = _last_interactive(mock_wa)
-    assert _button_ids(payload) == ["usar:almodovar-del-rio", "escribir"]
-    assert conv._states[phone].origen == "cordoba"
+    assert "Córdoba → Los Mochos" in payload["interactive"]["header"]["text"]
+    assert conv._states[phone].step == "SEL_DIA"
+    assert conv._states[phone].destino == "los-mochos"
 
-    conv.handle_message(phone, phone, None, "usar:almodovar-del-rio")
-    payload = _last_interactive(mock_wa)
-    assert "Córdoba → Almodóvar del Río" in payload["interactive"]["header"]["text"]
-
-    manana = (HOY + timedelta(days=1)).isoformat()
-    conv.handle_message(phone, phone, None, f"dia:{manana}")
-    payload = _last_interactive(mock_wa)
-    assert "Almodóvar del Río" in payload["interactive"]["body"]["text"]
+    total_before = _n_calls(mock_wa)
+    conv.handle_message(phone, phone, None, f"dia:{HOY.isoformat()}")
+    assert _n_calls(mock_wa) - total_before == 1
+    body = _last_interactive(mock_wa)["interactive"]["body"]["text"]
+    assert "Los Mochos" in body
+    # La nota común a todas las salidas sale una sola vez en la respuesta.
+    assert body.count("Horarios de paso aproximados.") == 1

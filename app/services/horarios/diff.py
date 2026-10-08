@@ -12,6 +12,8 @@ dos `Modelo`s reales.
 
 from __future__ import annotations
 
+from datetime import date
+
 from app.services.horarios.formato import DIAS_INDIVIDUALES, GRUPOS_DIA, Modelo
 from app.services.horarios.modelo import Linea, Paso, Viaje
 
@@ -421,7 +423,14 @@ def _comparar_viaje_pareado(
         )
         mensajes.extend(
             _comparar_observaciones_paso(
-                nombre_linea, temporada, dias, nombre_parada, paso_ant, paso_act
+                nombre_linea,
+                temporada,
+                dias,
+                nombre_parada,
+                paso_ant,
+                paso_act,
+                modelo_anterior,
+                modelo_actual,
             )
         )
 
@@ -435,7 +444,13 @@ def _comparar_viaje_pareado(
 
     mensajes.extend(
         _comparar_observaciones_viaje(
-            nombre_linea, temporada, dias, viaje_ant, viaje_act
+            nombre_linea,
+            temporada,
+            dias,
+            viaje_ant,
+            viaje_act,
+            modelo_anterior,
+            modelo_actual,
         )
     )
     mensajes.extend(
@@ -517,6 +532,16 @@ def _comparar_bus(
     ]
 
 
+def _texto_observacion(oid: str, actual: Modelo, anterior: Modelo) -> str:
+    """Texto de negocio de una observación: el del modelo actual; si ya no
+    existe, el del anterior; si no está en ninguno, el propio id."""
+    for modelo in (actual, anterior):
+        obs = modelo.observaciones.get(oid)
+        if obs is not None:
+            return obs.texto
+    return oid
+
+
 def _comparar_observaciones_paso(
     nombre_linea: str,
     temporada: str,
@@ -524,6 +549,8 @@ def _comparar_observaciones_paso(
     nombre_parada: str,
     paso_ant: Paso,
     paso_act: Paso,
+    modelo_anterior: Modelo,
+    modelo_actual: Modelo,
 ) -> list[str]:
     mensajes: list[str] = []
     obs_ant = set(paso_ant.observaciones)
@@ -531,12 +558,14 @@ def _comparar_observaciones_paso(
     for oid in sorted(obs_act - obs_ant):
         mensajes.append(
             f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}, en "
-            f"{nombre_parada}: se añade la observación '{oid}'."
+            f"{nombre_parada}: se añade la observación "
+            f"«{_texto_observacion(oid, modelo_actual, modelo_anterior)}»."
         )
     for oid in sorted(obs_ant - obs_act):
         mensajes.append(
             f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}, en "
-            f"{nombre_parada}: se quita la observación '{oid}'."
+            f"{nombre_parada}: se quita la observación "
+            f"«{_texto_observacion(oid, modelo_actual, modelo_anterior)}»."
         )
     return mensajes
 
@@ -547,20 +576,58 @@ def _comparar_observaciones_viaje(
     dias: str,
     viaje_ant: Viaje,
     viaje_act: Viaje,
+    modelo_anterior: Modelo,
+    modelo_actual: Modelo,
 ) -> list[str]:
     mensajes: list[str] = []
     obs_ant = set(viaje_ant.observaciones)
     obs_act = set(viaje_act.observaciones)
     for oid in sorted(obs_act - obs_ant):
+        texto = _texto_observacion(oid, modelo_actual, modelo_anterior)
         mensajes.append(
             f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: se añade "
-            f"la observación de viaje '{oid}'."
+            f"la observación «{texto}»."
         )
     for oid in sorted(obs_ant - obs_act):
+        texto = _texto_observacion(oid, modelo_actual, modelo_anterior)
         mensajes.append(
             f"{nombre_linea}, {temporada}, {clase_en_palabras(dias)}: se quita "
-            f"la observación de viaje '{oid}'."
+            f"la observación «{texto}»."
         )
+    return mensajes
+
+
+def _avisos_cambiados(
+    anterior: Linea, actual: Linea
+) -> tuple[list[str], list[str]]:
+    """(añadidos, quitados) ids de aviso de línea, ordenados."""
+    ant = set(anterior.avisos)
+    act = set(actual.avisos)
+    return sorted(act - ant), sorted(ant - act)
+
+
+def _comparar_avisos(
+    nombre_linea: str,
+    anterior: Linea,
+    actual: Linea,
+    modelo_anterior: Modelo,
+    modelo_actual: Modelo,
+    agrupados: frozenset[tuple[str, str]] | set[tuple[str, str]],
+) -> list[str]:
+    """Avisos de línea. Los (accion, id) que ya se dicen agrupados en el
+    bloque general se omiten aquí."""
+    mensajes: list[str] = []
+    anadidos, quitados = _avisos_cambiados(anterior, actual)
+    for oid in anadidos:
+        if ("añade", oid) in agrupados:
+            continue
+        texto = _texto_observacion(oid, modelo_actual, modelo_anterior)
+        mensajes.append(f"{nombre_linea}: se añade el aviso «{texto}».")
+    for oid in quitados:
+        if ("quita", oid) in agrupados:
+            continue
+        texto = _texto_observacion(oid, modelo_actual, modelo_anterior)
+        mensajes.append(f"{nombre_linea}: se quita el aviso «{texto}».")
     return mensajes
 
 
@@ -569,6 +636,7 @@ def _comparar_linea(
     actual: Linea,
     modelo_anterior: Modelo,
     modelo_actual: Modelo,
+    agrupados: frozenset[tuple[str, str]] | set[tuple[str, str]] = frozenset(),
 ) -> list[str]:
     nombre_linea = actual.nombre
     mensajes: list[str] = []
@@ -577,6 +645,11 @@ def _comparar_linea(
             f'{nombre_linea}: en el bot se mostrará como "{actual.titulo}" '
             f'(antes "{anterior.titulo}")'
         )
+    mensajes.extend(
+        _comparar_avisos(
+            nombre_linea, anterior, actual, modelo_anterior, modelo_actual, agrupados
+        )
+    )
     mensajes.extend(_comparar_temporadas(nombre_linea, anterior, actual))
     mensajes.extend(_comparar_dias(nombre_linea, anterior, actual))
     mensajes.extend(
@@ -585,13 +658,203 @@ def _comparar_linea(
     return mensajes
 
 
+# A partir de este número de líneas con el mismo aviso añadido (o quitado) se
+# dice en una sola frase en el bloque general.
+_MIN_LINEAS_AVISO_AGRUPADO = 3
+
+
+def _avisos_agrupados(
+    anterior: Modelo, actual: Modelo
+) -> tuple[list[str], set[tuple[str, str]]]:
+    """Frases del aviso añadido/quitado en >= 3 líneas, y el conjunto de
+    (accion, id) agrupados para no repetirlos línea a línea."""
+    por_cambio: dict[tuple[str, str], list[str]] = {}
+    for lid in sorted(set(anterior.lineas) & set(actual.lineas)):
+        linea_ant = anterior.lineas[lid]
+        linea_act = actual.lineas[lid]
+        anadidos, quitados = _avisos_cambiados(linea_ant, linea_act)
+        for oid in anadidos:
+            por_cambio.setdefault(("añade", oid), []).append(linea_act.nombre)
+        for oid in quitados:
+            por_cambio.setdefault(("quita", oid), []).append(linea_act.nombre)
+    frases: list[str] = []
+    agrupados: set[tuple[str, str]] = set()
+    for accion in ("añade", "quita"):
+        for (acc, oid), nombres in sorted(por_cambio.items()):
+            if acc != accion or len(nombres) < _MIN_LINEAS_AVISO_AGRUPADO:
+                continue
+            texto = _texto_observacion(oid, actual, anterior)
+            frases.append(
+                f"Se {accion} el aviso «{texto}» a {len(nombres)} líneas: "
+                f"{', '.join(nombres)}."
+            )
+            agrupados.add((acc, oid))
+    return frases, agrupados
+
+
+def _fecha_dia_mes(d: date) -> str:
+    return f"{d.day} de {_MESES_EN_PALABRAS[d.month]}"
+
+
+def _fecha_larga(d: date) -> str:
+    return f"{_fecha_dia_mes(d)} de {d.year}"
+
+
+def _comparar_calendario(anterior: Modelo, actual: Modelo) -> list[str]:
+    cal_ant = anterior.calendario
+    cal_act = actual.calendario
+    if cal_ant is None or cal_act is None:
+        return []
+    mensajes: list[str] = []
+
+    fest_ant = set(cal_ant.festivos.items())
+    fest_act = set(cal_act.festivos.items())
+    for fecha, nombre in sorted(fest_act - fest_ant):
+        mensajes.append(f"Se añade el festivo «{nombre}» ({_fecha_larga(fecha)}).")
+    for fecha, nombre in sorted(fest_ant - fest_act):
+        mensajes.append(f"Se quita el festivo «{nombre}» ({_fecha_larga(fecha)}).")
+
+    def _nombre_localidad(lid: str) -> str:
+        for modelo in (anterior, actual):
+            loc = modelo.localidades.get(lid)
+            if loc is not None:
+                return loc.nombre
+        return lid
+
+    locales_ant = {
+        (lid, f, n) for lid, d in cal_ant.festivos_locales.items() for f, n in d.items()
+    }
+    locales_act = {
+        (lid, f, n) for lid, d in cal_act.festivos_locales.items() for f, n in d.items()
+    }
+    for lid, fecha, nombre in sorted(locales_act - locales_ant):
+        mensajes.append(
+            f"Se añade el festivo local «{nombre}» en {_nombre_localidad(lid)} "
+            f"({_fecha_larga(fecha)})."
+        )
+    for lid, fecha, nombre in sorted(locales_ant - locales_act):
+        mensajes.append(
+            f"Se quita el festivo local «{nombre}» en {_nombre_localidad(lid)} "
+            f"({_fecha_larga(fecha)})."
+        )
+
+    sin_ant = cal_ant.sin_servicio_todas_las_lineas
+    sin_act = cal_act.sin_servicio_todas_las_lineas
+    for mes, dia in sorted(sin_act - sin_ant, key=lambda md: (md[0], md[1])):
+        mensajes.append(
+            f"Se añade el {dia} de {_MESES_EN_PALABRAS[mes]} como día sin "
+            "servicio en ninguna línea."
+        )
+    for mes, dia in sorted(sin_ant - sin_act, key=lambda md: (md[0], md[1])):
+        mensajes.append(
+            f"Se quita el {dia} de {_MESES_EN_PALABRAS[mes]} como día sin "
+            "servicio en ninguna línea."
+        )
+
+    for etiqueta, v_ant, v_act in (
+        ("El inicio de las clases", cal_ant.inicio_clases, cal_act.inicio_clases),
+        ("El fin de las clases", cal_ant.fin_clases, cal_act.fin_clases),
+        (
+            "El calendario empieza a valer",
+            cal_ant.vigencia_inicio,
+            cal_act.vigencia_inicio,
+        ),
+        ("El calendario deja de valer", cal_ant.vigencia_fin, cal_act.vigencia_fin),
+    ):
+        if v_ant != v_act:
+            mensajes.append(
+                f"{etiqueta} pasa del {_fecha_larga(v_ant)} al {_fecha_larga(v_act)}."
+            )
+    return mensajes
+
+
+def _comparar_paradas_y_localidades(anterior: Modelo, actual: Modelo) -> list[str]:
+    mensajes: list[str] = []
+
+    # Localidades
+    for lid in sorted(set(actual.localidades) - set(anterior.localidades)):
+        mensajes.append(f"Se añade la localidad «{actual.localidades[lid].nombre}».")
+    for lid in sorted(set(anterior.localidades) - set(actual.localidades)):
+        mensajes.append(f"Se quita la localidad «{anterior.localidades[lid].nombre}».")
+    for lid in sorted(set(anterior.localidades) & set(actual.localidades)):
+        loc_ant = anterior.localidades[lid]
+        loc_act = actual.localidades[lid]
+        if loc_ant.nombre != loc_act.nombre:
+            mensajes.append(
+                f"La localidad «{loc_ant.nombre}» pasa a llamarse «{loc_act.nombre}»."
+            )
+        for alias in sorted(set(loc_act.alias) - set(loc_ant.alias)):
+            mensajes.append(f"{loc_act.nombre}: se añade el alias «{alias}».")
+        for alias in sorted(set(loc_ant.alias) - set(loc_act.alias)):
+            mensajes.append(f"{loc_act.nombre}: se quita el alias «{alias}».")
+
+    # Paradas
+    for cod in sorted(set(actual.paradas) - set(anterior.paradas)):
+        parada = actual.paradas[cod]
+        loc = actual.localidades.get(parada.localidad)
+        nombre_loc = loc.nombre if loc is not None else parada.localidad
+        mensajes.append(
+            f"Se añade la parada «{parada.nombre}» (localidad {nombre_loc})."
+        )
+    for cod in sorted(set(anterior.paradas) - set(actual.paradas)):
+        mensajes.append(f"Se quita la parada «{anterior.paradas[cod].nombre}».")
+    for cod in sorted(set(anterior.paradas) & set(actual.paradas)):
+        p_ant = anterior.paradas[cod]
+        p_act = actual.paradas[cod]
+        if p_ant.nombre != p_act.nombre:
+            mensajes.append(
+                f"La parada «{p_ant.nombre}» pasa a llamarse «{p_act.nombre}»."
+            )
+
+    # Pares de localidades sin venta de billetes
+    def _par_en_palabras(par: frozenset[str], modelo: Modelo, otro: Modelo) -> str:
+        nombres = []
+        for lid in par:
+            loc = modelo.localidades.get(lid) or otro.localidades.get(lid)
+            nombres.append(loc.nombre if loc is not None else lid)
+        return " y ".join(sorted(nombres))
+
+    for par in sorted(actual.no_vendibles - anterior.no_vendibles, key=sorted):
+        mensajes.append(
+            "Ya no se venden billetes entre "
+            f"{_par_en_palabras(par, actual, anterior)}."
+        )
+    for par in sorted(anterior.no_vendibles - actual.no_vendibles, key=sorted):
+        mensajes.append(
+            "Vuelven a venderse billetes entre "
+            f"{_par_en_palabras(par, anterior, actual)}."
+        )
+    return mensajes
+
+
+def _comparar_textos_observaciones(anterior: Modelo, actual: Modelo) -> list[str]:
+    mensajes: list[str] = []
+    for oid in sorted(set(anterior.observaciones) & set(actual.observaciones)):
+        t_ant = anterior.observaciones[oid].texto
+        t_act = actual.observaciones[oid].texto
+        if t_ant != t_act:
+            mensajes.append(
+                f"El texto de la observación «{t_ant}» pasa a «{t_act}»."
+            )
+    return mensajes
+
+
 def comparar(anterior: Modelo, actual: Modelo) -> list[str]:
     """Devuelve una lista de frases en lenguaje de negocio con las
     diferencias entre `anterior` y `actual`. Ambos deben ser `Modelo`s reales
     ya validados; nunca se llama con `None` (eso lo decide quien invoca este
     módulo, típicamente `tools/revision.py`, que resuelve "primera versión"
-    antes de llamar aquí)."""
+    antes de llamar aquí).
+
+    Orden: bloque general (paradas y localidades, calendario, textos de
+    observaciones, avisos agrupados) y después línea a línea."""
     mensajes: list[str] = []
+    mensajes.extend(_comparar_paradas_y_localidades(anterior, actual))
+    mensajes.extend(_comparar_calendario(anterior, actual))
+    mensajes.extend(_comparar_textos_observaciones(anterior, actual))
+    frases_agrupadas, agrupados = _avisos_agrupados(anterior, actual)
+    mensajes.extend(frases_agrupadas)
+
     ids_lineas = sorted(set(anterior.lineas) | set(actual.lineas))
     for lid in ids_lineas:
         linea_ant = anterior.lineas.get(lid)
@@ -601,5 +864,7 @@ def comparar(anterior: Modelo, actual: Modelo) -> list[str]:
         elif linea_act is None:
             mensajes.append(f"Línea eliminada: {linea_ant.nombre}.")
         else:
-            mensajes.extend(_comparar_linea(linea_ant, linea_act, anterior, actual))
+            mensajes.extend(
+                _comparar_linea(linea_ant, linea_act, anterior, actual, agrupados)
+            )
     return mensajes

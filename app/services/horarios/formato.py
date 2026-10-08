@@ -75,6 +75,15 @@ GRUPOS_DIA: dict[str, frozenset[str]] = {
 
 ESTADOS_DIA = {"horario", "sin_servicio", "sin_datos"}
 
+# Temporadas con nombre público: solo estas se muestran al cliente como
+# "horario de X" en la cabecera del resultado (design.md, 4.6). Una temporada
+# nueva con nombre propio exige ampliar esta tabla.
+NOMBRES_PUBLICOS_TEMPORADA = {
+    "invierno": "invierno",
+    "verano": "verano",
+    "agosto": "agosto",
+}
+
 CONDICIONES_CONOCIDAS = {
     "a_demanda",
     "solo_viernes_lectivo",

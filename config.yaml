@@ -6,7 +6,7 @@
 
 negocio:
   nombre: "Autocares XX"    # TODO D9: confirmar operador y encargo
-  telefono_contacto: "957 XX XX XX"    # TODO D9
+  telefono_contacto: "957 42 90 30"    # TODO D9
   admin_phone: ""         # Fallback si no se define ADMIN_PHONE en .env. Solo dígitos, sin '+' ni espacios.
 
   horario_oficina:

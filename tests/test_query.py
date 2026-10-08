@@ -83,10 +83,15 @@ def test_cordoba_villaharta_a_demanda():
 
 def test_villaharta_cordoba_invierno_laborable():
     c = query.consultar(HORARIOS, "villaharta", "cordoba", date(2026, 9, 30))
-    assert _horas(c) == [("08:50", "09:30"), ("10:35", "11:25"), ("15:50", "16:30")]
+    assert _horas(c) == [
+        ("08:50", "09:30"),
+        ("10:35", "11:25"),
+        ("15:50", "16:30"),
+        ("18:35", "19:15"),
+    ]
     a_demanda = [any("957 42 90 30" in n for n in s.notas) for s in c.salidas]
-    # 10:35 no es a demanda; 08:50 y 15:50 sí.
-    assert a_demanda == [True, False, True]
+    # 10:35 no es a demanda; 08:50, 15:50 y 18:35 sí.
+    assert a_demanda == [True, False, True, True]
 
 
 def test_cordoba_villanueva_de_cordoba_solo_una_con_viajeros_desde_cordoba():
@@ -99,7 +104,7 @@ def test_cordoba_villanueva_de_cordoba_solo_una_con_viajeros_desde_cordoba():
         ("18:30", "20:10"),
         ("20:00", "21:45"),
     ]
-    con_nota = [s for s in c.salidas if s.notas]
+    con_nota = [s for s in c.salidas if any("viajeros" in n for n in s.notas)]
     assert len(con_nota) == 1
     assert con_nota[0].hora_salida == time(20, 0)
     assert any("viajeros" in n for n in con_nota[0].notas)
@@ -189,10 +194,41 @@ def test_no_circula_en_agosto():
     assert c_septiembre.estado == "con_salidas"
 
 
-def test_sin_servicio_en_7_dias_da_siguiente_con_servicio_none():
-    c = query.consultar(MOTOR, "pueblo-p", "pueblo-q", date(2026, 8, 28))
+def test_sin_servicio_sin_ningun_dia_con_salidas_en_45_dias_da_none():
+    # linea-sin-servicio-largo no circula en agosto ni septiembre (61 días):
+    # desde el 01/08/2026 los 45 días siguientes no tienen salidas.
+    assert query.SIGUIENTE_CON_SERVICIO_DIAS == 45
+    c = query.consultar(MOTOR, "pueblo-p", "pueblo-q", date(2026, 8, 1))
     assert c.estado == "sin_servicio"
     assert c.siguiente_con_servicio is None
+
+
+def test_siguiente_con_servicio_a_mas_de_7_dias():
+    # 28/08/2026 -> la línea retoma el 01/10/2026 (34 días después).
+    c = query.consultar(MOTOR, "pueblo-p", "pueblo-q", date(2026, 8, 28))
+    assert c.estado == "sin_servicio"
+    assert c.siguiente_con_servicio == date(2026, 10, 1)
+
+
+def test_siguiente_con_servicio_en_el_dia_45_exacto():
+    # 16/08/2026 + 45 = 30/09... aún no circula; 17/08 + 45 = 01/10: sí.
+    c = query.consultar(MOTOR, "pueblo-p", "pueblo-q", date(2026, 8, 17))
+    assert c.siguiente_con_servicio == date(2026, 10, 1)
+    c = query.consultar(MOTOR, "pueblo-p", "pueblo-q", date(2026, 8, 16))
+    assert c.siguiente_con_servicio is None
+
+
+def test_dia_sin_datos_dentro_de_la_ventana_no_cuenta_como_con_salidas():
+    c = query.consultar(MOTOR, "pueblo-g", "pueblo-h", date(2026, 9, 2))
+    assert c.estado == "sin_datos"
+    # el siguiente día es el primero con salidas reales, no uno sin datos
+    sig = c.siguiente_con_servicio
+    assert sig is not None
+    assert query.consultar(MOTOR, "pueblo-g", "pueblo-h", sig).estado == "con_salidas"
+    intermedio = date(2026, 9, 3)
+    assert intermedio < sig
+    c_int = query.consultar(MOTOR, "pueblo-g", "pueblo-h", intermedio)
+    assert c_int.estado == "sin_datos"
 
 
 def test_sin_datos_combinado_con_horario_muestra_salidas_y_aviso():
@@ -321,7 +357,11 @@ def test_festivo_local_de_cordoba_usa_las_salidas_de_festivos():
     general = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 8, 15))
     laborable = query.consultar(HORARIOS, "pozoblanco", "cordoba", date(2026, 9, 9))
     assert local.estado == "con_salidas"
-    assert _horas(local) == _horas(general) == [("08:15", "09:30"), ("15:15", "16:30")]
+    assert (
+        _horas(local)
+        == _horas(general)
+        == [("08:15", "09:30"), ("15:15", "16:30"), ("17:45", "19:00")]
+    )
     assert _horas(local) != _horas(laborable)
     assert local.festivo_local == ("Virgen de la Fuensanta", "cordoba")
     assert local.info_dia.es_festivo is False  # InfoDia no cambia (P04)
@@ -425,11 +465,11 @@ def test_villaviciosa_viernes_lectivo_incluye_las_16_00():
         HORARIOS, "cordoba", "villaviciosa-de-cordoba", date(2026, 10, 2)
     )
     assert c.estado == "con_salidas"
-    assert _horas(c) == [("13:10", "14:00"), ("16:00", "16:50"), ("18:30", "19:20")]
+    assert _horas(c) == [("13:10", "14:05"), ("16:00", "17:00"), ("18:30", "19:25")]
 
 
 def test_villaviciosa_viernes_no_lectivo_jueves_y_lunes_sin_las_16_00():
-    esperado = [("13:10", "14:00"), ("18:30", "19:20")]
+    esperado = [("13:10", "14:05"), ("18:30", "19:25")]
     for fecha in (date(2027, 2, 26), date(2026, 10, 1), date(2026, 10, 5)):
         c = query.consultar(HORARIOS, "cordoba", "villaviciosa-de-cordoba", fecha)
         assert c.estado == "con_salidas", fecha
@@ -722,7 +762,60 @@ def test_fuente_obejuna_2150_solo_viernes_lectivo():
 def test_hornachuelos_domingo_posadas_cordoba_invierno_y_verano():
     inv = query.consultar(HORARIOS, "posadas", "cordoba", date(2026, 10, 4))
     ver = query.consultar(HORARIOS, "posadas", "cordoba", date(2027, 7, 4))
-    assert ("15:30", "16:10") in _horas(inv)
+    assert ("15:30", "16:20") in _horas(inv)
     assert ("12:30", "13:10") in _horas(ver)
-    assert ("15:30", "16:10") not in _horas(ver)
+    assert ("15:30", "16:20") not in _horas(ver)
     assert ("12:30", "13:10") not in _horas(inv)
+
+
+# ── Actualización de negocio del 07/10/2026 (P29-P37) ───────────────────────
+
+VIERNES_AGOSTO = date(2027, 8, 6)
+DOMINGO_AGOSTO = date(2027, 8, 8)
+
+
+def test_cordoba_los_mochos_lunes_laborable_misma_hora_que_almodovar():
+    c = query.consultar(HORARIOS, "cordoba", "los-mochos", date(2026, 10, 5))
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("14:45", "15:15")]
+    assert (c.salidas[0].parada_origen, c.salidas[0].parada_destino) == ("COR", "MOC")
+    lunes = date(2026, 10, 5)
+    almodovar = query.consultar(HORARIOS, "cordoba", "almodovar-del-rio", lunes)
+    assert ("14:45", "15:15") in _horas(almodovar)
+
+
+def test_rivero_cordoba_solo_en_los_viajes_que_pasan_por_rivero():
+    c = query.consultar(HORARIOS, "rivero-de-posadas", "cordoba", date(2026, 10, 5))
+    assert c.estado == "con_salidas"
+    assert _horas(c) == [("06:35", "07:35"), ("09:30", "10:30"), ("14:55", "16:00")]
+    posadas = query.consultar(HORARIOS, "posadas", "cordoba", date(2026, 10, 5))
+    assert len(posadas.salidas) > len(c.salidas)
+
+
+def test_badajoz_agosto_viernes_cordoba_badajoz_sin_servicio_y_zafra_si():
+    c = query.consultar(HORARIOS, "cordoba", "badajoz", VIERNES_AGOSTO)
+    assert c.estado == "sin_servicio"
+    assert c.salidas == ()
+    z = query.consultar(HORARIOS, "cordoba", "zafra", VIERNES_AGOSTO)
+    assert z.estado == "con_salidas"
+    assert _horas(z) == [("15:00", "18:15")]
+
+
+def test_badajoz_agosto_domingo_sin_servicio():
+    c = query.consultar(HORARIOS, "badajoz", "cordoba", DOMINGO_AGOSTO)
+    assert c.estado == "sin_servicio"
+    assert c.salidas == ()
+
+
+def test_penarroya_agosto_domingo_sigue_con_los_viajes_de_domingo():
+    c = query.consultar(HORARIOS, "cordoba", "penarroya-pueblonuevo", DOMINGO_AGOSTO)
+    assert c.estado == "con_salidas"
+    assert [s.hora_salida.strftime("%H:%M") for s in c.salidas] == ["14:45", "20:30"]
+
+
+def test_respuesta_real_lleva_la_nota_de_horas_aproximadas_en_cada_salida():
+    lunes = date(2026, 10, 5)
+    c = query.consultar(HORARIOS, "cordoba", "villaviciosa-de-cordoba", lunes)
+    assert c.salidas
+    for s in c.salidas:
+        assert s.notas.count("Horarios de paso aproximados.") == 1

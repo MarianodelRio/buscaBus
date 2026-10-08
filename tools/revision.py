@@ -8,14 +8,13 @@ toca ni disco ni git.
 
 Nunca se ejecuta sobre `horarios/` inválido, nunca omite el PDF en
 silencio si WeasyPrint/Pango no están disponibles, y nunca resuelve una
-pregunta pendiente (`Pnn`, ver docs/preguntas_negocio.txt): solo la muestra.
+pregunta pendiente (`Pnn`): solo la muestra junto al dato afectado.
 """
 
 from __future__ import annotations
 
 import argparse
 import html
-import re
 import subprocess
 import sys
 import tempfile
@@ -38,7 +37,7 @@ from app.services.horarios.formato import (
 from app.utils.interactive import descripcion_linea
 from app.utils.messages import msg_no_vendible
 
-# Pendientes (docs/preguntas_negocio.txt) que afectan a una localidad concreta
+# Pendientes (`Pnn`) que afectan a una localidad concreta
 # de paradas.yaml. Mapeo fijado a mano (design.md, 8, "Correcciones de la
 # fase 1", punto 6). Hoy vacío: ninguna localidad tiene un pendiente propio
 # fuera de las aldeas con `pendiente:` (sección "Localidades sin hora de
@@ -48,11 +47,7 @@ PENDIENTES_POR_LOCALIDAD: dict[str, tuple[str, ...]] = {}
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HORARIOS_DIR = REPO_ROOT / "horarios"
 REVISION_DIR = REPO_ROOT / "revision"
-PREGUNTAS_PATH = REPO_ROOT / "docs" / "preguntas_negocio.txt"
 ZONA_HORARIA = "Europe/Madrid"
-
-_TAG_TITULO_RE = re.compile(r"^P(\d{2})\.\s*(.+)$")
-
 
 def _ultimo_tag(repo_root: Path) -> str | None:
     """Devuelve el último tag `horarios-*` (orden de versión, más reciente
@@ -136,22 +131,6 @@ def _pendientes_del_modelo(modelo: Modelo) -> set[str]:
         for viaje in linea.viajes:
             pendientes.update(viaje.pendientes)
     return pendientes
-
-
-def _titulos_preguntas(path: Path) -> dict[str, str]:
-    """Lee docs/preguntas_negocio.txt y extrae {codigo: titulo} de forma
-    best-effort. Nunca lanza excepción: si el fichero no existe o no se
-    puede interpretar, devuelve un diccionario vacío."""
-    try:
-        texto = path.read_text(encoding="utf-8")
-    except OSError:
-        return {}
-    titulos: dict[str, str] = {}
-    for linea in texto.splitlines():
-        m = _TAG_TITULO_RE.match(linea.strip())
-        if m:
-            titulos[f"P{m.group(1)}"] = m.group(2).strip()
-    return titulos
 
 
 def _contar_viajes(modelo: Modelo) -> int:
@@ -489,19 +468,29 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
             if localidad.alias
             else ""
         )
-        paradas_txt = ", ".join(
-            sorted(
-                html.escape(p.nombre)
-                for p in paradas_por_localidad.get(localidad.id, [])
-            )
+        nombres = sorted(
+            p.nombre for p in paradas_por_localidad.get(localidad.id, [])
         )
+        if len(nombres) == 1 and nombres[0] == localidad.nombre:
+            detalle = ""
+        elif len(nombres) <= 1:
+            detalle = f" — para en: {html.escape(nombres[0])}" if nombres else ""
+        elif len(nombres) == 2:
+            detalle = (
+                f" — para en: {html.escape(nombres[0])} o {html.escape(nombres[1])}"
+            )
+        else:
+            primeras = ", ".join(html.escape(n) for n in nombres[:-1])
+            detalle = f" — para en: {primeras} o {html.escape(nombres[-1])}"
         return (
-            f"<li>{html.escape(localidad.nombre)}{alias_txt} — {paradas_txt} "
-            f"{badges}</li>"
+            f"<li>{html.escape(localidad.nombre)}{alias_txt}{detalle} {badges}</li>"
         )
 
     lineas_pueblos = calcular_lineas_pueblos(modelo)
-    partes = []
+    partes = [
+        "<p>Cada pueblo es lo que elige el cliente; si tiene más de una parada, "
+        "se indica cuál.</p>"
+    ]
     usadas: set[str] = set()
     for lid, ids in lineas_pueblos.items():
         linea = modelo.lineas[lid]
@@ -527,7 +516,7 @@ def _render_seccion_pueblos(modelo: Modelo) -> str:
     return "".join(partes)
 
 
-def _render_seccion_pendientes(modelo: Modelo, titulos: dict[str, str]) -> str:
+def _render_seccion_pendientes(modelo: Modelo) -> str:
     """ "Localidades sin hora de paso" (P15/P32): aldeas en las que algunos
     autobuses paran pero sin hora propia; el bot remite a otra localidad.
     Devuelve "" si no hay ninguna."""
@@ -539,10 +528,7 @@ def _render_seccion_pendientes(modelo: Modelo, titulos: dict[str, str]) -> str:
         return ""
     partes = ["<h2>Localidades sin hora de paso</h2>"]
     for loc in pendientes:
-        titulo = titulos.get(loc.pendiente or "")
         badge = html.escape(loc.pendiente or "")
-        if titulo:
-            badge += f": {html.escape(titulo)}"
         ver = modelo.localidades.get(loc.ver or "")
         ver_nombre = ver.nombre if ver is not None else (loc.ver or "")
         partes.append(
@@ -650,19 +636,6 @@ def _render_cambios(cambios: list[str] | None) -> str:
     return f"<ul>{items}</ul>"
 
 
-def _render_anexo(pendientes: set[str], titulos: dict[str, str]) -> str:
-    if not pendientes:
-        return "<p>Sin preguntas pendientes.</p>"
-    items = []
-    for p in sorted(pendientes):
-        titulo = titulos.get(p)
-        if titulo:
-            items.append(f"<li>{html.escape(p)}: {html.escape(titulo)}</li>")
-        else:
-            items.append(f"<li>{html.escape(p)}</li>")
-    return f"<ul>{''.join(items)}</ul>"
-
-
 _ESTILO = """
 @page { size: A4 landscape; margin: 15mm; }
 body { font-family: sans-serif; font-size: 10pt; }
@@ -701,17 +674,12 @@ def generar_html(
     primera versión (nunca se llama a diff.comparar en ese caso)."""
     n_lineas = len(actual_modelo.lineas)
     n_viajes = _contar_viajes(actual_modelo)
-    pendientes = _pendientes_del_modelo(actual_modelo)
-    titulos = _titulos_preguntas(PREGUNTAS_PATH)
-
-    portada_pendientes = ", ".join(sorted(pendientes)) if pendientes else "ninguno"
     portada = (
         "<h1>Revisión de horarios</h1>"
         f"<p>Fecha: {html.escape(fecha)}</p>"
         f"<p>Versión: {html.escape(ref) if ref else 'sin publicar'}</p>"
         f"<p>Líneas: {n_lineas}</p>"
         f"<p>Viajes: {n_viajes}</p>"
-        f"<p>Pendientes abiertos: {html.escape(portada_pendientes)}</p>"
     )
 
     cambios_html = "<h2>Cambios desde la versión publicada</h2>" + _render_cambios(
@@ -729,16 +697,14 @@ def generar_html(
         + _render_seccion_pueblos(actual_modelo)
     )
 
-    pendientes_html = _render_seccion_pendientes(actual_modelo, titulos)
+    pendientes_html = _render_seccion_pendientes(actual_modelo)
 
     calendario_html = _render_seccion_calendario(actual_modelo)
-
-    anexo = "<h2>Anexo: preguntas pendientes</h2>" + _render_anexo(pendientes, titulos)
 
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         f"<style>{_ESTILO}</style></head><body>"
-        f"{portada}{cambios_html}{secciones}{pueblos_html}{pendientes_html}{calendario_html}{anexo}"
+        f"{portada}{cambios_html}{secciones}{pueblos_html}{pendientes_html}{calendario_html}"
         "</body></html>"
     )
 

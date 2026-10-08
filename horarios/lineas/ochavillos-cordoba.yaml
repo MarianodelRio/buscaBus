@@ -1,7 +1,10 @@
 # horarios/lineas/ochavillos-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja OCHAVILLOS.
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja OCHAVILLOS.
 nombre: Ochavillos – Córdoba
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:
@@ -15,7 +18,7 @@ horarios:
     dias: lunes-viernes
     tabla: |
       OCH    HER    FPA    VEN    FCU    COR
-      08:30  08:35  08:45  08:50  09:00  09:40
+      09:45  09:50  10:00  10:05  10:15  10:55
 
   - temporada: anual
     dias: lunes-viernes

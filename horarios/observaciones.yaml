@@ -39,16 +39,6 @@ hora_aproximada:
   ambitos: [linea, parada]
   texto: "Horarios de paso aproximados."
 
-pasa_por_rivero:
-  tipo: aviso
-  ambitos: [viaje]
-  texto: "Para en Rivero de Posadas, a unos 4 minutos de Posadas."
-
-para_en_los_mochos:
-  tipo: aviso
-  ambitos: [viaje]
-  texto: "Para dentro de Los Mochos, a unos 7 minutos de Almodóvar del Río."
-
 # P16: solo aparece con origen o destino Posadas; la letra E va siempre en la
 # celda de Posadas.
 no_para_en_el_pedrera:

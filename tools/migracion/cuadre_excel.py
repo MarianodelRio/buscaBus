@@ -21,9 +21,12 @@ dentro de texto:
   Peñarroya tiene 11:55 y la hoja BLAZQUEZ tiene 12:30, cada una en su fichero
   (la salida de Los Blázquez y la llegada de Peñarroya no se cuentan dos veces).
 
-Única discrepancia aceptada: hoja POZOB VER, fila 48, 17:50 (x1) y 19:05 (x1).
-Negocio indica (P09b) que ese viaje no está en vigor en verano; se borró del
-YAML y el Excel modificado conserva la fila. El cuadre sale con código 1.
+Dos excepciones documentadas, ninguna es una discrepancia:
+- Columnas RIV y MOC (hornachuelos-cordoba, P32): no existen en el Excel, repiten
+  la hora de Posadas y de Almodóvar en los viajes marcados; no se cuentan.
+- Hoja BADAJOZ: solo se cuenta la temporada septiembre-julio (P31). Las tablas
+  de agosto repiten las horas de lunes a jueves y de la vuelta.
+Se espera 100 % en las 18 hojas y código de salida 0.
 
 Uso: python -m tools.migracion.cuadre_excel
 """
@@ -42,8 +45,11 @@ import yaml
 from app.services.horarios.formato import _parse_tabla
 
 RAIZ = Path(__file__).resolve().parent.parent.parent
-EXCEL_PATH = RAIZ / "horarios_fuente" / "HORARIOS NUEVOS MODIFICADO.xlsx"
+EXCEL_PATH = RAIZ / "horarios_fuente" / "2026-10-07 ACTUALIZACION HORARIOS.xlsx"
 HORARIOS_DIR = RAIZ / "horarios"
+
+# Columnas derivadas de P32 que no existen en el Excel.
+_COLUMNAS_IGNORADAS = {"RIV", "MOC"}
 
 _HORA_EXCEL_RE = re.compile(r"^\d{1,2}:\d{2}\*{0,2}$")
 _HORA_PUNTO_RE = re.compile(r"^\d{1,2}\.\d{2}$")   # "18.10" (D-p)
@@ -59,7 +65,7 @@ HOJAS = {
     "BELAL- COR": [("belalcazar-cordoba", None)],
     "ADAMUZ INV": [("adamuz-cordoba", {"invierno"})],
     "ADAMUZ VER": [("adamuz-cordoba", {"verano"})],
-    "BADAJOZ ": [("badajoz-cordoba", None)],
+    "BADAJOZ ": [("badajoz-cordoba", {"septiembre-julio"})],   # P31
     "FTE CARRET": [("fuente-carreteros-cordoba", None)],
     "VILLAVIC INV": [("villaviciosa-cordoba", {"invierno"})],
     "VILLAVIC VER": [("villaviciosa-cordoba", {"verano"})],
@@ -122,10 +128,11 @@ def _horas_fichero(fichero_linea: str, temporadas: set[str] | None) -> Counter[s
     for entrada in datos.get("horarios", []):
         if temporadas is not None and entrada.get("temporada") not in temporadas:
             continue
-        _cabecera, filas = _parse_tabla(entrada["tabla"])
+        cabecera, filas = _parse_tabla(entrada["tabla"])
+        ignoradas = {i for i, c in enumerate(cabecera) if c in _COLUMNAS_IGNORADAS}
         for fila in filas:
-            for valor in fila.valores:
-                if valor == "-":
+            for i, valor in enumerate(fila.valores):
+                if i in ignoradas or valor == "-":
                     continue
                 contador[_normalizar(valor)] += 1
     return contador

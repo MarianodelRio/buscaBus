@@ -19,7 +19,7 @@ from app.services.horarios.modelo import Linea, Temporada, Viaje
 
 # Número de días hacia delante en los que se busca la siguiente fecha con
 # servicio cuando la fecha pedida no tiene salidas (design.md, sección 3).
-SIGUIENTE_CON_SERVICIO_DIAS = 7
+SIGUIENTE_CON_SERVICIO_DIAS = 45
 
 EstadoConsulta = Literal[
     "con_salidas", "sin_servicio", "sin_datos", "sin_trayecto", "no_vendible"

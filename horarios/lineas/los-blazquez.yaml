@@ -1,5 +1,8 @@
 # horarios/lineas/los-blazquez.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja BLAZQUEZ.
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja BLAZQUEZ.
 #
 # Todo el año (P01; P27: el "hasta 21/06/26" era un error, negocio confirma
 # "ES UN ERROR, ACABA EL 22/06"). Solo de lunes a viernes; sábados y domingos
@@ -18,7 +21,7 @@
 # se separan (Pozoblanco no para en El Vacar); `make validar` avisa y no se
 # fusionan.
 nombre: Los Blázquez
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:

@@ -1,11 +1,14 @@
 # horarios/lineas/santa-eufemia-villaralto-pozoblanco.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas TORR INV y TORR VER (filas 20-32 de INV y VER).
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas TORR INV y TORR VER (filas 20-32 de INV y VER).
 # Cuatro tablas, una por cabecera del Excel: Santa Eufemia y Villaralto son dos
 # ramales distintos; ningún viaje pasa por los dos.
 # POZ. HOSPITAL = PZH y POZOBLANCO / POZO.EST = POZ (P10).
 nombre: Santa Eufemia – Villaralto
 nombre_corto: Santa Eufemia-Villaralto
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:

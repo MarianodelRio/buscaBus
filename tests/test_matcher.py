@@ -308,7 +308,7 @@ def test_lineas_reales_en_orden_de_titulo_con_pueblos_ordenados():
             assert loc.pendiente is None
 
 
-def test_pendientes_reales_rivero_y_los_mochos_y_vecinas():
+def test_rivero_y_los_mochos_son_pueblos_normales_y_vecinas():
     h = _horarios_real()
     m = matcher.Matcher(h)
     esperado = {

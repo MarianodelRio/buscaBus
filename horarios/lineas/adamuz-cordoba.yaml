@@ -1,12 +1,15 @@
 # horarios/lineas/adamuz-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas ADAMUZ INV y ADAMUZ VER.
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas ADAMUZ INV y ADAMUZ VER.
 #
 # Notas internas del Excel ("no tendríamos que entrar en Rabanales, pero lo
 # hacemos", "tendríamos que salir de Adamuz 11:35h...") no se publican (D-m):
 # las horas transcritas son las que el autobús hace de verdad.
 nombre: Adamuz – Villafranca – Córdoba
 nombre_corto: Adamuz – Córdoba
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:

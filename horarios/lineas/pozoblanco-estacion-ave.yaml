@@ -1,9 +1,12 @@
 # horarios/lineas/pozoblanco-estacion-ave.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hojas TORR INV y TORR VER (filas 48-55 de INV y 49-56 de VER).
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hojas TORR INV y TORR VER (filas 48-55 de INV y 49-56 de VER).
 # La Estación AVE de Villanueva de Córdoba es un sitio aparte del pueblo (P11).
 nombre: Estación AVE Vva de Córdoba
 nombre_corto: Estación AVE Villanueva
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:

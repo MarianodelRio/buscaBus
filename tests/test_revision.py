@@ -171,6 +171,27 @@ def test_main_genera_html_con_cambios(tmp_path, monkeypatch):
     assert "Primera versión." not in contenido
 
 
+def test_cambios_con_texto_de_negocio_y_html_escapado(tmp_path, monkeypatch):
+    repo_root = _build_repo(tmp_path)
+    obs = repo_root / "horarios" / "observaciones.yaml"
+    obs.write_text(
+        obs.read_text(encoding="utf-8").replace(
+            "Pasa por Rivero de Posadas.", "Pasa por <Rivero> & Posadas."
+        ),
+        encoding="utf-8",
+    )
+    assert _git(repo_root, "add", "horarios").returncode == 0
+    assert _git(repo_root, "commit", "-q", "-m", "texto").returncode == 0
+
+    assert _generar_para_repo(repo_root, tmp_path, monkeypatch) == 0
+    contenido = (repo_root / "revision" / "horarios.html").read_text(encoding="utf-8")
+    assert (
+        "El texto de la observación «Pasa por Rivero de Posadas.» pasa a "
+        "«Pasa por &lt;Rivero&gt; &amp; Posadas.»." in contenido
+    )
+    assert "pasa_por_rivero" not in contenido.split("Cambios desde la versión")[1][:600]
+
+
 def test_main_primera_version_sin_tags(tmp_path, monkeypatch):
     repo_root = tmp_path / "repo_sin_tags"
     horarios_dir = repo_root / "horarios"
@@ -520,7 +541,7 @@ def test_html_real_tiene_seccion_calendario():
     html_doc = _html_real()
     assert "<h2>Calendario</h2>" in html_doc
     seccion = html_doc[html_doc.index("<h2>Calendario</h2>") :]
-    seccion = seccion[: seccion.index("<h2>Anexo")]
+    seccion = seccion[: seccion.index("</body>")]
     # días sin servicio en ninguna línea
     assert "<li>25/12</li>" in seccion and "<li>01/01</li>" in seccion
     # festivos generales
@@ -540,13 +561,12 @@ def test_html_real_tiene_seccion_calendario():
     assert "Campus de Rabanales" in seccion
 
 
-def test_html_real_anexo_muestra_p28_y_no_p03_ni_p12():
+def test_html_real_sin_anexo_ni_pendientes_en_portada():
+    # El anexo de preguntas pendientes y la línea "Pendientes abiertos" de la
+    # portada se quitaron: ya no hay dudas abiertas con negocio.
     html_doc = _html_real()
-    anexo = html_doc[html_doc.index("<h2>Anexo") :]
-    assert "P28" in anexo
-    assert "P03:" not in anexo and "P12:" not in anexo
-    portada = html_doc[: html_doc.index("<h2>Cambios")]
-    assert "P28" in portada
+    assert "Anexo" not in html_doc
+    assert "Pendientes abiertos" not in html_doc
 
 
 def test_pendientes_del_calendario_se_recogen(tmp_path):
@@ -637,7 +657,7 @@ def test_html_pendientes_muestra_localidades_y_viajes():
     html_doc = revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
     assert "<h2>Localidades sin hora de paso</h2>" in html_doc
     seccion = html_doc[html_doc.index("<h2>Localidades sin hora de paso</h2>") :]
-    seccion = seccion[: seccion.index("<h2>Anexo")]
+    seccion = seccion[: seccion.index("<h2>Calendario</h2>")]
     assert "Aldea A" in seccion and "Aldea Bonita" in seccion
     assert "P32" in seccion
     assert "Consultar en su lugar: Pueblo A" in seccion
@@ -647,8 +667,10 @@ def test_html_pendientes_muestra_localidades_y_viajes():
     assert "Pueblo A – Pueblo C" in seccion
     assert "<td>08:00</td>" in seccion and "<td>10:00</td>" in seccion
     assert "<td>15:00</td>" not in seccion
-    # antes del calendario y del anexo
-    assert html_doc.index("Localidades sin hora de paso") < html_doc.index("<h2>Anexo")
+    # antes del calendario
+    assert html_doc.index("Localidades sin hora de paso") < html_doc.index(
+        "<h2>Calendario</h2>"
+    )
 
 
 def test_html_pendientes_sin_viajes_declarados(tmp_path):
@@ -669,17 +691,36 @@ def test_html_pendientes_sin_viajes_declarados(tmp_path):
     assert html_doc.count("ningún viaje declarado") == 2
 
 
-def test_html_real_seccion_de_pendientes_lista_rivero_y_los_mochos():
+def test_html_real_ya_no_tiene_seccion_de_localidades_sin_hora_de_paso():
     html_doc = _html_real()
-    assert "<h2>Localidades sin hora de paso</h2>" in html_doc
-    seccion = html_doc[html_doc.index("<h2>Localidades sin hora de paso</h2>") :]
-    seccion = seccion[: seccion.index("<h2>Calendario</h2>")]
+    assert "Localidades sin hora de paso" not in html_doc
+
+
+def test_html_real_hornachuelos_tiene_columnas_rivero_y_los_mochos():
+    html_doc = _html_real()
+    inicio = html_doc.index("<h2>Hornachuelos – Córdoba</h2>")
+    seccion = html_doc[inicio : html_doc.index("<h2>", inicio + 10)]
     assert "Rivero de Posadas" in seccion and "Los Mochos" in seccion
-    assert "Consultar en su lugar: Posadas" in seccion
-    assert "Consultar en su lugar: Almodóvar del Río" in seccion
-    assert "a unos 4 minutos" in seccion and "a unos 7 minutos" in seccion
-    assert "Hornachuelos – Córdoba" in seccion
-    assert "<td>06:15</td>" in seccion  # primer viaje que pasa por Rivero
+
+
+def test_html_real_badajoz_tiene_temporada_de_agosto():
+    html_doc = _html_real()
+    inicio = html_doc.index("<h2>Badajoz – Córdoba</h2>")
+    seccion = html_doc[inicio : html_doc.index("<h2>", inicio + 10)]
+    assert "agosto" in seccion.lower()
+
+
+def test_html_real_pueblos_con_el_nuevo_formato():
+    html_doc = _html_real()
+    pueblos = html_doc[html_doc.index("<h2>Así aparecen las líneas en el bot</h2>") :]
+    assert "Cada pueblo es lo que elige el cliente; si tiene más de una" in pueblos
+    assert "<li>Azuaga " in pueblos or "<li>Azuaga</li>" in pueblos
+    assert "Azuaga — " not in pueblos
+    assert (
+        "Villanueva del Rey — para en: Villanueva del Rey (cruce, gasolinera) o"
+        in pueblos
+    )
+    assert "Villanueva del Rey (pueblo)" in pueblos
 
 
 def test_html_real_tiene_15_secciones_de_linea():
@@ -690,14 +731,6 @@ def test_html_real_tiene_15_secciones_de_linea():
     assert bloque.count("<h2>") - 1 == 15
     for nombre in ("Peñarroya – Córdoba", "Los Blázquez", "Hornachuelos – Córdoba"):
         assert f"<h2>{nombre}</h2>" in bloque
-
-
-def test_html_real_anexo_incluye_p28_a_p36_sin_p27_ni_p33():
-    html_doc = _html_real()
-    anexo = html_doc[html_doc.index("<h2>Anexo") :]
-    for codigo in ("P28", "P29", "P30", "P31", "P32", "P34", "P35", "P36"):
-        assert f"{codigo}:" in anexo, codigo
-    assert "P27" not in anexo and "P33" not in anexo
 
 
 _OBS_EXTRA = """
@@ -747,8 +780,30 @@ def test_tabla_sin_notas_no_tiene_columna_notas(tmp_path):
     assert "<th>Notas</th>" not in html_
 
 
-def test_pendientes_muestran_dias_en_palabras():
-    html_ = _html_real()
+def test_pendientes_muestran_dias_en_palabras(tmp_path):
+    import shutil
+
+    destino = tmp_path / "h"
+    shutil.copytree(FIXTURES / "horarios_pendientes", destino)
+    linea = destino / "lineas" / "linea.yaml"
+    texto = linea.read_text(encoding="utf-8").replace(
+        "sabado: sin_servicio", "sabado: horario"
+    )
+    texto = texto.replace(
+        "\npendientes: []",
+        """
+  - temporada: anual
+    dias: sabado
+    tabla: |
+      PAA    PBB    PCC
+      09:00  09:30  10:00  | pasa_por_aldea_a
+
+pendientes: []""",
+    )
+    linea.write_text(texto, encoding="utf-8")
+    resultado = validar_horarios(destino)
+    assert resultado.errores == []
+    html_ = revision.generar_html(resultado.modelo, None, None, None, "01/01/2026")
     inicio = html_.index("Localidades sin hora de paso")
     seccion = html_[inicio:]
     assert "sábado" in seccion

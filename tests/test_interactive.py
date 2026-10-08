@@ -476,14 +476,20 @@ def test_build_localidad_pendiente_acorta_nombre_largo():
     assert titulo("Superextraordinariamente") == "Usar Superextraordin"
 
 
-def test_build_localidad_pendiente_los_mochos_real():
+def test_build_localidad_pendiente_aldea_bonita_fixture(datos_pendientes):
     from app.utils.interactive import build_localidad_pendiente
 
-    modelo = horarios_datos.actual().horarios.modelo
-    mochos = modelo.localidades["los-mochos"]
-    ver = modelo.localidades[mochos.ver]
-    payload = build_localidad_pendiente("Texto", mochos.ver, ver.nombre, "origen")
+    modelo = datos_pendientes.horarios.modelo
+    aldea = modelo.localidades["aldea-b"]
+    ver = modelo.localidades[aldea.ver]
+    payload = build_localidad_pendiente("Texto", aldea.ver, ver.nombre, "origen")
     _assert_button_limits(payload)
     titulos = [b["reply"]["title"] for b in _buttons(payload)]
-    assert titulos[0] == "Usar Almodóvar"
+    assert titulos[0] == "Usar Pueblo B"
     assert len(titulos[0]) <= 20
+
+
+def test_datos_reales_no_tienen_localidades_pendientes():
+    # P32 cerrada el 07/10/2026: Rivero y Los Mochos son localidades normales.
+    modelo = horarios_datos.actual().horarios.modelo
+    assert all(loc.pendiente is None for loc in modelo.localidades.values())

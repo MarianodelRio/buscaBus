@@ -1,5 +1,8 @@
 # horarios/lineas/penarroya-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja PYA INV.
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja PYA INV.
 #
 # Todo el año (P01). Villanueva del Rey tiene dos paradas (P20): VRE es el
 # pueblo (celda con marca amarilla en el Excel) y VRC es el cruce (sin marca).
@@ -15,7 +18,7 @@
 # se separan (Pozoblanco no para en El Vacar); `make validar` avisa y no se
 # fusionan.
 nombre: Peñarroya – Córdoba
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:

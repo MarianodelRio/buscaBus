@@ -13,6 +13,7 @@ from app.config import (
     NEGOCIO_HORARIO_OFICINA,
     NEGOCIO_TELEFONO,
 )
+from app.services.horarios.formato import NOMBRES_PUBLICOS_TEMPORADA
 
 _DIAS_ES = (
     "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo",
@@ -22,6 +23,10 @@ _MESES_ES = (
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 )
+
+# Hasta cuántos días de distancia el siguiente día con salidas se cuenta sin
+# aclarar que la falta de servicio es de este trayecto.
+_DIAS_SIGUIENTE_CERCANO = 7
 
 _MARCAS_NUMERO = "¹²³⁴⁵⁶⁷⁸⁹"
 
@@ -225,10 +230,12 @@ def _cabecera_fecha(consulta, fecha: date, horarios) -> str:
         localidad = horarios.modelo.localidades.get(localidad_id)
         nombre_localidad = localidad.nombre if localidad is not None else localidad_id
         return f"📅 {dia_txt} · festivo en {nombre_localidad} ({nombre_festivo})"
-    if consulta.temporadas:
-        nombres_temporada = sorted({t.nombre for _, t in consulta.temporadas})
-        temp_txt = " / ".join(nombres_temporada)
-        return f"📅 {dia_txt} · horario de {temp_txt}"
+    # solo una temporada única con nombre público; nunca se une con " / "
+    nombres_temporada = {t.nombre for _, t in consulta.temporadas}
+    if len(nombres_temporada) == 1:
+        publico = NOMBRES_PUBLICOS_TEMPORADA.get(next(iter(nombres_temporada)))
+        if publico is not None:
+            return f"📅 {dia_txt} · horario de {publico}"
     return f"📅 {dia_txt}"
 
 
@@ -270,8 +277,12 @@ def msg_resultado(consulta, horarios, origen_nombre: str, destino_nombre: str,
         cuerpo = f"{cabecera}\n{_cabecera_fecha(consulta, fecha, horarios)}\n\n"
         if consulta.siguiente_con_servicio is not None:
             sig = consulta.siguiente_con_servicio
+            if (sig - fecha).days <= _DIAS_SIGUIENTE_CERCANO:
+                cuerpo += "Ese día no hay servicio. "
+            else:
+                cuerpo += "Ese día no hay servicio en este trayecto. "
             cuerpo += (
-                f"Ese día no hay servicio. El siguiente día con salidas es"
+                f"El siguiente día con salidas es"
                 f" {nombre_dia_es(sig)} {sig.day:02d}/{sig.month:02d}."
             )
         else:

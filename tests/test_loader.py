@@ -152,14 +152,15 @@ def test_lineas_pueblos_ordena_por_titulo_no_por_nombre(datos_muchas_lineas):
     assert len(lp["linea-larga"]) == 19
 
 
-def test_lineas_pueblos_real_los_blazquez_y_sin_pendientes():
+def test_lineas_pueblos_real_los_blazquez_y_rivero_y_mochos_en_hornachuelos():
     horarios = loader.cargar(HORARIOS_REAL)
     blazquez = horarios.lineas_pueblos["los-blazquez"]
     for loc in ("el-porvenir", "la-granjuela", "valsequillo", "los-blazquez"):
         assert loc in blazquez
-    for pueblos in horarios.lineas_pueblos.values():
-        assert "rivero-de-posadas" not in pueblos
-        assert "los-mochos" not in pueblos
+    # P32 cerrada el 07/10/2026: Rivero y Los Mochos son pueblos normales.
+    hornachuelos = horarios.lineas_pueblos["hornachuelos-cordoba"]
+    assert "rivero-de-posadas" in hornachuelos
+    assert "los-mochos" in hornachuelos
 
 
 def test_horarios_real_vrc_con_nombre_con_coma():

@@ -1,12 +1,15 @@
 # horarios/lineas/fuente-carreteros-cordoba.yaml
-# Fuente: horarios_fuente/HORARIOS NUEVOS MODIFICADO.xlsx, hoja FTE CARRET.
+# Horarios actualizados por negocio el 07/10/2026. El "desde 01/10/2026" de los
+# títulos del Excel se lee como la fecha desde la que rigen, no como un cambio
+# de temporada (P37).
+# Fuente: horarios_fuente/2026-10-07 ACTUALIZACION HORARIOS.xlsx, hoja FTE CARRET.
 #
 # Horario anual (D-c). Viaje de las 13:15 desde Córdoba: cambio de la empresa
 # en el Excel modificado (fila 16). Antes 12:30 ... 13:40, ahora 13:15 ...
 # 14:25, todo el viaje.
 nombre: Fuente Carreteros – Córdoba
 nombre_corto: F. Carreteros – Córdoba
-avisos: []
+avisos: [hora_aproximada]
 no_circula: []
 
 temporadas:
@@ -21,7 +24,7 @@ horarios:
     dias: lunes-viernes
     tabla: |
       FCA    SIL    FPA    VEN    FCU    GDZ    COR
-      06:45  06:50  07:00  07:05  07:15  07:25  07:55
+      06:30  06:35  06:45  06:50  07:00  07:10  07:45
       10:00  10:05  10:15  10:20  10:30  10:40  11:10
       15:30  15:35  15:45  15:50  16:00  16:10  16:40
 

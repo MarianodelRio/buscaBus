@@ -89,7 +89,7 @@ decisiones ya tomadas (D-a a D-p) están en
    amarillo es "a demanda" en Pozoblanco, Belalcázar-Córdoba y Badajoz, pero
    "entran en pueblo" en Peñarroya; en Los Blázquez eso mismo es verde.
 2. **Las marcas actúan a tres niveles**: toda la hoja (Badajoz, "horarios de
-   paso aproximado"), todo el viaje (Posadas: Rivero, Los Mochos) o
+   paso aproximado"), todo el viaje (por ejemplo, `solo_viernes_lectivo`) o
    **una sola parada de un viaje** (El Pedrera, letra `E` en la celda de Posadas;
    solo se muestra con origen o destino Posadas, P16) (a demanda; "solo viernes lectivo" solo en
    la última parada; "solo si hay viajeros desde Córdoba" solo en Villanueva de
@@ -238,7 +238,7 @@ hora_aproximada:
   que el motor conoce (`a_demanda`, `solo_viernes_lectivo`,
   `solo_si_viajeros_desde_cordoba`); el validador rechaza una condición que el
   código no sepa aplicar.
-- **Aviso**: solo informa (`pasa_por_rivero`, `para_en_los_mochos`,
+- **Aviso**: solo informa (`hora_aproximada`, `solo_virgen_remedios`,
   `no_para_en_el_pedrera` (letra `E`, parada), `solo_virgen_remedios`, `hora_aproximada`...). Se
   pueden añadir libremente. `entra_en_pueblo` ya no existe: en Villanueva del
   Rey "entrar en el pueblo" es **otra parada** (P20, `VRE` frente a `VRC`), no
@@ -308,9 +308,9 @@ Reglas del formato:
   el mismo id son **un único autobús físico** que negocio o el Excel han
   confirmado; se declara solo donde hay esa confirmación, nunca por parecido.
   El validador exige que lo declarado cuadre (ver Comprobaciones). Puede ir
-  junto a observaciones de viaje y `Pnn`: `| bus:cor-1030 pasa_por_rivero P21`.
+  junto a observaciones de viaje y `Pnn`: `| bus:cor-1030 solo_viernes_lectivo P21`.
 - **Observaciones de viaje y pendientes** tras `|` al final de la fila:
-  `06:15 06:35 06:50 07:30 | pasa_por_rivero P21`. Los tokens `Pnn` son
+  `16:00 16:30 16:45 17:00 | solo_viernes_lectivo P21`. Los tokens `Pnn` son
   referencias a preguntas abiertas.
 - **Clases de día**: `lunes`...`domingo` y `festivos`. Claves admitidas en
   `dias` y en las tablas: los días sueltos, `lunes-viernes`, `lunes-jueves`,
@@ -397,7 +397,24 @@ que usan `make validar`, los tests y el loader al arrancar el bot.
 2. **Cambios desde la versión publicada** (el último tag `horarios-*`), en
    lenguaje de negocio: *"Pozoblanco – Córdoba, invierno, lunes a viernes,
    hacia Córdoba: la salida de las 10:00 pasa a las 10:05"*. Si no hay versión
-   publicada, pone "primera versión".
+   publicada, pone "primera versión". Las listas de cambios usan siempre el
+   texto de negocio, nunca los ids internos, e incluyen:
+   - **Avisos de línea**: "Línea X: se añade el aviso «…»". Si el mismo aviso
+     se añade (o se quita) en 3 o más líneas, una sola frase: "Se añade el aviso
+     «…» a N líneas: A, B, C." (sin repetirlo línea a línea). `no_circula` y
+     `telefono_demanda` no generan frases.
+   - **Calendario** (si ambas versiones lo tienen): festivos generales y
+     locales añadidos o quitados, días sin servicio en ninguna línea, inicio y
+     fin de clases y vigencia. Vacaciones y días no lectivos no se listan.
+   - **Paradas y localidades**: nuevas, quitadas o renombradas (las paradas
+     nuevas con su localidad), alias añadidos o quitados y pares sin venta de
+     billetes.
+   - **Observaciones**: viaje o parada con "se añade/se quita la observación
+     «texto»" (texto de la versión actual, o de la anterior si ya no existe) y
+     "El texto de la observación «antes» pasa a «ahora»". Un id renombrado es
+     una baja y un alta.
+   Orden: primero el bloque general (paradas y localidades, calendario, textos
+   de observaciones, avisos agrupados) y después línea a línea.
 3. Una sección por línea: temporadas en palabras ("del 15 de septiembre al 22
    de junio"), un cuadro de qué días hay servicio, sin servicio o sin datos,
    las tablas con nombres de parada completos y `—` donde no para, y bajo cada
@@ -815,6 +832,22 @@ no se listan ni participan en la numeración; su recuento sale en
 `(hoy ya han salido N)`. Si el texto superaría 4096 caracteres, se corta en
 la última salida completa que entre y se añade
 "…y N salidas más, llama al <teléfono>".
+
+**Cabecera de temporada.** Solo se muestra `· horario de X` cuando todas las
+temporadas aplicadas a la consulta son una única temporada con nombre público
+(`NOMBRES_PUBLICOS_TEMPORADA` en `formato.py`: invierno, verano, agosto). Una
+temporada sin nombre público (`anual`, `septiembre-julio`) o una mezcla de
+varias no lleva texto de horario: la cabecera es solo `📅 Día dd/mm`. Nunca se
+unen nombres con " / ". Una temporada nueva con nombre propio exige ampliar
+esa constante.
+
+**Siguiente día con salidas.** Si el día pedido no tiene salidas, se busca el
+siguiente día con salidas en los 45 días siguientes (sin pasar de la vigencia
+del calendario; un día `sin_datos` no cuenta). Si está a 7 días o menos: "Ese
+día no hay servicio. El siguiente día con salidas es …"; si está a más de 7:
+"Ese día no hay servicio en este trayecto. El siguiente día con salidas es
+…". Si no hay ninguno en 45 días: "No hay salidas en los próximos días" con el
+teléfono. El botón `Día d/m` se ofrece en ambos casos.
 
 **Cabecera de día especial.** Un festivo general sale `festivo (Navidad)`; un
 festivo local sale `festivo en Córdoba (Virgen de la Fuensanta)`; si coinciden
@@ -1242,6 +1275,25 @@ pueblos de cada línea (`Horarios.lineas_pueblos`), `Linea.nombre_corto` da
 título a las líneas de más de 24 caracteres y la vista de revisión enseña
 "Así aparecen las líneas en el bot". `pendientes:` de `paradas.yaml` queda en
 `[P32]`. La fixture `tests/fixtures/horarios_cicloC/` ya está migrada.
+
+**Ciclo D (actualización de negocio del 07/10/2026, hecho):** el Excel nuevo
+(`2026-10-07 ACTUALIZACION HORARIOS.xlsx`) cambia horas de Villaviciosa,
+Hornachuelos, Fuente Carreteros, Ochavillos y Pozoblanco, recupera el viaje de
+domingo de verano de Pozoblanco (P09b deja de aplicarse) y añade
+`avisos: [hora_aproximada]` a las 15 líneas. Se cierran P29 (el Córdoba 12:00
+llega a Cabeza del Buey de lunes a viernes), P31 (Badajoz en agosto: la ida
+termina en Zafra de lunes a viernes y sábado, domingo y festivos no hay
+servicio; la temporada `agosto` es la segunda de la línea, `septiembre-julio`
+la primera; los domingos de agosto Peñarroya sigue funcionando), P32 (Rivero de
+Posadas y Los Mochos son localidades y paradas normales, `RIV` y `MOC`, con la
+hora de Posadas y de Almodóvar en los viajes marcados; el código de localidades
+pendientes se queda, genérico y con tests con fixtures, pero ningún dato real
+lo usa), P34, P35 y P36. Se abre P37 (lectura de "desde 01/10/2026" como fecha
+de vigencia, no cambio de temporada) y `pendientes:` de `paradas.yaml` queda en
+`[P37]`; siguen abiertas P28 y P30. La revisión muestra los pueblos como los
+elige el cliente (solo el nombre, o "para en: A o B" si hay varias paradas) y
+el cuadre con el Excel cuenta `RIV`/`MOC` aparte y solo `septiembre-julio` de
+Badajoz.
 
 ### Correcciones de la fase 1 (revisión del 2026-09-26) — resueltas el 2026-09-27
 Resueltas en un ciclo propio (`docs/rds_fase1_correcciones.md`). Verificado el
